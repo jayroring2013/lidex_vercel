@@ -38,7 +38,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto">
           <div className="text-center animate-fade-in">
             <div className="inline-flex items-center space-x-2 glass px-4 py-2 mb-6">
-              <span className="text-sm text-secondary">👋 A personal project by Jay Roring</span>
+              <span className="text-sm text-secondary">👋 A personal project by Hýt</span>
             </div>
 
             <h1 className="text-4xl md:text-5xl font-bold mb-6 text-primary">
@@ -57,7 +57,7 @@ export default function Home() {
                 <span>View Dashboard</span>
               </Link>
               <a
-                href="https://github.com/jayroring2013/bxh"
+                href="https://github.com/"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn-secondary flex items-center space-x-2"

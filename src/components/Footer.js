@@ -30,7 +30,7 @@ export default function Footer() {
           <div>
             <h4 className="text-primary font-semibold mb-4">Connect</h4>
             <div className="flex items-center space-x-4">
-              <a href="https://github.com/jayroring2013" target="_blank" className="text-secondary hover:text-primary">
+              <a href="https://github.com/" target="_blank" className="text-secondary hover:text-primary">
                 <Github className="w-5 h-5" />
               </a>
               <a href="#" className="text-secondary hover:text-primary">
@@ -44,7 +44,7 @@ export default function Footer() {
         </div>
 
         <div className="border-t border-gray-200 dark:border-dark-700 pt-8 text-center text-muted text-sm">
-          <p>© 2013-2026 LiDex. Built by Jay Roring.</p>
+          <p>© 2026 LiDex. Built by Hýt.</p>
         </div>
       </div>
     </footer>

@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LiDex - Light Novel, Anime & Manga Analytics</title>
+    <meta name="description" content="A personal project tracking and analyzing data for Light Novels, Anime, and Manga.">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS (CDN for GitHub Pages) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="assets/css/styles.css">
+    
+    <!-- Tailwind Config -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        primary: {
+                            50: '#eef2ff', 100: '#e0e7ff', 200: '#c7d2fe', 300: '#a5b4fc',
+                            400: '#818cf8', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca',
+                            800: '#3730a3', 900: '#312e81',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-light-900 dark:bg-dark-900 text-gray-900 dark:text-gray-100 min-h-screen">
+    
+    <!-- Navigation (Shared Structure) -->
+    <nav class="fixed top-0 left-0 right-0 z-50 glass border-b border-custom">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <!-- Logo -->
+                <a href="index.html" class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-primary-500 to-purple-600 rounded-lg flex items-center justify-center">
+                        <i data-lucide="bar-chart-3" class="w-6 h-6 text-white"></i>
+                    </div>
+                    <span class="text-xl font-bold gradient-text">LiDex</span>
+                </a>
+                
+                <!-- Desktop Navigation -->
+                <div class="hidden md:flex items-center space-x-8">
+                    <a href="index.html" class="nav-link">Home</a>
+                    <a href="dashboard.html" class="nav-link">Dashboard</a>
+                    <a href="content-detail.html" class="nav-link">Content</a>
+                    <a href="reports.html" class="nav-link">Reports</a>
+                    <a href="https://github.com/jayroring2013" target="_blank" class="text-secondary hover:text-primary">
+                        <i data-lucide="github" class="w-5 h-5"></i>
+                    </a>
+                </div>
+                
+                <!-- Right Side -->
+                <div class="flex items-center space-x-4">
+                    <!-- Search (Desktop) -->
+                    <div class="relative hidden lg:block">
+                        <i data-lucide="search" class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted"></i>
+                        <input type="text" placeholder="Search..." 
+                            class="input-field pl-10 pr-4 py-2 text-sm w-56">
+                    </div>
+                    
+                    <!-- Theme Toggle -->
+                    <button data-theme-toggle class="theme-toggle">
+                        <i data-lucide="moon" class="w-5 h-5 text-secondary"></i>
+                    </button>
+                    
+                    <!-- Mobile Menu Button -->
+                    <button data-mobile-menu class="md:hidden theme-toggle">
+                        <i data-lucide="menu" class="w-5 h-5 text-secondary"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Mobile Menu (Hidden by default) -->
+        <div data-mobile-menu-content class="hidden md:hidden glass border-t border-custom">
+            <div class="px-4 py-4 space-y-4">
+                <a href="index.html" class="nav-link block">Home</a>
+                <a href="dashboard.html" class="nav-link block">Dashboard</a>
+                <a href="content-detail.html" class="nav-link block">Content</a>
+                <a href="reports.html" class="nav-link block">Reports</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="pt-32 pb-20 px-4">
+        <div class="max-w-7xl mx-auto">
+            <div class="text-center animate-fade-in">
+                <div class="inline-flex items-center space-x-2 glass px-4 py-2 mb-6">
+                    <span class="text-sm text-muted">👋 A personal project by Jay Roring</span>
+                </div>
+                
+                <h1 class="text-4xl md:text-5xl font-bold mb-6 text-primary">
+                    Tracking & Analyzing<br>
+                    <span class="gradient-text">Light Novels, Anime & Manga</span>
+                </h1>
+                
+                <p class="text-lg text-secondary max-w-2xl mx-auto mb-10">
+                    This is a community-driven data project I built to track popularity trends, 
+                    voting patterns, and analytics for LN/Anime/Manga.
+                </p>
+                
+                <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+                    <a href="dashboard.html" class="btn-primary flex items-center space-x-2">
+                        <i data-lucide="bar-chart-2" class="w-5 h-5"></i>
+                        <span>View Dashboard</span>
+                    </a>
+                    <a href="https://github.com/jayroring2013/bxh" target="_blank" class="btn-secondary flex items-center space-x-2">
+                        <i data-lucide="github" class="w-5 h-5"></i>
+                        <span>View on GitHub</span>
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Stats Overview -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-16 animate-slide-up">
+                <div class="stat-card glass p-6 text-center">
+                    <div class="w-12 h-12 bg-primary-500/20 rounded-lg flex items-center justify-center mx-auto mb-4">
+                        <i data-lucide="book-open" class="w-6 h-6 text-primary-500"></i>
+                    </div>
+                    <div class="text-3xl font-bold font-mono text-primary mb-1">15,847</div>
+                    <div class="text-sm text-secondary">Light Novels</div>
+                </div>
+                
+                <div class="stat-card glass p-6 text-center">
+                    <div class="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center mx-auto mb-4">
+                        <i data-lucide="tv" class="w-6 h-6 text-purple-500"></i>
+                    </div>
+                    <div class="text-3xl font-bold font-mono text-primary mb-1">8,234</div>
+                    <div class="text-sm text-secondary">Anime Titles</div>
+                </div>
+                
+                <div class="stat-card glass p-6 text-center">
+                    <div class="w-12 h-12 bg-pink-500/20 rounded-lg flex items-center justify-center mx-auto mb-4">
+                        <i data-lucide="book" class="w-6 h-6 text-pink-500"></i>
+                    </div>
+                    <div class="text-3xl font-bold font-mono text-primary mb-1">23,156</div>
+                    <div class="text-sm text-secondary">Manga Series</div>
+                </div>
+                
+                <div class="stat-card glass p-6 text-center">
+                    <div class="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center mx-auto mb-4">
+                        <i data-lucide="users" class="w-6 h-6 text-green-500"></i>
+                    </div>
+                    <div class="text-3xl font-bold font-mono text-primary mb-1">1,247</div>
+                    <div class="text-sm text-secondary">Community Members</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer (Shared Structure) -->
+    <footer class="border-t border-custom py-12 px-4 bg-secondary">
+        <div class="max-w-7xl mx-auto">
+            <div class="grid md:grid-cols-4 gap-8 mb-8">
+                <div>
+                    <div class="flex items-center space-x-3 mb-4">
+                        <div class="w-10 h-10 bg-gradient-to-br from-primary-500 to-purple-600 rounded-lg flex items-center justify-center">
+                            <i data-lucide="bar-chart-3" class="w-6 h-6 text-white"></i>
+                        </div>
+                        <span class="text-xl font-bold gradient-text">LiDex</span>
+                    </div>
+                    <p class="text-secondary text-sm">
+                        A personal project tracking LN/Anime/Manga data since 2013.
+                    </p>
+                </div>
+                
+                <div>
+                    <h4 class="text-primary font-semibold mb-4">Pages</h4>
+                    <ul class="space-y-2 text-sm text-secondary">
+                        <li><a href="index.html" class="hover:text-primary-500 transition-colors">Home</a></li>
+                        <li><a href="dashboard.html" class="hover:text-primary-500 transition-colors">Dashboard</a></li>
+                        <li><a href="content-detail.html" class="hover:text-primary-500 transition-colors">Content</a></li>
+                        <li><a href="reports.html" class="hover:text-primary-500 transition-colors">Reports</a></li>
+                    </ul>
+                </div>
+                
+                <div>
+                    <h4 class="text-primary font-semibold mb-4">Data Sources</h4>
+                    <ul class="space-y-2 text-sm text-secondary">
+                        <li><a href="https://anilist.co" target="_blank" class="hover:text-primary-500 transition-colors">AniList</a></li>
+                        <li><a href="https://myanimelist.net" target="_blank" class="hover:text-primary-500 transition-colors">MyAnimeList</a></li>
+                        <li><a href="https://novelupdates.com" target="_blank" class="hover:text-primary-500 transition-colors">NovelUpdates</a></li>
+                    </ul>
+                </div>
+                
+                <div>
+                    <h4 class="text-primary font-semibold mb-4">Connect</h4>
+                    <div class="flex items-center space-x-4">
+                        <a href="https://github.com/jayroring2013" target="_blank" class="text-secondary hover:text-primary transition-colors">
+                            <i data-lucide="github" class="w-5 h-5"></i>
+                        </a>
+                        <a href="#" class="text-secondary hover:text-primary transition-colors">
+                            <i data-lucide="twitter" class="w-5 h-5"></i>
+                        </a>
+                        <a href="#" class="text-secondary hover:text-primary transition-colors">
+                            <i data-lucide="mail" class="w-5 h-5"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="border-t border-custom pt-8 flex flex-col md:flex-row items-center justify-between">
+                <p class="text-muted text-sm mb-4 md:mb-0">
+                    © 2013-2026 LiDex. Built by Jay Roring.
+                </p>
+                <p class="text-muted text-sm">
+                    Data updated: <span class="font-mono">March 16, 2026</span>
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Shared Scripts (Load AFTER DOM content) -->
+    <script src="assets/js/theme.js"></script>
+    <script src="assets/js/nav.js"></script>
+    
+    <!-- Page-Specific Scripts -->
+    <script>
+        // Initialize Lucide icons after theme system loads
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+        });
+    </script>
+</body>
+</html>

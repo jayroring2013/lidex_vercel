@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - LiDex Analytics</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Shared Styles -->
+    <link rel="stylesheet" href="assets/css/styles.css">
+    
+    <!-- Tailwind Config -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        primary: {
+                            50: '#eef2ff', 100: '#e0e7ff', 200: '#c7d2fe', 300: '#a5b4fc',
+                            400: '#818cf8', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca',
+                            800: '#3730a3', 900: '#312e81',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-light-900 dark:bg-dark-900 text-gray-900 dark:text-gray-100 min-h-screen">
+    
+    <!-- Navigation (Same as index.html) -->
+    <nav class="fixed top-0 left-0 right-0 z-50 glass border-b border-custom">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <a href="index.html" class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-primary-500 to-purple-600 rounded-lg flex items-center justify-center">
+                        <i data-lucide="bar-chart-3" class="w-6 h-6 text-white"></i>
+                    </div>
+                    <span class="text-xl font-bold gradient-text">LiDex</span>
+                </a>
+                
+                <div class="hidden md:flex items-center space-x-8">
+                    <a href="index.html" class="nav-link">Home</a>
+                    <a href="dashboard.html" class="nav-link">Dashboard</a>
+                    <a href="content-detail.html" class="nav-link">Content</a>
+                    <a href="reports.html" class="nav-link">Reports</a>
+                    <a href="https://github.com/jayroring2013" target="_blank" class="text-secondary hover:text-primary">
+                        <i data-lucide="github" class="w-5 h-5"></i>
+                    </a>
+                </div>
+                
+                <div class="flex items-center space-x-4">
+                    <button data-theme-toggle class="theme-toggle">
+                        <i data-lucide="moon" class="w-5 h-5 text-secondary"></i>
+                    </button>
+                    <button data-mobile-menu class="md:hidden theme-toggle">
+                        <i data-lucide="menu" class="w-5 h-5 text-secondary"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="pt-24 pb-12 px-4">
+        <div class="max-w-7xl mx-auto">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
+                <div>
+                    <h1 class="text-3xl font-bold text-primary mb-2">Dashboard</h1>
+                    <p class="text-secondary">Overview of all tracked content and community activity</p>
+                </div>
+                <div class="mt-4 md:mt-0 flex items-center space-x-3">
+                    <span class="text-sm text-secondary">Last updated:</span>
+                    <span class="text-sm font-mono text-primary">March 16, 2026 14:30</span>
+                    <button class="p-2 glass hover:bg-hover-bg">
+                        <i data-lucide="refresh-cw" class="w-4 h-4 text-secondary"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Quick Stats -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                <div class="stat-card glass p-5">
+                    <div class="flex items-center justify-between mb-3">
+                        <i data-lucide="book-open" class="w-5 h-5 text-primary-500"></i>
+                        <span class="text-xs text-green-500 flex items-center">
+                            <i data-lucide="trending-up" class="w-3 h-3 mr-1"></i>+12.5%
+                        </span>
+                    </div>
+                    <div class="text-2xl font-bold font-mono text-primary">15,847</div>
+                    <div class="text-xs text-secondary">Light Novels</div>
+                </div>
+                
+                <div class="stat-card glass p-5">
+                    <div class="flex items-center justify-between mb-3">
+                        <i data-lucide="tv" class="w-5 h-5 text-purple-500"></i>
+                        <span class="text-xs text-green-500 flex items-center">
+                            <i data-lucide="trending-up" class="w-3 h-3 mr-1"></i>+8.3%
+                        </span>
+                    </div>
+                    <div class="text-2xl font-bold font-mono text-primary">8,234</div>
+                    <div class="text-xs text-secondary">Anime Titles</div>
+                </div>
+                
+                <div class="stat-card glass p-5">
+                    <div class="flex items-center justify-between mb-3">
+                        <i data-lucide="book" class="w-5 h-5 text-pink-500"></i>
+                        <span class="text-xs text-green-500 flex items-center">
+                            <i data-lucide="trending-up" class="w-3 h-3 mr-1"></i>+15.2%
+                        </span>
+                    </div>
+                    <div class="text-2xl font-bold font-mono text-primary">23,156</div>
+                    <div class="text-xs text-secondary">Manga Series</div>
+                </div>
+                
+                <div class="stat-card glass p-5">
+                    <div class="flex items-center justify-between mb-3">
+                        <i data-lucide="users" class="w-5 h-5 text-green-500"></i>
+                        <span class="text-xs text-green-500 flex items-center">
+                            <i data-lucide="trending-up" class="w-3 h-3 mr-1"></i>+5.1%
+                        </span>
+                    </div>
+                    <div class="text-2xl font-bold font-mono text-primary">1,247</div>
+                    <div class="text-xs text-secondary">Active Users</div>
+                </div>
+            </div>
+            
+            <!-- Charts Row -->
+            <div class="grid md:grid-cols-2 gap-6 mb-8">
+                <div class="glass p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-primary">Popularity Trends (6 Months)</h3>
+                        <button class="p-2 hover:bg-hover-bg rounded-lg">
+                            <i data-lucide="download" class="w-4 h-4 text-secondary"></i>
+                        </button>
+                    </div>
+                    <canvas id="trendChart" height="200"></canvas>
+                </div>
+                
+                <div class="glass p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-primary">Content Distribution</h3>
+                        <button class="p-2 hover:bg-hover-bg rounded-lg">
+                            <i data-lucide="download" class="w-4 h-4 text-secondary"></i>
+                        </button>
+                    </div>
+                    <canvas id="distributionChart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer (Same as index.html) -->
+    <footer class="border-t border-custom py-8 px-4 bg-secondary">
+        <div class="max-w-7xl mx-auto text-center">
+            <p class="text-muted text-sm">© 2013-2026 LiDex. Built by Jay Roring.</p>
+        </div>
+    </footer>
+
+    <!-- Shared Scripts -->
+    <script src="assets/js/theme.js"></script>
+    <script src="assets/js/nav.js"></script>
+    
+    <!-- Page-Specific Scripts -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            
+            // Initialize charts
+            const isDark = document.documentElement.classList.contains('dark');
+            
+            new Chart(document.getElementById('trendChart'), {
+                type: 'line',
+                data: {
+                    labels: ['Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'],
+                    datasets: [
+                        { label: 'Anime', data: [65, 72, 78, 85, 82, 91], borderColor: '#6366f1', backgroundColor: 'rgba(99, 102, 241, 0.1)', tension: 0.4, fill: true },
+                        { label: 'Manga', data: [78, 82, 85, 88, 92, 95], borderColor: '#ec4899', backgroundColor: 'rgba(236, 72, 153, 0.1)', tension: 0.4, fill: true },
+                        { label: 'LN', data: [55, 62, 68, 75, 80, 85], borderColor: '#06b6d4', backgroundColor: 'rgba(6, 182, 212, 0.1)', tension: 0.4, fill: true }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { grid: { color: isDark ? '#334155' : '#e2e8f0' }, ticks: { color: isDark ? '#94a3b8' : '#64748b' } },
+                        x: { grid: { display: false }, ticks: { color: isDark ? '#94a3b8' : '#64748b' } }
+                    }
+                }
+            });
+            
+            new Chart(document.getElementById('distributionChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['Anime', 'Manga', 'LN'],
+                    datasets: [{ data: [34, 41, 25], backgroundColor: ['#6366f1', '#ec4899', '#06b6d4'], borderWidth: 0 }]
+                },
+                options: { responsive: true, plugins: { legend: { display: false } }, cutout: '70%' }
+            });
+        });
+    </script>
+</body>
+</html>

@@ -8,7 +8,7 @@ import {
   ExternalLink, Share2, Copy, Twitter, Loader2,
   ArrowLeft, AlertCircle
 } from 'lucide-react'
-import { getSeriesById, getVoteCount, submitVote } from '../../lib/supabase'
+import { getSeriesById, getVoteCount, submitVote } from '../../../lib/supabase'
 
 export default function ContentDetail() {
   const params = useParams()

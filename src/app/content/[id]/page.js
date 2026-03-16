@@ -1,34 +1,50 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { 
   Star, Heart, Calendar, BookOpen, Info, Tags, 
-  ExternalLink, Share2, Copy, Twitter, Loader2 
+  ExternalLink, Share2, Copy, Twitter, Loader2,
+  ArrowLeft, AlertCircle
 } from 'lucide-react'
-import { getSeriesById, getVoteCount, submitVote } from '@/lib/supabase'
+import { getSeriesById, getVoteCount, submitVote } from '../../lib/supabase'
 
 export default function ContentDetail() {
   const params = useParams()
+  const router = useRouter()
   const [series, setSeries] = useState(null)
   const [voteCount, setVoteCount] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [voting, setVoting] = useState(false)
 
   useEffect(() => {
     async function loadData() {
-      if (!params.id) return
+      if (!params.id) {
+        setError('No series ID provided')
+        setLoading(false)
+        return
+      }
       
       try {
+        console.log('🔍 Loading series ID:', params.id)
+        
         const { data, error } = await getSeriesById(params.id)
-        if (error || !data) throw new Error('Series not found')
+        
+        console.log('📊 Series data:', data)
+        console.log('📊 Error:', error)
+        
+        if (error || !data) {
+          throw new Error(`Series with ID "${params.id}" not found in database`)
+        }
         
         setSeries(data)
         const votes = await getVoteCount(params.id)
         setVoteCount(votes)
-      } catch (error) {
-        console.error('Failed to load series:', error)
+      } catch (err) {
+        console.error('Failed to load series:', err)
+        setError(err.message)
       } finally {
         setLoading(false)
       }
@@ -44,13 +60,14 @@ export default function ContentDetail() {
       await submitVote(params.id)
       const newCount = await getVoteCount(params.id)
       setVoteCount(newCount)
-    } catch (error) {
-      alert('Failed to submit vote: ' + error.message)
+    } catch (err) {
+      alert('Failed to submit vote: ' + err.message)
     } finally {
       setVoting(false)
     }
   }
 
+  // Loading State
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -59,11 +76,29 @@ export default function ContentDetail() {
     )
   }
 
-  if (!series) {
+  // Error State
+  if (error || !series) {
     return (
-      <div className="text-center py-20">
-        <h2 className="text-2xl font-bold text-primary mb-4">Series Not Found</h2>
-        <Link href="/dashboard" className="btn-primary">Back to Dashboard</Link>
+      <div className="max-w-2xl mx-auto px-4 py-20 text-center">
+        <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-6" />
+        <h1 className="text-3xl font-bold text-primary mb-4">Series Not Found</h1>
+        <p className="text-secondary mb-8">{error || 'The series you\'re looking for doesn\'t exist.'}</p>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <Link href="/dashboard" className="btn-primary inline-flex items-center space-x-2">
+            <ArrowLeft className="w-5 h-5" />
+            <span>Back to Dashboard</span>
+          </Link>
+          <Link href="/" className="btn-secondary inline-flex items-center space-x-2">
+            <span>Go to Home</span>
+          </Link>
+        </div>
+        
+        {/* Debug Info (remove in production) */}
+        <div className="mt-8 p-4 glass rounded-lg text-left">
+          <p className="text-sm text-secondary mb-2">Debug Info:</p>
+          <p className="text-xs font-mono text-muted">ID: {params.id}</p>
+          <p className="text-xs font-mono text-muted">URL: {typeof window !== 'undefined' ? window.location.href : 'N/A'}</p>
+        </div>
       </div>
     )
   }

@@ -9,32 +9,34 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-// Helper functions
-export async function getSeries({ limit = 20, offset = 0, type = null, search = null } = {}) {
-  let query = supabase.from('series').select('*')
-  
-  if (type) query = query.eq('item_type', type)
-  if (search) query = query.ilike('title', `%${search}%`)
-  
-  return await query
-    .order('created_at', { ascending: false })
-    .range(offset, offset + limit - 1)
-}
-
 export async function getSeriesById(id) {
-  return await supabase
+  console.log('🔍 Fetching series ID:', id)
+  
+  const { data, error } = await supabase
     .from('series')
     .select('*')
     .eq('id', id)
     .single()
+  
+  console.log('📊 Result:', data)
+  console.log('📊 Error:', error)
+  
+  return { data, error }
 }
 
-export async function getTrendingSeries({ limit = 10 } = {}) {
+export async function getVoteCount(seriesId) {
+  const { count } = await supabase
+    .from('novel_votes')
+    .select('*', { count: 'exact', head: true })
+    .eq('novel_id', seriesId)
+  
+  return count || 0
+}
+
+export async function submitVote(seriesId) {
   return await supabase
-    .from('series')
-    .select('*')
-    .order('is_featured', { ascending: false })
-    .limit(limit)
+    .from('novel_votes')
+    .insert([{ novel_id: seriesId, created_at: new Date().toISOString() }])
 }
 
 export async function getSiteStats() {
@@ -53,17 +55,10 @@ export async function getSiteStats() {
   }
 }
 
-export async function getVoteCount(seriesId) {
-  const { count } = await supabase
-    .from('novel_votes')
-    .select('*', { count: 'exact', head: true })
-    .eq('novel_id', seriesId)
-  
-  return count || 0
-}
-
-export async function submitVote(seriesId) {
+export async function getTrendingSeries({ limit = 10 } = {}) {
   return await supabase
-    .from('novel_votes')
-    .insert([{ novel_id: seriesId, created_at: new Date().toISOString() }])
+    .from('series')
+    .select('*')
+    .order('is_featured', { ascending: false })
+    .limit(limit)
 }

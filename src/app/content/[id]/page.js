@@ -93,11 +93,13 @@ export default function ContentDetail() {
           </Link>
         </div>
         
-        {/* Debug Info (remove in production) */}
+        {/* Debug Info */}
         <div className="mt-8 p-4 glass rounded-lg text-left">
           <p className="text-sm text-secondary mb-2">Debug Info:</p>
           <p className="text-xs font-mono text-muted">ID: {params.id}</p>
-          <p className="text-xs font-mono text-muted">URL: {typeof window !== 'undefined' ? window.location.href : 'N/A'}</p>
+          <p className="text-xs font-mono text-muted">
+            URL: {typeof window !== 'undefined' ? window.location.href : 'N/A'}
+          </p>
         </div>
       </div>
     )
@@ -129,8 +131,12 @@ export default function ContentDetail() {
               )}
               <div className="pb-4">
                 <div className="flex items-center space-x-3 mb-3">
-                  <span className="px-3 py-1 bg-purple-500/80 rounded-full text-xs font-medium text-white">{typeText}</span>
-                  <span className="px-3 py-1 bg-green-500/80 rounded-full text-xs font-medium text-white">{series.status || 'Unknown'}</span>
+                  <span className="px-3 py-1 bg-purple-500/80 rounded-full text-xs font-medium text-white">
+                    {typeText}
+                  </span>
+                  <span className="px-3 py-1 bg-green-500/80 rounded-full text-xs font-medium text-white">
+                    {series.status || 'Unknown'}
+                  </span>
                 </div>
                 <h1 className="text-3xl md:text-4xl font-bold text-white mb-3">{series.title}</h1>
                 <div className="flex items-center gap-6 text-sm">
@@ -154,27 +160,56 @@ export default function ContentDetail() {
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">
           <div className="glass rounded-xl p-6">
-            <h3 className="text-lg font-semibold text-primary mb-4">Synopsis</h3>
-            <p className="text-secondary leading-relaxed">{series.description || 'No description available.'}</p>
+            <div className="flex items-center space-x-2 mb-4">
+              <BookOpen className="w-5 h-5 text-primary-500" />
+              <h3 className="text-lg font-semibold text-primary">Synopsis</h3>
+            </div>
+            <p className="text-secondary leading-relaxed">
+              {series.description || series.description_vi || 'No description available.'}
+            </p>
           </div>
 
           <div className="glass rounded-xl p-6">
-            <h3 className="text-lg font-semibold text-primary mb-4">Information</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-center space-x-2 mb-4">
+              <Info className="w-5 h-5 text-primary-500" />
+              <h3 className="text-lg font-semibold text-primary">Information</h3>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <InfoItem label="Type" value={typeText} />
               <InfoItem label="Status" value={series.status || '--'} />
               <InfoItem label="Author" value={series.author || '--'} />
               <InfoItem label="Publisher" value={series.publisher || series.studio || '--'} />
+              <InfoItem label="Source" value={series.source || 'Manual'} />
+              <InfoItem label="External ID" value={series.external_id || '--'} />
             </div>
           </div>
 
           {series.genres && series.genres.length > 0 && (
             <div className="glass rounded-xl p-6">
-              <h3 className="text-lg font-semibold text-primary mb-4">Genres</h3>
+              <div className="flex items-center space-x-2 mb-4">
+                <Tags className="w-5 h-5 text-primary-500" />
+                <h3 className="text-lg font-semibold text-primary">Genres</h3>
+              </div>
               <div className="flex flex-wrap gap-2">
                 {series.genres.map((genre, i) => (
                   <span key={i} className="px-3 py-1 bg-primary-500/20 text-primary-400 rounded-full text-xs">
                     {genre}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {series.tags && series.tags.length > 0 && (
+            <div className="glass rounded-xl p-6">
+              <div className="flex items-center space-x-2 mb-4">
+                <Tags className="w-5 h-5 text-primary-500" />
+                <h3 className="text-lg font-semibold text-primary">Tags</h3>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {series.tags.map((tag, i) => (
+                  <span key={i} className="px-3 py-1 glass rounded-full text-xs text-secondary">
+                    {tag}
                   </span>
                 ))}
               </div>
@@ -185,7 +220,10 @@ export default function ContentDetail() {
         {/* Sidebar */}
         <div className="space-y-6">
           <div className="glass rounded-xl p-6">
-            <h3 className="text-lg font-semibold text-primary mb-4">Support</h3>
+            <div className="flex items-center space-x-2 mb-4">
+              <Heart className="w-5 h-5 text-primary-500" />
+              <h3 className="text-lg font-semibold text-primary">Support</h3>
+            </div>
             <button
               onClick={handleVote}
               disabled={voting}
@@ -194,18 +232,78 @@ export default function ContentDetail() {
               {voting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Heart className="w-5 h-5" />}
               <span>{voting ? 'Submitting...' : 'Vote for this series'}</span>
             </button>
+            <p className="text-xs text-secondary text-center">You can vote once per week</p>
           </div>
 
           <div className="glass rounded-xl p-6">
-            <h3 className="text-lg font-semibold text-primary mb-4">Share</h3>
+            <div className="flex items-center space-x-2 mb-4">
+              <ExternalLink className="w-5 h-5 text-primary-500" />
+              <h3 className="text-lg font-semibold text-primary">External Links</h3>
+            </div>
+            <div className="space-y-2">
+              <a 
+                href={`https://anilist.co/search/${series.item_type || 'anime'}?search=${encodeURIComponent(series.title)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center space-x-2 text-sm text-primary-500 hover:text-primary-600 transition-colors"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>Search on AniList</span>
+              </a>
+              <a 
+                href={`https://myanimelist.net/search.php?q=${encodeURIComponent(series.title)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center space-x-2 text-sm text-primary-500 hover:text-primary-600 transition-colors"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>Search on MyAnimeList</span>
+              </a>
+            </div>
+          </div>
+
+          <div className="glass rounded-xl p-6">
+            <div className="flex items-center space-x-2 mb-4">
+              <Share2 className="w-5 h-5 text-primary-500" />
+              <h3 className="text-lg font-semibold text-primary">Share</h3>
+            </div>
             <div className="flex gap-3">
-              <button onClick={() => navigator.clipboard.writeText(window.location.href)} className="flex-1 p-3 glass rounded-lg hover:bg-hover-bg">
+              <button 
+                onClick={() => {
+                  navigator.clipboard.writeText(window.location.href)
+                  alert('Link copied to clipboard!')
+                }} 
+                className="flex-1 p-3 glass rounded-lg hover:bg-hover-bg transition-colors"
+              >
                 <Copy className="w-5 h-5 text-secondary" />
               </button>
-              <button onClick={() => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(series.title)}`, '_blank')} className="flex-1 p-3 glass rounded-lg hover:bg-hover-bg">
+              <button 
+                onClick={() => {
+                  const text = encodeURIComponent(`Check out "${series.title}" on LiDex Analytics!`)
+                  const url = encodeURIComponent(window.location.href)
+                  window.open(`https://twitter.com/intent/tweet?text=${text}&url=${url}`, '_blank')
+                }} 
+                className="flex-1 p-3 glass rounded-lg hover:bg-hover-bg transition-colors"
+              >
                 <Twitter className="w-5 h-5 text-secondary" />
               </button>
             </div>
+          </div>
+
+          <div className="glass rounded-xl p-6">
+            <div className="flex items-center space-x-2 mb-2">
+              <Calendar className="w-5 h-5 text-primary-500" />
+              <h3 className="text-lg font-semibold text-primary">Last Updated</h3>
+            </div>
+            <p className="text-sm text-secondary">
+              {new Date(series.updated_at).toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              })}
+            </p>
           </div>
         </div>
       </div>
@@ -213,6 +311,7 @@ export default function ContentDetail() {
   )
 }
 
+// Helper Component
 function InfoItem({ label, value }) {
   return (
     <div className="p-3 glass rounded-lg">

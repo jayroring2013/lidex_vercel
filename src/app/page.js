@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { BookOpen, Tv, Book, Heart, Loader2, Star } from 'lucide-react'
-import { getSiteStats, getTrendingSeries } from '@/lib/supabase'
-import StatsCard from '@/components/StatsCard'
-import SeriesCard from '@/components/SeriesCard'
-import LoadingSpinner from '@/components/LoadingSpinner'
+import { BookOpen, Tv, Book, Heart, Loader2, Star, BarChart2, Github } from 'lucide-react'
+import { getSiteStats, getTrendingSeries } from '../lib/supabase'
+import StatsCard from '../components/StatsCard'
+import SeriesCard from '../components/SeriesCard'
+import LoadingSpinner from '../components/LoadingSpinner'
 
 export default function Home() {
   const [stats, setStats] = useState(null)

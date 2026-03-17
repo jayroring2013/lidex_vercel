@@ -15,7 +15,7 @@ export default function ContentDetail() {
   const [series, setSeries] = useState(null)
   const [voteCount, setVoteCount] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState<string | null>(null)
   const [voting, setVoting] = useState(false)
   const [bookmarked, setBookmarked] = useState(false)
   const [synopsisExpanded, setSynopsisExpanded] = useState(false)

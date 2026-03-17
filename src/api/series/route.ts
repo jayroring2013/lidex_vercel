@@ -1,107 +1,66 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { seriesService } from './service'
 import { supabase } from '@/lib/supabase'
 
-interface RouteParams {
-  params: { id: string }
-}
-
-// GET /api/series/:id
-export async function GET(request: NextRequest, { params }: RouteParams) {
+// GET /api/series
+export async function GET(request: NextRequest) {
   try {
-    const id = parseInt(params.id)
+    const searchParams = request.nextUrl.searchParams
     
-    if (isNaN(id)) {
-      return NextResponse.json(
-        { error: 'Invalid series ID' },
-        { status: 400 }
-      )
+    const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : 20
+    const offset = searchParams.get('offset') ? parseInt(searchParams.get('offset')!) : 0
+    const type = searchParams.get('type') || undefined
+    const search = searchParams.get('search') || undefined
+
+    let query = supabase.from('series').select('*', { count: 'exact' })
+
+    if (type) {
+      query = query.eq('item_type', type)
     }
 
-    // Get series data
-    const series = await seriesService.findOne(id)
-
-    // Get anime metadata if applicable
-    let anime_meta = null
-    if (series.item_type === 'anime') {
-      const { data, error } = await supabase
-        .from('anime_meta')
-        .select('*')
-        .eq('series_id', id)
-        .single()
-      
-      if (!error && data) {
-        anime_meta = data
-      }
+    if (search) {
+      query = query.ilike('title', `%${search}%`)
     }
 
-    // Get manga metadata if applicable
-    let manga_meta = null
-    if (series.item_type === 'manga') {
-      const { data, error } = await supabase
-        .from('manga_meta')
-        .select('*')
-        .eq('series_id', id)
-        .single()
-      
-      if (!error && data) {
-        manga_meta = data
-      }
-    }
+    query = query.order('created_at', { ascending: false })
+    query = query.range(offset, offset + limit - 1)
 
-    return NextResponse.json({
-      ...series,
-      anime_meta,
-      manga_meta
-    })
+    const { data, error, count } = await query
+
+    if (error) throw new Error(error.message)
+
+    return NextResponse.json({ data, count: count || 0 })
   } catch (error: any) {
+    console.error('API Error:', error)
     return NextResponse.json(
       { error: error.message },
-      { status: error.message.includes('not found') ? 404 : 500 }
+      { status: 500 }
     )
   }
 }
 
-// PUT /api/series/:id
-export async function PUT(request: NextRequest, { params }: RouteParams) {
+// POST /api/series
+export async function POST(request: NextRequest) {
   try {
-    const id = parseInt(params.id)
     const body = await request.json()
 
-    if (isNaN(id)) {
+    if (!body.title || !body.item_type) {
       return NextResponse.json(
-        { error: 'Invalid series ID' },
+        { error: 'Title and item_type are required' },
         { status: 400 }
       )
     }
 
-    const result = await seriesService.update(id, body)
+    const { data, error } = await supabase
+      .from('series')
+      .insert([body])
+      .select()
+      .single()
 
-    return NextResponse.json(result)
+    if (error) throw new Error(error.message)
+
+    return NextResponse.json(data, { status: 201 })
   } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message },
-      { status: error.message.includes('not found') ? 404 : 500 }
-    )
-  }
-}
-
-// DELETE /api/series/:id
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  try {
-    const id = parseInt(params.id)
-
-    if (isNaN(id)) {
-      return NextResponse.json(
-        { error: 'Invalid series ID' },
-        { status: 400 }
-      )
-    }
-
-    await seriesService.delete(id)
-
-    return NextResponse.json({ success: true })
-  } catch (error: any) {
+    console.error('API Error:', error)
     return NextResponse.json(
       { error: error.message },
       { status: 500 }

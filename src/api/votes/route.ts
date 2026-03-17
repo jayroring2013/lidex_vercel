@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { votesService } from './service'
-
+import { supabase } from '@/lib/supabase'  // ← ADD THIS IMPORT
 // GET /api/votes/count/:seriesId
 export async function GET(request: NextRequest) {
   try {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { seriesService } from './service'
-
+import { supabase } from '@/lib/supabase'  // ← ADD THIS IMPORT
 // GET /api/series
 export async function GET(request: NextRequest) {
   try {

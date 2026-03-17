@@ -87,7 +87,7 @@ export default function RadarChart({ series }: RadarChartProps) {
           color: 'rgba(148, 163, 184, 1)',
           font: {
             size: 12,
-            weight: '600',
+            weight: 600 as any,
           },
         },
         ticks: {

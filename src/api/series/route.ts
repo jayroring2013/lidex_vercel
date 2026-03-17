@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { seriesService } from '../service'
+import { seriesService } from './service'
 import { supabase } from '@/lib/supabase'
 
 interface RouteParams {

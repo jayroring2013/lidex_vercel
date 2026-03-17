@@ -9,7 +9,6 @@ import {
   ArrowLeft, Bookmark, Book, Award, TrendingUp, Globe, Tv, Clock, Users
 } from 'lucide-react'
 import { fetchSeries, fetchVoteCount, submitVote } from '@/lib/api'
-import { useRealtime } from '@/hooks/useRealtime'
 import RadarChart from '@/components/RadarChart'
 
 export default function ContentDetail() {
@@ -48,14 +47,7 @@ export default function ContentDetail() {
     }
     loadData()
   }, [seriesId])
-
-  // Update vote count from realtime
-  useEffect(() => {
-    if (realtime.voteCount > 0) {
-      setVoteCount(prev => prev + realtime.voteCount)
-    }
-  }, [realtime.voteCount])
-
+  
   const handleVote = async () => {
     if (!seriesId || voting) return
     

@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-
+import { supabase } from '@/lib/supabase'  // ← ADD THIS IMPORT
 export async function GET(request: NextRequest) {
   const encoder = new TextEncoder()
 

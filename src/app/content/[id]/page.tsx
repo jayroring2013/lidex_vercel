@@ -6,7 +6,7 @@ import Link from 'next/link'
 import {
   Star, Heart, Calendar, BookOpen, Info, Tags,
   ExternalLink, Share2, Copy, Twitter, Loader2,
-  ArrowLeft, Bookmark, Award, TrendingUp, Globe
+  ArrowLeft, Award, TrendingUp, Globe
 } from 'lucide-react'
 import { fetchSeries, fetchVoteCount } from '@/lib/api'
 import RadarChart from '@/components/RadarChart'
@@ -97,7 +97,7 @@ export default function ContentDetail() {
                 className="w-full h-full object-cover"
                 onError={() => setImageError(true)}
               />
-              {/* Increased opacity: bg-dark-900/80 instead of /70 */}
+              {/* Increased opacity: bg-dark-900/80 */}
               <div className="absolute inset-0 backdrop-blur-xl bg-dark-900/80" />
               <div className="absolute inset-0 bg-gradient-to-t from-dark-900 via-dark-900/90 to-transparent" />
             </>
@@ -205,7 +205,7 @@ export default function ContentDetail() {
                 </div>
               )}
 
-              {/* ✅ Genres Below Cover (instead of tags) */}
+              {/* ✅ Genres Below Cover */}
               {series.genres && series.genres.length > 0 && (
                 <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mb-4">
                   {series.genres.slice(0, 6).map((genre: string, i: number) => (
@@ -255,7 +255,7 @@ export default function ContentDetail() {
                 <InfoItem icon={BookOpen} label="Type" value={typeText} />
                 <InfoItem icon={Calendar} label="Status" value={series.status || '--'} />
                 <InfoItem icon={Globe} label="Source" value={series.source || 'Manual'} />
-                <InfoItem icon={Book} label="Author" value={series.author || '--'} />
+                <InfoItem icon={BookOpen} label="Author" value={series.author || '--'} />
                 <InfoItem icon={Award} label="Publisher" value={series.publisher || '--'} />
                 <InfoItem icon={TrendingUp} label="External ID" value={series.external_id || '--'} />
               </div>
@@ -265,15 +265,15 @@ export default function ContentDetail() {
           {/* Right Sidebar */}
           <div className="space-y-6">
             
-            {/* ✅ Tags Box - Moved ABOVE Share (Desktop) */}
-            {(series.genres?.length > 0 || series.tags?.length > 0) && (
+            {/* ✅ Tags Box - Moved ABOVE Share */}
+            {(series.tags && series.tags.length > 0) && (
               <div className="glass rounded-2xl p-6">
                 <div className="flex items-center space-x-2 mb-4">
                   <Tags className="w-5 h-5 text-primary-500" />
                   <h3 className="text-lg font-bold text-primary">Tags</h3>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {series.tags?.map((tag: string, i: number) => (
+                  {series.tags.map((tag: string, i: number) => (
                     <span
                       key={`tag-${i}`}
                       className="px-3 py-1.5 bg-dark-800 text-secondary rounded-lg text-sm hover:bg-dark-700 transition-colors cursor-pointer"

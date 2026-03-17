@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { votesService } from './service'
-import { supabase } from '@/lib/supabase'  // ← ADD THIS IMPORT
-// GET /api/votes/count/:seriesId
+import { supabase } from '@/lib/supabase'
+
+// GET /api/votes?seriesId=123
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
@@ -14,10 +14,16 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const result = await votesService.getCount(parseInt(seriesId))
+    const { count, error } = await supabase
+      .from('novel_votes')
+      .select('*', { count: 'exact', head: true })
+      .eq('novel_id', parseInt(seriesId))
 
-    return NextResponse.json(result)
+    if (error) throw new Error(error.message)
+
+    return NextResponse.json({ seriesId, count: count || 0 })
   } catch (error: any) {
+    console.error('API Error:', error)
     return NextResponse.json(
       { error: error.message },
       { status: 500 }
@@ -37,10 +43,20 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const result = await votesService.create(body.novel_id)
+    const { data, error } = await supabase
+      .from('novel_votes')
+      .insert([{
+        novel_id: body.novel_id,
+        created_at: new Date().toISOString()
+      }])
+      .select()
+      .single()
 
-    return NextResponse.json(result, { status: 201 })
+    if (error) throw new Error(error.message)
+
+    return NextResponse.json(data, { status: 201 })
   } catch (error: any) {
+    console.error('API Error:', error)
     return NextResponse.json(
       { error: error.message },
       { status: 500 }

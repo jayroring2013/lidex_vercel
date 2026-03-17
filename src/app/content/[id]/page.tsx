@@ -23,6 +23,9 @@ export default function ContentDetail() {
   // Convert string to number
   const seriesId = params.id ? parseInt(params.id as string) : undefined
 
+  // ✅ Get cover image from multiple sources
+  const coverImage = series?.cover_url || series?.anime_meta?.cover_url || series?.manga_meta?.cover_url
+
   useEffect(() => {
     async function loadData() {
       if (!seriesId) {
@@ -104,31 +107,44 @@ export default function ContentDetail() {
 
   return (
     <div className="min-h-screen">
-      {/* Hero Banner */}
+      {/* ✅ Hero Banner with Background Image */}
       <div className="relative h-[500px] md:h-[600px] overflow-hidden">
         {/* Background Image with Blur */}
         <div 
-          className="absolute inset-0 bg-cover bg-center blur-xl opacity-50"
+          className="absolute inset-0 bg-cover bg-center"
           style={{ 
-            backgroundImage: series.cover_url ? `url(${series.cover_url})` : 'none',
-            filter: 'blur(40px)'
+            backgroundImage: coverImage ? `url(${coverImage})` : 'none',
           }}
-        />
-        
-        {/* Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-dark-900 via-dark-900/80 to-transparent" />
+        >
+          {/* Blur Overlay */}
+          <div className="absolute inset-0 backdrop-blur-xl bg-dark-900/60" />
+          
+          {/* Gradient Overlay */}
+          <div className="absolute inset-0 bg-gradient-to-t from-dark-900 via-dark-900/70 to-dark-900/50" />
+        </div>
         
         {/* Content */}
         <div className="relative h-full max-w-7xl mx-auto px-4 flex items-end pb-12">
           <div className="flex flex-col md:flex-row items-end md:items-center gap-8 w-full">
-            {/* Cover Image */}
+            {/* ✅ Cover Image */}
             <div className="flex-shrink-0">
-              <div className="w-48 md:w-64 rounded-xl overflow-hidden shadow-2xl border-2 border-white/20">
-                {series.cover_url ? (
+              <div className="w-48 md:w-64 rounded-xl overflow-hidden shadow-2xl border-2 border-white/20 bg-dark-800">
+                {coverImage ? (
                   <img 
-                    src={series.cover_url} 
+                    src={coverImage} 
                     alt={series.title} 
-                    className="w-full h-auto"
+                    className="w-full h-auto object-cover"
+                    onError={(e) => {
+                      // Fallback if image fails to load
+                      e.currentTarget.style.display = 'none'
+                      e.currentTarget.parentElement!.innerHTML = `
+                        <div class="w-full h-72 bg-gradient-to-br from-primary-600 to-purple-700 flex items-center justify-center">
+                          <svg class="w-24 h-24 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                          </svg>
+                        </div>
+                      `
+                    }}
                   />
                 ) : (
                   <div className="w-full h-72 bg-gradient-to-br from-primary-600 to-purple-700 flex items-center justify-center">

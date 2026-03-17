@@ -6,9 +6,9 @@ import Link from 'next/link'
 import {
   Star, Heart, Calendar, BookOpen, Info, Tags,
   ExternalLink, Share2, Copy, Twitter, Loader2,
-  ArrowLeft, Bookmark, Book, Award, TrendingUp, Globe, ChevronDown, ChevronUp
+  ArrowLeft, Bookmark, Award, TrendingUp, Globe
 } from 'lucide-react'
-import { fetchSeries, fetchVoteCount, submitVote } from '@/lib/api'
+import { fetchSeries, fetchVoteCount } from '@/lib/api'
 import RadarChart from '@/components/RadarChart'
 
 export default function ContentDetail() {
@@ -17,9 +17,6 @@ export default function ContentDetail() {
   const [voteCount, setVoteCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [voting, setVoting] = useState(false)
-  const [bookmarked, setBookmarked] = useState(false)
-  const [synopsisExpanded, setSynopsisExpanded] = useState(false)
   const [imageError, setImageError] = useState(false)
 
   const seriesId = params.id ? parseInt(params.id as string) : undefined
@@ -49,24 +46,6 @@ export default function ContentDetail() {
     loadData()
   }, [seriesId])
 
-  const handleVote = async () => {
-    if (!seriesId || voting) return
-    setVoting(true)
-    try {
-      await submitVote(seriesId)
-      const newCount = await fetchVoteCount(seriesId)
-      setVoteCount(newCount.count)
-    } catch (err: any) {
-      alert('Failed to submit vote: ' + err.message)
-    } finally {
-      setVoting(false)
-    }
-  }
-
-  const handleBookmark = () => {
-    setBookmarked(!bookmarked)
-  }
-
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href)
     alert('Link copied to clipboard!')
@@ -78,14 +57,6 @@ export default function ContentDetail() {
     window.open(`https://twitter.com/intent/tweet?text=${text}&url=${url}`, '_blank')
   }
 
-  const formatSynopsis = (text: string) => {
-    if (!text) return 'No description available.'
-    return text.split(/(?<=[.!?])\s+/).map((sentence, i) => (
-      <p key={i} className="mb-2 last:mb-0">{sentence}</p>
-    ))
-  }
-
-  // Loading State
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-light-50 dark:bg-dark-900">
@@ -94,7 +65,6 @@ export default function ContentDetail() {
     )
   }
 
-  // Error State
   if (error || !series) {
     return (
       <div className="min-h-screen bg-light-50 dark:bg-dark-900 flex items-center justify-center px-4">
@@ -117,7 +87,7 @@ export default function ContentDetail() {
     <div className="min-h-screen bg-light-50 dark:bg-dark-900">
       {/* Hero Banner */}
       <div className="relative pt-16 sm:pt-0">
-        {/* Background Image with Blur */}
+        {/* Background Image with Blur - INCREASED OPACITY */}
         <div className="absolute inset-0 h-[400px] sm:h-[500px] md:h-[600px] overflow-hidden">
           {bannerImage ? (
             <>
@@ -127,13 +97,14 @@ export default function ContentDetail() {
                 className="w-full h-full object-cover"
                 onError={() => setImageError(true)}
               />
-              <div className="absolute inset-0 backdrop-blur-xl bg-dark-900/70" />
-              <div className="absolute inset-0 bg-gradient-to-t from-dark-900 via-dark-900/80 to-transparent" />
+              {/* Increased opacity: bg-dark-900/80 instead of /70 */}
+              <div className="absolute inset-0 backdrop-blur-xl bg-dark-900/80" />
+              <div className="absolute inset-0 bg-gradient-to-t from-dark-900 via-dark-900/90 to-transparent" />
             </>
           ) : (
             <>
               <div className="absolute inset-0 bg-gradient-to-br from-primary-600 via-purple-600 to-pink-600" />
-              <div className="absolute inset-0 bg-gradient-to-t from-dark-900 via-dark-900/80 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-dark-900 via-dark-900/90 to-transparent" />
             </>
           )}
         </div>
@@ -208,10 +179,6 @@ export default function ContentDetail() {
                   <Heart className="w-5 h-5 text-pink-400" />
                   <span className="text-lg text-white">{voteCount.toLocaleString()}</span>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <Bookmark className="w-5 h-5 text-purple-400" />
-                  <span className="text-lg text-white">--</span>
-                </div>
               </div>
 
               {/* Author/Studio */}
@@ -238,38 +205,19 @@ export default function ContentDetail() {
                 </div>
               )}
 
-              {/* Action Buttons */}
-              <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
-                <button
-                  onClick={handleBookmark}
-                  className={`px-6 py-3 rounded-lg font-semibold flex items-center space-x-2 transition-all ${
-                    bookmarked
-                      ? 'bg-green-500 text-white'
-                      : 'bg-orange-500 hover:bg-orange-600 text-white'
-                  }`}
-                >
-                  <Bookmark className="w-5 h-5" />
-                  <span>{bookmarked ? 'In Library' : 'Add to Library'}</span>
-                </button>
-
-                <button className="px-6 py-3 bg-dark-800 hover:bg-dark-700 text-white rounded-lg font-semibold flex items-center space-x-2 transition-all border border-dark-700">
-                  <Book className="w-5 h-5" />
-                  <span>Start Reading</span>
-                </button>
-
-                <button
-                  onClick={handleVote}
-                  disabled={voting}
-                  className="px-6 py-3 bg-dark-800 hover:bg-dark-700 text-white rounded-lg font-semibold flex items-center space-x-2 transition-all border border-dark-700"
-                >
-                  {voting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Heart className="w-5 h-5" />}
-                  <span>{voting ? 'Voting...' : 'Vote'}</span>
-                </button>
-
-                <button onClick={handleShare} className="p-3 bg-dark-800 hover:bg-dark-700 text-white rounded-lg transition-all border border-dark-700">
-                  <Share2 className="w-5 h-5" />
-                </button>
-              </div>
+              {/* ✅ Genres Below Cover (instead of tags) */}
+              {series.genres && series.genres.length > 0 && (
+                <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mb-4">
+                  {series.genres.slice(0, 6).map((genre: string, i: number) => (
+                    <span
+                      key={`genre-${i}`}
+                      className="px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-full text-xs font-medium text-white hover:bg-white/30 transition-colors"
+                    >
+                      {genre}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -287,58 +235,14 @@ export default function ContentDetail() {
                 <BookOpen className="w-6 h-6 text-primary-500" />
                 <h2 className="text-xl font-bold text-primary">Synopsis</h2>
               </div>
-              <div className="relative">
-                <div className={`text-secondary leading-relaxed text-base md:text-lg ${
-                  synopsisExpanded ? '' : 'line-clamp-4 md:line-clamp-5'
-                }`}>
-                  {formatSynopsis(series.description || series.description_vi || '')}
-                </div>
-                {!synopsisExpanded && (series.description || series.description_vi) && (
-                  <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-dark-900 to-transparent pointer-events-none" />
-                )}
-              </div>
-              {(series.description || series.description_vi) && (
-                <button
-                  onClick={() => setSynopsisExpanded(!synopsisExpanded)}
-                  className="mt-3 flex items-center space-x-1 text-primary-500 hover:text-primary-600 text-sm font-medium transition-colors"
-                >
-                  <span>{synopsisExpanded ? 'Less' : 'More'}</span>
-                  {synopsisExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                </button>
-              )}
+              <p className="text-secondary leading-relaxed text-base md:text-lg">
+                {series.description || series.description_vi || 'No description available.'}
+              </p>
             </div>
 
             {/* Radar Chart (Anime Only) */}
             {series.item_type === 'anime' && series.anime_meta && (
               <RadarChart series={series} />
-            )}
-
-            {/* Genres & Tags */}
-            {(series.genres?.length > 0 || series.tags?.length > 0) && (
-              <div className="glass rounded-2xl p-6 md:p-8">
-                <div className="flex items-center space-x-2 mb-4">
-                  <Tags className="w-6 h-6 text-primary-500" />
-                  <h2 className="text-xl font-bold text-primary">Tags</h2>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {series.genres?.map((genre: string, i: number) => (
-                    <span
-                      key={`genre-${i}`}
-                      className="px-4 py-2 bg-primary-500/20 text-primary-400 rounded-lg text-sm font-medium hover:bg-primary-500/30 transition-colors cursor-pointer"
-                    >
-                      {genre}
-                    </span>
-                  ))}
-                  {series.tags?.map((tag: string, i: number) => (
-                    <span
-                      key={`tag-${i}`}
-                      className="px-4 py-2 bg-dark-800 text-secondary rounded-lg text-sm hover:bg-dark-700 transition-colors cursor-pointer"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
             )}
 
             {/* Information Grid */}
@@ -360,6 +264,26 @@ export default function ContentDetail() {
 
           {/* Right Sidebar */}
           <div className="space-y-6">
+            
+            {/* ✅ Tags Box - Moved ABOVE Share (Desktop) */}
+            {(series.genres?.length > 0 || series.tags?.length > 0) && (
+              <div className="glass rounded-2xl p-6">
+                <div className="flex items-center space-x-2 mb-4">
+                  <Tags className="w-5 h-5 text-primary-500" />
+                  <h3 className="text-lg font-bold text-primary">Tags</h3>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {series.tags?.map((tag: string, i: number) => (
+                    <span
+                      key={`tag-${i}`}
+                      className="px-3 py-1.5 bg-dark-800 text-secondary rounded-lg text-sm hover:bg-dark-700 transition-colors cursor-pointer"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Share */}
             <div className="glass rounded-2xl p-6">

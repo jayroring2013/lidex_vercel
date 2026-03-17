@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { 
   Star, Heart, Calendar, BookOpen, Info, Tags, 
   ExternalLink, Share2, Copy, Twitter, Loader2,
-  ArrowLeft, Award, TrendingUp, Globe, Tv, Clock, Users
+  ArrowLeft, Award, TrendingUp, Globe, Users, ChevronDown, ChevronUp
 } from 'lucide-react'
 import { fetchSeries, fetchVoteCount } from '@/lib/api'
 import RadarChart from '@/components/RadarChart'
@@ -18,6 +18,7 @@ export default function ContentDetail() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [imageError, setImageError] = useState(false)
+  const [synopsisExpanded, setSynopsisExpanded] = useState(false)
 
   const seriesId = params.id ? parseInt(params.id as string) : undefined
   const coverImage = !imageError && series?.cover_url ? series.cover_url : null
@@ -60,7 +61,6 @@ export default function ContentDetail() {
   // Format synopsis with line breaks
   const formatSynopsis = (text: string) => {
     if (!text) return 'No description available.'
-    // Split by common Vietnamese/English sentence endings
     return text.split(/(?<=[.!?])\s+/).map((sentence, i) => (
       <p key={i} className="mb-3 last:mb-0">{sentence}</p>
     ))
@@ -96,8 +96,9 @@ export default function ContentDetail() {
 
   return (
     <div className="min-h-screen bg-light-50 dark:bg-dark-900">
-      {/* ✅ Hero Banner - Mobile Optimized */}
-      <div className="relative h-[300px] sm:h-[400px] md:h-[500px] overflow-hidden">
+      {/* ✅ Hero Banner - Fixed Navbar Overlap */}
+      <div className="relative h-[350px] sm:h-[400px] md:h-[500px]">
+        {/* Background Image */}
         <div className="absolute inset-0">
           {bannerImage ? (
             <>
@@ -118,10 +119,10 @@ export default function ContentDetail() {
           )}
         </div>
         
-        {/* Content */}
-        <div className="relative h-full max-w-5xl mx-auto px-4 flex flex-col items-center justify-end pb-6">
+        {/* Content - Centered Vertically */}
+        <div className="relative h-full max-w-5xl mx-auto px-4 flex flex-col items-center justify-center pb-8">
           {/* Cover Image */}
-          <div className="mb-4">
+          <div className="mb-4 sm:mb-6">
             <div className="w-40 sm:w-48 md:w-56 rounded-xl overflow-hidden shadow-2xl border-2 border-white/20 bg-light-200 dark:bg-dark-800">
               {coverImage ? (
                 <img 
@@ -212,15 +213,43 @@ export default function ContentDetail() {
       {/* Main Content - Mobile Optimized */}
       <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
         
-        {/* Synopsis */}
+        {/* Synopsis - Collapsible */}
         <div className="bg-white dark:bg-dark-800 rounded-2xl p-5 shadow-sm border border-light-200 dark:border-dark-700">
           <div className="flex items-center space-x-2 mb-4">
             <BookOpen className="w-5 h-5 text-primary-500" />
             <h2 className="text-lg font-bold text-light-900 dark:text-white">Synopsis</h2>
           </div>
-          <div className="text-light-700 dark:text-secondary leading-relaxed text-sm sm:text-base">
-            {formatSynopsis(series.description || series.description_vi || '')}
+          
+          {/* Synopsis Content with Line Clamp */}
+          <div className="relative">
+            <div 
+              className={`text-light-700 dark:text-secondary leading-relaxed text-sm sm:text-base transition-all ${
+                synopsisExpanded ? '' : 'line-clamp-4 sm:line-clamp-5'
+              }`}
+            >
+              {formatSynopsis(series.description || series.description_vi || '')}
+            </div>
+            
+            {/* Fade Overlay when collapsed */}
+            {!synopsisExpanded && (
+              <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-white dark:from-dark-800 to-transparent pointer-events-none" />
+            )}
           </div>
+          
+          {/* More/Less Button */}
+          {(series.description || series.description_vi) && (
+            <button
+              onClick={() => setSynopsisExpanded(!synopsisExpanded)}
+              className="mt-3 flex items-center space-x-1 text-primary-500 hover:text-primary-600 text-sm font-medium transition-colors"
+            >
+              <span>{synopsisExpanded ? 'Less' : 'More'}</span>
+              {synopsisExpanded ? (
+                <ChevronUp className="w-4 h-4" />
+              ) : (
+                <ChevronDown className="w-4 h-4" />
+              )}
+            </button>
+          )}
         </div>
 
         {/* Radar Chart (Anime Only) */}

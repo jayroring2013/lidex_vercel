@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase'
-import { supabase } from '@/lib/supabase'  // ← ADD THIS IMPORT
+
 export interface SeriesFilters {
   limit?: number
   offset?: number

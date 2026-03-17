@@ -10,22 +10,25 @@ export async function fetchSeries(id?: number, options?: any) {
   })
 
   if (!res.ok) {
-    const error = await res.json()
+    const error = await res.json().catch(() => ({ error: 'Failed to fetch' }))
     throw new Error(error.error || 'Failed to fetch')
   }
 
   return res.json()
 }
 
-export async function fetchVoteCount(seriesId: number) {  // ✅ Accept number
+export async function fetchVoteCount(seriesId: number) {
   const res = await fetch(`${API_BASE}/votes?seriesId=${seriesId}`)
 
-  if (!res.ok) throw new Error('Failed to fetch votes')
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ error: 'Failed to fetch votes' }))
+    throw new Error(error.error || 'Failed to fetch votes')
+  }
 
   return res.json()
 }
 
-export async function submitVote(seriesId: number) {  // ✅ Accept number
+export async function submitVote(seriesId: number) {
   const res = await fetch(`${API_BASE}/votes`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -33,7 +36,7 @@ export async function submitVote(seriesId: number) {  // ✅ Accept number
   })
 
   if (!res.ok) {
-    const error = await res.json()
+    const error = await res.json().catch(() => ({ error: 'Failed to submit vote' }))
     throw new Error(error.error || 'Failed to submit vote')
   }
 
@@ -45,7 +48,10 @@ export async function fetchStats() {
     cache: 'no-store'
   })
 
-  if (!res.ok) throw new Error('Failed to fetch stats')
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ error: 'Failed to fetch stats' }))
+    throw new Error(error.error || 'Failed to fetch stats')
+  }
 
   return res.json()
 }

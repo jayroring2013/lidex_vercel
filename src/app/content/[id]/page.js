@@ -6,58 +6,64 @@ import Link from 'next/link'
 import { 
   Star, Heart, Calendar, BookOpen, Info, Tags, 
   ExternalLink, Share2, Copy, Twitter, Loader2,
-  ArrowLeft, Bookmark, Book, MessageCircle, Eye,
-  ChevronRight, Globe, Award, TrendingUp
+  ArrowLeft, Bookmark, Book, Award, TrendingUp, Globe
 } from 'lucide-react'
-import { getSeriesById, getVoteCount, submitVote } from '../../../lib/supabase'
+import { fetchSeries, fetchVoteCount, submitVote } from '@/lib/api'
+import { useRealtime } from '@/hooks/useRealtime'
 
 export default function ContentDetail() {
   const params = useParams()
-  const [series, setSeries] = useState(null)
+  const [series, setSeries] = useState<any>(null)
   const [voteCount, setVoteCount] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState<string | null>(null)
   const [voting, setVoting] = useState(false)
   const [bookmarked, setBookmarked] = useState(false)
 
+  // ✅ Convert string to number (ONCE)
+  const seriesId = params.id ? parseInt(params.id as string) : undefined
+  const realtime = useRealtime(seriesId)
+
   useEffect(() => {
     async function loadData() {
-      if (!params.id) {
+      if (!seriesId) {
         setError('No series ID provided')
         setLoading(false)
         return
       }
-      
+
       try {
-        const { data, error } = await getSeriesById(params.id)
-        
-        if (error || !data) {
-          throw new Error(`Series with ID "${params.id}" not found`)
-        }
-        
+        const data = await fetchSeries(seriesId)
         setSeries(data)
-        const votes = await getVoteCount(params.id)
-        setVoteCount(votes)
-      } catch (err) {
-        console.error('Failed to load series:', err)
+
+        const votes = await fetchVoteCount(seriesId)
+        setVoteCount(votes.count)
+      } catch (err: any) {
+        console.error('Failed to load:', err)
         setError(err.message)
       } finally {
         setLoading(false)
       }
     }
     loadData()
-  }, [params.id])
+  }, [seriesId])
+
+  // Update vote count from realtime
+  useEffect(() => {
+    if (realtime.voteCount > 0) {
+      setVoteCount(prev => prev + realtime.voteCount)
+    }
+  }, [realtime.voteCount])
 
   const handleVote = async () => {
-    if (!params.id || voting) return
+    if (!seriesId || voting) return
     
     setVoting(true)
     try {
-      await submitVote(params.id)
-      const newCount = await getVoteCount(params.id)
-      setVoteCount(newCount)
-    } catch (err) {
-      alert('Failed to submit vote: ' + err.message)
+      await submitVote(seriesId)
+      setVoteCount(prev => prev + 1)
+    } catch (err: any) {
+      alert('Failed to vote: ' + err.message)
     } finally {
       setVoting(false)
     }
@@ -65,6 +71,17 @@ export default function ContentDetail() {
 
   const handleBookmark = () => {
     setBookmarked(!bookmarked)
+  }
+
+  const handleShare = () => {
+    navigator.clipboard.writeText(window.location.href)
+    alert('Link copied to clipboard!')
+  }
+
+  const handleShareTwitter = () => {
+    const text = encodeURIComponent(`Check out "${series?.title}" on LiDex Analytics!`)
+    const url = encodeURIComponent(window.location.href)
+    window.open(`https://twitter.com/intent/tweet?text=${text}&url=${url}`, '_blank')
   }
 
   // Loading State
@@ -182,10 +199,6 @@ export default function ContentDetail() {
                   <Bookmark className="w-5 h-5 text-purple-400" />
                   <span className="text-lg text-white">--</span>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <Eye className="w-5 h-5 text-blue-400" />
-                  <span className="text-lg text-white">--</span>
-                </div>
               </div>
               
               {/* Author/Studio */}
@@ -240,7 +253,7 @@ export default function ContentDetail() {
                   <span>{voting ? 'Voting...' : 'Vote'}</span>
                 </button>
                 
-                <button className="p-3 bg-dark-800 hover:bg-dark-700 text-white rounded-lg transition-all border border-dark-700">
+                <button onClick={handleShare} className="p-3 bg-dark-800 hover:bg-dark-700 text-white rounded-lg transition-all border border-dark-700">
                   <Share2 className="w-5 h-5" />
                 </button>
               </div>
@@ -274,7 +287,7 @@ export default function ContentDetail() {
                   <h2 className="text-xl font-bold text-primary">Tags</h2>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {series.genres?.map((genre, i) => (
+                  {series.genres?.map((genre: string, i: number) => (
                     <span 
                       key={`genre-${i}`}
                       className="px-4 py-2 bg-primary-500/20 text-primary-400 rounded-lg text-sm font-medium hover:bg-primary-500/30 transition-colors cursor-pointer"
@@ -282,7 +295,7 @@ export default function ContentDetail() {
                       {genre}
                     </span>
                   ))}
-                  {series.tags?.map((tag, i) => (
+                  {series.tags?.map((tag: string, i: number) => (
                     <span 
                       key={`tag-${i}`}
                       className="px-4 py-2 bg-dark-800 text-secondary rounded-lg text-sm hover:bg-dark-700 transition-colors cursor-pointer"
@@ -319,14 +332,14 @@ export default function ContentDetail() {
               <h3 className="text-lg font-bold text-primary mb-4">Share</h3>
               <div className="grid grid-cols-2 gap-3">
                 <button 
-                  onClick={() => navigator.clipboard.writeText(window.location.href)}
+                  onClick={handleShare}
                   className="p-3 bg-dark-800 hover:bg-dark-700 rounded-lg flex items-center justify-center space-x-2 transition-colors"
                 >
                   <Copy className="w-5 h-5 text-secondary" />
                   <span className="text-sm">Copy Link</span>
                 </button>
                 <button 
-                  onClick={() => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(series.title)}`, '_blank')}
+                  onClick={handleShareTwitter}
                   className="p-3 bg-dark-800 hover:bg-dark-700 rounded-lg flex items-center justify-center space-x-2 transition-colors"
                 >
                   <Twitter className="w-5 h-5 text-secondary" />
@@ -384,7 +397,7 @@ export default function ContentDetail() {
 }
 
 // Info Item Component
-function InfoItem({ icon: Icon, label, value }) {
+function InfoItem({ icon: Icon, label, value }: { icon: any, label: string, value: string }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center space-x-2 text-secondary">

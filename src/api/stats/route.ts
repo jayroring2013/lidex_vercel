@@ -18,6 +18,7 @@ export async function GET() {
       totalVotes: voteCount.count || 0
     })
   } catch (error: any) {
+    console.error('API Error:', error)
     return NextResponse.json(
       { error: error.message },
       { status: 500 }

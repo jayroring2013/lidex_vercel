@@ -12,6 +12,9 @@ export default function ContentDetail() {
   const [voteCount, setVoteCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const realtime = useRealtime(params.id as string)
+    // ✅ FIX: Convert string to number
+  const seriesId = params.id ? parseInt(params.id as string) : undefined
+  const realtime = useRealtime(seriesId)
 
   useEffect(() => {
     async function loadData() {

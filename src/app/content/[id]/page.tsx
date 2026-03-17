@@ -6,13 +6,13 @@ import Link from 'next/link'
 import {
   Star, Heart, Calendar, BookOpen, Info, Tags,
   ExternalLink, Share2, Copy, Twitter, Loader2,
-  ArrowLeft, Bookmark, Award, TrendingUp, Globe, ChevronDown, ChevronUp
+  ArrowLeft, Bookmark, Book, Award, TrendingUp, Globe, ChevronDown, ChevronUp
 } from 'lucide-react'
 import { getSeriesById, getVoteCount, submitVote } from '../../../lib/supabase'
 
 export default function ContentDetail() {
   const params = useParams()
-  const [series, setSeries] = useState(null)
+  const [series, setSeries] = useState<any>(null)
   const [voteCount, setVoteCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -38,9 +38,9 @@ export default function ContentDetail() {
         setSeries(data)
         const votes = await getVoteCount(params.id)
         setVoteCount(votes)
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load series:', err)
-        setError(err.message)
+        setError(err.message || 'Failed to load series')
       } finally {
         setLoading(false)
       }
@@ -55,8 +55,8 @@ export default function ContentDetail() {
       await submitVote(params.id)
       const newCount = await getVoteCount(params.id)
       setVoteCount(newCount)
-    } catch (err) {
-      alert('Failed to submit vote: ' + err.message)
+    } catch (err: any) {
+      alert('Failed to submit vote: ' + (err.message || 'Unknown error'))
     } finally {
       setVoting(false)
     }
@@ -77,7 +77,7 @@ export default function ContentDetail() {
     window.open(`https://twitter.com/intent/tweet?text=${text}&url=${url}`, '_blank')
   }
 
-  const formatSynopsis = (text) => {
+  const formatSynopsis = (text: string) => {
     if (!text) return 'No description available.'
     const cleanText = text.replace(/<br\s*\/?>/gi, '\n\n')
     return cleanText.split(/\n\n+/).map((paragraph, i) => (
@@ -85,6 +85,7 @@ export default function ContentDetail() {
     ))
   }
 
+  // Loading State
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-dark-900">
@@ -93,6 +94,7 @@ export default function ContentDetail() {
     )
   }
 
+  // Error State
   if (error || !series) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-dark-900 flex items-center justify-center px-4">
@@ -114,7 +116,7 @@ export default function ContentDetail() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-900">
       {/* Hero Banner */}
-      <div className="relative">
+      <div className="relative pt-20 sm:pt-0">
         {/* Background Image with Blur */}
         <div className="absolute inset-0 h-[450px] sm:h-[550px] md:h-[650px] overflow-hidden">
           {series.cover_url ? (
@@ -135,8 +137,8 @@ export default function ContentDetail() {
           )}
         </div>
 
-        {/* Content - Added pt-20 for navbar + pb-16 for spacing */}
-        <div className="relative max-w-7xl mx-auto px-4">
+        {/* Content */}
+        <div className="relative h-full max-w-7xl mx-auto px-4">
           <div className="flex flex-col md:flex-row items-end md:items-center gap-6 md:gap-8 pt-24 sm:pt-20 pb-16">
             {/* Cover Image */}
             <div className="flex-shrink-0 mx-auto md:mx-0">
@@ -233,7 +235,7 @@ export default function ContentDetail() {
               {/* Genres Below Cover */}
               {series.genres && series.genres.length > 0 && (
                 <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
-                  {series.genres.slice(0, 6).map((genre, i) => (
+                  {series.genres.slice(0, 6).map((genre: string, i: number) => (
                     <span
                       key={`genre-${i}`}
                       className="px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-full text-xs font-medium text-white hover:bg-white/30 transition-colors"
@@ -248,13 +250,13 @@ export default function ContentDetail() {
         </div>
       </div>
 
-      {/* Main Content - Added mt-8 to prevent overlap */}
+      {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-12 mt-8">
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Left Content */}
           <div className="lg:col-span-2 space-y-8">
 
-            {/* Synopsis - Collapsible with Line Breaks */}
+            {/* Synopsis - Collapsible */}
             <div className="bg-white dark:bg-dark-800 rounded-2xl p-6 md:p-8 shadow-sm border border-gray-200 dark:border-dark-700">
               <div className="flex items-center space-x-2 mb-4">
                 <BookOpen className="w-6 h-6 text-primary-500" />
@@ -291,7 +293,7 @@ export default function ContentDetail() {
                 <InfoItem icon={BookOpen} label="Type" value={typeText} />
                 <InfoItem icon={Calendar} label="Status" value={(series.status || '--').toUpperCase()} />
                 <InfoItem icon={Globe} label="Source" value={series.source || 'Manual'} />
-                <InfoItem icon={BookOpen} label="Author" value={series.author || '--'} />
+                <InfoItem icon={Book} label="Author" value={series.author || '--'} />
                 <InfoItem icon={Award} label="Publisher" value={series.publisher || '--'} />
                 <InfoItem icon={TrendingUp} label="External ID" value={series.external_id || '--'} />
               </div>
@@ -371,7 +373,7 @@ export default function ContentDetail() {
 }
 
 // Info Item Component
-function InfoItem({ icon: Icon, label, value }) {
+function InfoItem({ icon: Icon, label, value }: { icon: any, label: string, value: string }) {
   return (
     <div className="p-3 bg-gray-50 dark:bg-dark-700/50 rounded-lg">
       <div className="flex items-center space-x-2 text-gray-500 dark:text-gray-400 mb-1">

@@ -11,31 +11,44 @@ export async function GET() {
       supabase.from('novel_votes').select('*', { count: 'exact', head: true })
     ])
 
-    // ✅ Get average popularity from anime_meta
-    const { data: popularityData } = await supabase
+    // ✅ Get dynamic popularity distribution from anime_meta
+    const { data: popularityData, error } = await supabase
       .from('anime_meta')
       .select('popularity')
       .not('popularity', 'is', null)
+      .order('popularity', { ascending: true })
 
-    const avgPopularity = popularityData 
-      ? popularityData.reduce((sum, item) => sum + (item.popularity || 0), 0) / popularityData.length 
-      : 600000
+    let popularityStats = {
+      min: 500000,
+      max: 1000000,
+      p50: 600000,
+      p75: 750000,
+      p90: 900000,
+      p95: 950000,
+      p99: 990000,
+    }
 
-    const { min, max } = popularityData 
-      ? {
-          min: Math.min(...popularityData.map(p => p.popularity || 0)),
-          max: Math.max(...popularityData.map(p => p.popularity || 0))
-        }
-      : { min: 500000, max: 1000000 }
+    if (!error && popularityData && popularityData.length > 0) {
+      const popularities = popularityData.map(p => p.popularity).filter((p): p is number => p !== null)
+      const count = popularities.length
+
+      popularityStats = {
+        min: Math.min(...popularities),
+        max: Math.max(...popularities),
+        p50: popularities[Math.floor(count * 0.50)] || 600000,
+        p75: popularities[Math.floor(count * 0.75)] || 750000,
+        p90: popularities[Math.floor(count * 0.90)] || 900000,
+        p95: popularities[Math.floor(count * 0.95)] || 950000,
+        p99: popularities[Math.floor(count * 0.99)] || 990000,
+      }
+    }
 
     return NextResponse.json({
       totalSeries: seriesCount.count || 0,
       totalAnime: animeCount.count || 0,
       totalManga: mangaCount.count || 0,
       totalVotes: voteCount.count || 0,
-      avgPopularity: Math.round(avgPopularity),
-      minPopularity: min,
-      maxPopularity: max
+      popularityStats, // ✅ Dynamic percentiles
     })
   } catch (error: any) {
     console.error('API Error:', error)

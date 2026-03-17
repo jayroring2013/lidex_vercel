@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
-import { supabase } from '@/lib/supabase'  // ← ADD THIS IMPORT
+import { supabase } from '@/lib/supabase'
+
 export async function GET(request: NextRequest) {
   const encoder = new TextEncoder()
 
@@ -9,10 +10,8 @@ export async function GET(request: NextRequest) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
       }
 
-      // Send initial connection message
       send({ type: 'connected', time: new Date().toISOString() })
 
-      // Listen to Supabase Realtime changes
       const channel = supabase
         .channel('realtime-votes')
         .on(
@@ -28,12 +27,10 @@ export async function GET(request: NextRequest) {
         )
         .subscribe()
 
-      // Keep connection alive
       const heartbeat = setInterval(() => {
         send({ type: 'heartbeat', time: new Date().toISOString() })
       }, 30000)
 
-      // Cleanup on client disconnect
       request.signal.addEventListener('abort', () => {
         clearInterval(heartbeat)
         supabase.removeChannel(channel)

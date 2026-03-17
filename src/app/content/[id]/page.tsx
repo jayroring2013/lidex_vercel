@@ -6,7 +6,7 @@ import Link from 'next/link'
 import {
   Star, Heart, Calendar, BookOpen, Info, Tags,
   ExternalLink, Share2, Copy, Twitter, Loader2,
-  ArrowLeft, Award, TrendingUp, Globe
+  ArrowLeft, Award, TrendingUp, Globe, ChevronDown, ChevronUp
 } from 'lucide-react'
 import { fetchSeries, fetchVoteCount } from '@/lib/api'
 import RadarChart from '@/components/RadarChart'
@@ -18,6 +18,7 @@ export default function ContentDetail() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [imageError, setImageError] = useState(false)
+  const [synopsisExpanded, setSynopsisExpanded] = useState(false)
 
   const seriesId = params.id ? parseInt(params.id as string) : undefined
   const coverImage = !imageError && series?.cover_url ? series.cover_url : null
@@ -55,6 +56,16 @@ export default function ContentDetail() {
     const text = encodeURIComponent(`Check out "${series?.title}" on LiDex Analytics!`)
     const url = encodeURIComponent(window.location.href)
     window.open(`https://twitter.com/intent/tweet?text=${text}&url=${url}`, '_blank')
+  }
+
+  // ✅ Fix: Parse synopsis with proper line breaks
+  const formatSynopsis = (text: string) => {
+    if (!text) return 'No description available.'
+    // Remove <br> tags and split by sentences
+    const cleanText = text.replace(/<br\s*\/?>/gi, '\n\n')
+    return cleanText.split(/\n\n+/).map((paragraph, i) => (
+      <p key={i} className="mb-3 last:mb-0">{paragraph}</p>
+    ))
   }
 
   if (loading) {
@@ -97,7 +108,6 @@ export default function ContentDetail() {
                 className="w-full h-full object-cover"
                 onError={() => setImageError(true)}
               />
-              {/* Increased opacity: bg-dark-900/80 */}
               <div className="absolute inset-0 backdrop-blur-xl bg-dark-900/80" />
               <div className="absolute inset-0 bg-gradient-to-t from-dark-900 via-dark-900/90 to-transparent" />
             </>
@@ -132,25 +142,7 @@ export default function ContentDetail() {
 
             {/* Info */}
             <div className="flex-1 text-center md:text-left pb-4">
-              {/* Type & Status Badges */}
-              <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mb-4">
-                <span className="px-4 py-1.5 bg-primary-500/90 rounded-full text-xs font-semibold text-white">
-                  {typeText}
-                </span>
-                <span className={`px-4 py-1.5 rounded-full text-xs font-semibold text-white ${
-                  series.status === 'ongoing' || series.status === 'Ongoing'
-                    ? 'bg-green-500/90'
-                    : 'bg-blue-500/90'
-                }`}>
-                  {series.status || 'Unknown'}
-                </span>
-                {series.is_featured && (
-                  <span className="px-4 py-1.5 bg-yellow-500/90 rounded-full text-xs font-semibold text-white flex items-center">
-                    <Award className="w-3 h-3 mr-1" />
-                    Featured
-                  </span>
-                )}
-              </div>
+              {/* ✅ REMOVED: Type & Status Badges */}
 
               {/* Title */}
               <h1 className="text-3xl md:text-5xl font-bold text-white mb-3 leading-tight">
@@ -205,7 +197,7 @@ export default function ContentDetail() {
                 </div>
               )}
 
-              {/* ✅ Genres Below Cover */}
+              {/* Genres Below Cover */}
               {series.genres && series.genres.length > 0 && (
                 <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mb-4">
                   {series.genres.slice(0, 6).map((genre: string, i: number) => (
@@ -229,15 +221,31 @@ export default function ContentDetail() {
           {/* Left Content */}
           <div className="lg:col-span-2 space-y-8">
 
-            {/* Synopsis */}
-            <div className="glass rounded-2xl p-6 md:p-8">
+            {/* ✅ Synopsis - Collapsible with Line Breaks */}
+            <div className="bg-white dark:bg-dark-800 rounded-2xl p-6 md:p-8 shadow-sm border border-light-200 dark:border-dark-700">
               <div className="flex items-center space-x-2 mb-4">
                 <BookOpen className="w-6 h-6 text-primary-500" />
-                <h2 className="text-xl font-bold text-primary">Synopsis</h2>
+                <h2 className="text-xl font-bold text-light-900 dark:text-primary">Synopsis</h2>
               </div>
-              <p className="text-secondary leading-relaxed text-base md:text-lg">
-                {series.description || series.description_vi || 'No description available.'}
-              </p>
+              <div className="relative">
+                <div className={`text-light-700 dark:text-secondary leading-relaxed text-base md:text-lg ${
+                  synopsisExpanded ? '' : 'line-clamp-4 md:line-clamp-5'
+                }`}>
+                  {formatSynopsis(series.description || series.description_vi || '')}
+                </div>
+                {!synopsisExpanded && (series.description || series.description_vi) && (
+                  <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-white dark:from-dark-800 to-transparent pointer-events-none" />
+                )}
+              </div>
+              {(series.description || series.description_vi) && (
+                <button
+                  onClick={() => setSynopsisExpanded(!synopsisExpanded)}
+                  className="mt-3 flex items-center space-x-1 text-primary-500 hover:text-primary-600 text-sm font-medium transition-colors"
+                >
+                  <span>{synopsisExpanded ? 'Less' : 'More'}</span>
+                  {synopsisExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </button>
+              )}
             </div>
 
             {/* Radar Chart (Anime Only) */}
@@ -246,10 +254,10 @@ export default function ContentDetail() {
             )}
 
             {/* Information Grid */}
-            <div className="glass rounded-2xl p-6 md:p-8">
+            <div className="bg-white dark:bg-dark-800 rounded-2xl p-6 md:p-8 shadow-sm border border-light-200 dark:border-dark-700">
               <div className="flex items-center space-x-2 mb-6">
                 <Info className="w-6 h-6 text-primary-500" />
-                <h2 className="text-xl font-bold text-primary">Information</h2>
+                <h2 className="text-xl font-bold text-light-900 dark:text-primary">Information</h2>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
                 <InfoItem icon={BookOpen} label="Type" value={typeText} />
@@ -265,18 +273,18 @@ export default function ContentDetail() {
           {/* Right Sidebar */}
           <div className="space-y-6">
             
-            {/* ✅ Tags Box - Moved ABOVE Share */}
+            {/* Tags Box - Moved ABOVE Share */}
             {(series.tags && series.tags.length > 0) && (
-              <div className="glass rounded-2xl p-6">
+              <div className="bg-white dark:bg-dark-800 rounded-2xl p-6 shadow-sm border border-light-200 dark:border-dark-700">
                 <div className="flex items-center space-x-2 mb-4">
                   <Tags className="w-5 h-5 text-primary-500" />
-                  <h3 className="text-lg font-bold text-primary">Tags</h3>
+                  <h3 className="text-lg font-bold text-light-900 dark:text-primary">Tags</h3>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {series.tags.map((tag: string, i: number) => (
                     <span
                       key={`tag-${i}`}
-                      className="px-3 py-1.5 bg-dark-800 text-secondary rounded-lg text-sm hover:bg-dark-700 transition-colors cursor-pointer"
+                      className="px-3 py-1.5 bg-light-100 dark:bg-dark-700 text-light-700 dark:text-secondary rounded-lg text-sm hover:bg-light-200 dark:hover:bg-dark-600 transition-colors cursor-pointer"
                     >
                       {tag}
                     </span>
@@ -286,55 +294,55 @@ export default function ContentDetail() {
             )}
 
             {/* Share */}
-            <div className="glass rounded-2xl p-6">
-              <h3 className="text-lg font-bold text-primary mb-4">Share</h3>
+            <div className="bg-white dark:bg-dark-800 rounded-2xl p-6 shadow-sm border border-light-200 dark:border-dark-700">
+              <h3 className="text-lg font-bold text-light-900 dark:text-primary mb-4">Share</h3>
               <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={handleShare}
-                  className="p-3 bg-dark-800 hover:bg-dark-700 rounded-lg flex items-center justify-center space-x-2 transition-colors"
+                  className="p-3 bg-light-100 dark:bg-dark-700 hover:bg-light-200 dark:hover:bg-dark-600 rounded-lg flex items-center justify-center space-x-2 transition-colors"
                 >
-                  <Copy className="w-5 h-5 text-secondary" />
-                  <span className="text-sm">Copy Link</span>
+                  <Copy className="w-5 h-5 text-light-700 dark:text-secondary" />
+                  <span className="text-sm text-light-700 dark:text-secondary">Copy Link</span>
                 </button>
                 <button
                   onClick={handleShareTwitter}
-                  className="p-3 bg-dark-800 hover:bg-dark-700 rounded-lg flex items-center justify-center space-x-2 transition-colors"
+                  className="p-3 bg-light-100 dark:bg-dark-700 hover:bg-light-200 dark:hover:bg-dark-600 rounded-lg flex items-center justify-center space-x-2 transition-colors"
                 >
-                  <Twitter className="w-5 h-5 text-secondary" />
-                  <span className="text-sm">Twitter</span>
+                  <Twitter className="w-5 h-5 text-light-700 dark:text-secondary" />
+                  <span className="text-sm text-light-700 dark:text-secondary">Twitter</span>
                 </button>
               </div>
             </div>
 
             {/* External Links */}
-            <div className="glass rounded-2xl p-6">
-              <h3 className="text-lg font-bold text-primary mb-4">External Links</h3>
+            <div className="bg-white dark:bg-dark-800 rounded-2xl p-6 shadow-sm border border-light-200 dark:border-dark-700">
+              <h3 className="text-lg font-bold text-light-900 dark:text-primary mb-4">External Links</h3>
               <div className="space-y-3">
                 <a
                   href={`https://anilist.co/search/${series.item_type || 'anime'}?search=${encodeURIComponent(series.title)}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center justify-between p-3 bg-dark-800 hover:bg-dark-700 rounded-lg transition-colors group"
+                  className="flex items-center justify-between p-3 bg-light-100 dark:bg-dark-700 hover:bg-light-200 dark:hover:bg-dark-600 rounded-lg transition-colors group"
                 >
-                  <span className="text-sm text-secondary group-hover:text-primary transition-colors">AniList</span>
-                  <ExternalLink className="w-4 h-4 text-secondary group-hover:text-primary transition-colors" />
+                  <span className="text-sm text-light-700 dark:text-secondary group-hover:text-primary-500 transition-colors">AniList</span>
+                  <ExternalLink className="w-4 h-4 text-light-500 dark:text-secondary group-hover:text-primary-500 transition-colors" />
                 </a>
                 <a
                   href={`https://myanimelist.net/search.php?q=${encodeURIComponent(series.title)}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center justify-between p-3 bg-dark-800 hover:bg-dark-700 rounded-lg transition-colors group"
+                  className="flex items-center justify-between p-3 bg-light-100 dark:bg-dark-700 hover:bg-light-200 dark:hover:bg-dark-600 rounded-lg transition-colors group"
                 >
-                  <span className="text-sm text-secondary group-hover:text-primary transition-colors">MyAnimeList</span>
-                  <ExternalLink className="w-4 h-4 text-secondary group-hover:text-primary transition-colors" />
+                  <span className="text-sm text-light-700 dark:text-secondary group-hover:text-primary-500 transition-colors">MyAnimeList</span>
+                  <ExternalLink className="w-4 h-4 text-light-500 dark:text-secondary group-hover:text-primary-500 transition-colors" />
                 </a>
               </div>
             </div>
 
             {/* Last Updated */}
-            <div className="glass rounded-2xl p-6">
-              <h3 className="text-lg font-bold text-primary mb-4">Updated</h3>
-              <div className="flex items-center space-x-3 text-secondary">
+            <div className="bg-white dark:bg-dark-800 rounded-2xl p-6 shadow-sm border border-light-200 dark:border-dark-700">
+              <h3 className="text-lg font-bold text-light-900 dark:text-primary mb-4">Updated</h3>
+              <div className="flex items-center space-x-3 text-light-700 dark:text-secondary">
                 <Calendar className="w-5 h-5 text-primary-500" />
                 <span className="text-sm">
                   {new Date(series.updated_at).toLocaleDateString('en-US', {
@@ -357,12 +365,12 @@ export default function ContentDetail() {
 // Info Item Component
 function InfoItem({ icon: Icon, label, value }: { icon: any, label: string, value: string }) {
   return (
-    <div className="p-3 bg-dark-800/50 rounded-lg">
-      <div className="flex items-center space-x-2 text-secondary mb-1">
+    <div className="p-3 bg-light-50 dark:bg-dark-700/50 rounded-lg">
+      <div className="flex items-center space-x-2 text-light-500 dark:text-gray-400 mb-1">
         <Icon className="w-4 h-4" />
         <span className="text-xs">{label}</span>
       </div>
-      <p className="text-sm font-semibold text-primary">{value}</p>
+      <p className="text-sm font-semibold text-light-900 dark:text-white">{value}</p>
     </div>
   )
 }

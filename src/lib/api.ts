@@ -6,7 +6,7 @@ export async function fetchSeries(id?: number, options?: any) {
     : `${API_BASE}/series?${new URLSearchParams(options as any)}`
 
   const res = await fetch(url, {
-    cache: 'no-store' // Disable caching for fresh data
+    cache: 'no-store'
   })
 
   if (!res.ok) {
@@ -17,7 +17,7 @@ export async function fetchSeries(id?: number, options?: any) {
   return res.json()
 }
 
-export async function fetchVoteCount(seriesId: number) {
+export async function fetchVoteCount(seriesId: number) {  // ✅ Accept number
   const res = await fetch(`${API_BASE}/votes?seriesId=${seriesId}`)
 
   if (!res.ok) throw new Error('Failed to fetch votes')
@@ -25,7 +25,7 @@ export async function fetchVoteCount(seriesId: number) {
   return res.json()
 }
 
-export async function submitVote(seriesId: number) {
+export async function submitVote(seriesId: number) {  // ✅ Accept number
   const res = await fetch(`${API_BASE}/votes`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

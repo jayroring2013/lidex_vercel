@@ -11,6 +11,7 @@ import {
   Legend,
   ChartOptions
 } from 'chart.js'
+import { Tv, Clock, Star, Users, Heart, TrendingUp, Calendar } from 'lucide-react'
 
 // Register Chart.js components
 ChartJS.register(
@@ -37,28 +38,28 @@ export default function RadarChart({ series }: RadarChartProps) {
 
   // Normalize data to 0-10 scale for radar chart
   const data = {
-    labels: ['Score', 'Popularity', 'Episodes', 'Duration', 'Members', 'Favorites'],
+    labels: ['Score', 'Popularity', 'Episodes', 'Duration', 'Favorites', 'Completion'],
     datasets: [
       {
         label: series.title,
         data: [
-          // Score (0-10)
-          parseFloat(series.score) || 0,
+          // Score (0-10) - from mean_score
+          anime_meta.mean_score ? anime_meta.mean_score / 10 : 0,
           
-          // Popularity (1-10, inverted - lower is better)
+          // Popularity (0-10, inverted - lower is better)
           anime_meta.popularity ? Math.max(0, 10 - (anime_meta.popularity / 1000)) : 5,
           
           // Episodes (0-10 scale)
           anime_meta.episodes ? Math.min(10, anime_meta.episodes / 50 * 10) : 5,
           
-          // Duration (0-10 scale, minutes)
-          anime_meta.duration ? Math.min(10, anime_meta.duration / 30 * 10) : 5,
-          
-          // Members (0-10 scale)
-          anime_meta.members ? Math.min(10, Math.log10(anime_meta.members + 1) * 2) : 5,
+          // Duration (0-10 scale, minutes per episode)
+          anime_meta.duration_min ? Math.min(10, anime_meta.duration_min / 30 * 10) : 5,
           
           // Favorites (0-10 scale)
-          anime_meta.favorites ? Math.min(10, Math.log10(anime_meta.favorites + 1) * 2.5) : 5,
+          anime_meta.favourites ? Math.min(10, Math.log10(anime_meta.favourites + 1) * 2.5) : 5,
+          
+          // Completion (0-10 based on whether it has end_date)
+          anime_meta.end_date ? 10 : anime_meta.start_date ? 5 : 0,
         ],
         backgroundColor: 'rgba(99, 102, 241, 0.2)',
         borderColor: 'rgba(99, 102, 241, 0.8)',
@@ -116,7 +117,10 @@ export default function RadarChart({ series }: RadarChartProps) {
   return (
     <div className="glass rounded-2xl p-6 md:p-8">
       <div className="flex items-center justify-between mb-6">
-        <h3 className="text-xl font-bold text-primary">Statistics Overview</h3>
+        <div className="flex items-center space-x-2">
+          <TrendingUp className="w-6 h-6 text-primary-500" />
+          <h3 className="text-xl font-bold text-primary">Statistics Overview</h3>
+        </div>
         <div className="flex items-center space-x-2 text-sm text-secondary">
           <span className="w-3 h-3 rounded-full bg-primary-500"></span>
           <span>Rating</span>
@@ -130,34 +134,34 @@ export default function RadarChart({ series }: RadarChartProps) {
       {/* Stats Legend */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-6 pt-6 border-t border-dark-700">
         <StatItem 
+          icon={Tv}
           label="Episodes" 
           value={anime_meta.episodes || 'N/A'} 
-          icon="📺"
         />
         <StatItem 
+          icon={Clock}
           label="Duration" 
-          value={anime_meta.duration ? `${anime_meta.duration} min` : 'N/A'} 
-          icon="⏱️"
+          value={anime_meta.duration_min ? `${anime_meta.duration_min} min` : 'N/A'} 
         />
         <StatItem 
-          label="Status" 
-          value={series.status || 'N/A'} 
-          icon="📊"
+          icon={Calendar}
+          label="Season" 
+          value={anime_meta.season ? `${anime_meta.season} ${anime_meta.season_year || ''}` : 'N/A'} 
         />
         <StatItem 
-          label="Members" 
-          value={anime_meta.members ? formatNumber(anime_meta.members) : 'N/A'} 
-          icon="👥"
-        />
-        <StatItem 
-          label="Favorites" 
-          value={anime_meta.favorites ? formatNumber(anime_meta.favorites) : 'N/A'} 
-          icon="❤️"
-        />
-        <StatItem 
+          icon={Users}
           label="Popularity" 
-          value={`#${anime_meta.popularity || 'N/A'}`} 
-          icon="🔥"
+          value={anime_meta.popularity ? `#${anime_meta.popularity}` : 'N/A'} 
+        />
+        <StatItem 
+          icon={Heart}
+          label="Favorites" 
+          value={anime_meta.favourites ? formatNumber(anime_meta.favourites) : 'N/A'} 
+        />
+        <StatItem 
+          icon={Star}
+          label="Mean Score" 
+          value={anime_meta.mean_score ? `${anime_meta.mean_score}/100` : 'N/A'} 
         />
       </div>
     </div>
@@ -165,12 +169,14 @@ export default function RadarChart({ series }: RadarChartProps) {
 }
 
 // Stat Item Component
-function StatItem({ label, value, icon }: { label: string, value: string | number, icon: string }) {
+function StatItem({ icon: Icon, label, value }: { icon: any, label: string, value: string | number }) {
   return (
-    <div className="text-center">
-      <div className="text-2xl mb-1">{icon}</div>
-      <div className="text-xs text-secondary mb-1">{label}</div>
-      <div className="text-sm font-semibold text-primary">{value}</div>
+    <div className="flex items-center space-x-3 p-3 bg-dark-800/50 rounded-lg">
+      <Icon className="w-5 h-5 text-primary-500 flex-shrink-0" />
+      <div className="flex-1 min-w-0">
+        <div className="text-xs text-secondary mb-0.5">{label}</div>
+        <div className="text-sm font-semibold text-primary truncate">{value}</div>
+      </div>
     </div>
   )
 }

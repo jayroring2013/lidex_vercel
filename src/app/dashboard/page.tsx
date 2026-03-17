@@ -3,24 +3,19 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { 
-  BarChart3, TrendingUp, Users, BookOpen, Tv, Book, 
-  Heart, Calendar, Star, ArrowUpRight, ArrowDownRight,
-  Loader2, ExternalLink
+  BarChart3, TrendingUp, BookOpen, Tv, Book, 
+  Heart, Loader2, ArrowUpRight, Star
 } from 'lucide-react'
 import { 
   getSiteStats, 
   getTrendingSeries, 
-  getSeriesByType, 
-  getVoteStats,
-  getReleaseSchedule,
-  getSeriesCountByType,
   getTopRatedSeries,
-  getRecentActivity
+  getSeriesCountByType,
+  getVoteStats
 } from '../../lib/supabase'
 import StatsCard from '../../components/StatsCard'
 import DashboardChart from '../../components/DashboardChart'
 import SeriesTable from '../../components/SeriesTable'
-import ActivityFeed from '../../components/ActivityFeed'
 
 export default function Dashboard() {
   const [stats, setStats] = useState(null)
@@ -28,8 +23,6 @@ export default function Dashboard() {
   const [topRated, setTopRated] = useState([])
   const [typeDistribution, setTypeDistribution] = useState([])
   const [voteStats, setVoteStats] = useState([])
-  const [recentActivity, setRecentActivity] = useState([])
-  const [releaseSchedule, setReleaseSchedule] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -40,17 +33,13 @@ export default function Dashboard() {
           trendingData,
           topRatedData,
           typeData,
-          voteData,
-          activityData,
-          releaseData
+          voteData
         ] = await Promise.all([
           getSiteStats(),
           getTrendingSeries({ limit: 5 }),
           getTopRatedSeries({ limit: 5 }),
           getSeriesCountByType(),
-          getVoteStats({ days: 30 }),
-          getRecentActivity({ limit: 10 }),
-          getReleaseSchedule({ limit: 5 })
+          getVoteStats({ days: 30 })
         ])
 
         setStats(statsData)
@@ -58,8 +47,6 @@ export default function Dashboard() {
         setTopRated(topRatedData.data || [])
         setTypeDistribution(typeData.data || [])
         setVoteStats(voteData.data || [])
-        setRecentActivity(activityData.data || [])
-        setReleaseSchedule(releaseData.data || [])
       } catch (error) {
         console.error('Failed to load dashboard:', error)
       } finally {
@@ -105,28 +92,24 @@ export default function Dashboard() {
           value={stats?.totalSeries?.toLocaleString() || '0'} 
           label="Total Series" 
           color="primary"
-          trend="+12.5%"
         />
         <StatsCard 
           icon={Tv} 
           value={stats?.totalAnime?.toLocaleString() || '0'} 
           label="Anime Titles" 
           color="purple"
-          trend="+8.3%"
         />
         <StatsCard 
           icon={Book} 
           value={stats?.totalManga?.toLocaleString() || '0'} 
           label="Manga Series" 
           color="pink"
-          trend="+15.2%"
         />
         <StatsCard 
           icon={Heart} 
           value={stats?.totalVotes?.toLocaleString() || '0'} 
           label="Total Votes" 
           color="green"
-          trend="+22.1%"
         />
       </div>
 
@@ -160,12 +143,12 @@ export default function Dashboard() {
       </div>
 
       {/* Content Grid */}
-      <div className="grid lg:grid-cols-3 gap-6 mb-8">
+      <div className="grid lg:grid-cols-2 gap-6">
         {/* Trending Series */}
-        <div className="lg:col-span-2 glass rounded-xl p-6">
+        <div className="glass rounded-xl p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-primary">Trending This Week</h3>
-            <Link href="/reports" className="text-sm text-primary-500 hover:text-primary-600 flex items-center">
+            <Link href="/dashboard" className="text-sm text-primary-500 hover:text-primary-600 flex items-center">
               View All <ArrowUpRight className="w-4 h-4 ml-1" />
             </Link>
           </div>
@@ -179,27 +162,6 @@ export default function Dashboard() {
             <Star className="w-5 h-5 text-yellow-500" />
           </div>
           <SeriesTable series={topRated} type="rated" />
-        </div>
-      </div>
-
-      {/* Activity & Releases */}
-      <div className="grid md:grid-cols-2 gap-6">
-        {/* Recent Activity */}
-        <div className="glass rounded-xl p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-primary">Recent Activity</h3>
-            <Users className="w-5 h-5 text-primary-500" />
-          </div>
-          <ActivityFeed activities={recentActivity} />
-        </div>
-
-        {/* Upcoming Releases */}
-        <div className="glass rounded-xl p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-primary">Upcoming Releases</h3>
-            <Calendar className="w-5 h-5 text-primary-500" />
-          </div>
-          <ActivityFeed activities={releaseSchedule} type="release" />
         </div>
       </div>
     </div>

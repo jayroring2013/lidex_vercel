@@ -8,10 +8,7 @@ export async function GET(request: NextRequest) {
     const seriesId = searchParams.get('seriesId')
 
     if (!seriesId) {
-      return NextResponse.json(
-        { error: 'seriesId is required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'seriesId is required' }, { status: 400 })
     }
 
     const { count, error } = await supabase
@@ -24,10 +21,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ seriesId, count: count || 0 })
   } catch (error: any) {
     console.error('API Error:', error)
-    return NextResponse.json(
-      { error: error.message },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
 
@@ -37,18 +31,12 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
 
     if (!body.novel_id) {
-      return NextResponse.json(
-        { error: 'novel_id is required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'novel_id is required' }, { status: 400 })
     }
 
     const { data, error } = await supabase
       .from('novel_votes')
-      .insert([{
-        novel_id: body.novel_id,
-        created_at: new Date().toISOString()
-      }])
+      .insert([{ novel_id: body.novel_id, created_at: new Date().toISOString() }])
       .select()
       .single()
 
@@ -57,9 +45,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(data, { status: 201 })
   } catch (error: any) {
     console.error('API Error:', error)
-    return NextResponse.json(
-      { error: error.message },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }

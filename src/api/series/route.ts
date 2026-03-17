@@ -1,49 +1,65 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { seriesService } from './service'
-import { supabase } from '@/lib/supabase'  // ← ADD THIS IMPORT
-// GET /api/series
-export async function GET(request: NextRequest) {
-  try {
-    const searchParams = request.nextUrl.searchParams
-    
-    const filters = {
-      limit: searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : undefined,
-      offset: searchParams.get('offset') ? parseInt(searchParams.get('offset')!) : undefined,
-      type: searchParams.get('type') || undefined,
-      search: searchParams.get('search') || undefined,
-    }
+import { seriesService } from '../service'
+import { supabase } from '@/lib/supabase'
 
-    const result = await seriesService.findAll(filters)
-
-    return NextResponse.json(result)
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message },
-      { status: 500 }
-    )
-  }
+interface RouteParams {
+  params: { id: string }
 }
 
-// POST /api/series
-export async function POST(request: NextRequest) {
+// GET /api/series/:id
+export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    const body = await request.json()
-
-    // Validate required fields
-    if (!body.title || !body.item_type) {
+    const id = parseInt(params.id)
+    
+    if (isNaN(id)) {
       return NextResponse.json(
-        { error: 'Title and item_type are required' },
+        { error: 'Invalid series ID' },
         { status: 400 }
       )
     }
 
-    const result = await seriesService.create(body)
+    // Get series data
+    const series = await seriesService.findOne(id)
 
-    return NextResponse.json(result, { status: 201 })
+    // Get anime metadata if applicable
+    let anime_meta = null
+    if (series.item_type === 'anime') {
+      const { data, error } = await supabase
+        .from('anime_meta')
+        .select('*')
+        .eq('series_id', id)
+        .single()
+      
+      if (!error && data) {
+        anime_meta = data
+      }
+    }
+
+    // Get manga metadata if applicable
+    let manga_meta = null
+    if (series.item_type === 'manga') {
+      const { data, error } = await supabase
+        .from('manga_meta')
+        .select('*')
+        .eq('series_id', id)
+        .single()
+      
+      if (!error && data) {
+        manga_meta = data
+      }
+    }
+
+    return NextResponse.json({
+      ...series,
+      anime_meta,
+      manga_meta
+    })
   } catch (error: any) {
     return NextResponse.json(
       { error: error.message },
-      { status: 500 }
+      { status: error.message.includes('not found') ? 404 : 500 }
     )
   }
 }
+
+// ... PUT and DELETE methods remain the same

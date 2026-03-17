@@ -22,7 +22,6 @@ export default function ContentDetail() {
 
   // Convert string to number
   const seriesId = params.id ? parseInt(params.id as string) : undefined
-  const realtime = useRealtime(seriesId)
 
   useEffect(() => {
     async function loadData() {
@@ -47,7 +46,7 @@ export default function ContentDetail() {
     }
     loadData()
   }, [seriesId])
-  
+
   const handleVote = async () => {
     if (!seriesId || voting) return
     
@@ -272,7 +271,7 @@ export default function ContentDetail() {
               </p>
             </div>
 
-            {/* ✅ RADAR CHART (Anime Only) */}
+            {/* Radar Chart (Anime Only) */}
             {series.item_type === 'anime' && series.anime_meta && (
               <RadarChart series={series} />
             )}

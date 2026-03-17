@@ -56,7 +56,7 @@ export default function ContentDetail() {
   }
 
   const formatSynopsis = (text: string) => {
-    if (!text) return <p className="text-gray-400 dark:text-gray-500 italic">No description available.</p>
+    if (!text) return <p style={{ color: 'var(--foreground-muted)', fontStyle: 'italic' }}>No description available.</p>
     const cleanText = text.replace(/<br\s*\/?>/gi, '\n\n')
     return cleanText.split(/\n\n+/).map((paragraph, i) => (
       <p key={i} className="mb-3 last:mb-0">{paragraph}</p>
@@ -65,10 +65,10 @@ export default function ContentDetail() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-dark-900">
+      <div className="flex items-center justify-center min-h-screen" style={{ background: 'var(--background)' }}>
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="w-10 h-10 text-primary-500 animate-spin" />
-          <p className="text-sm text-gray-500 dark:text-gray-400 animate-pulse">Loading series…</p>
+          <p className="text-sm animate-pulse" style={{ color: 'var(--foreground-muted)' }}>Loading series…</p>
         </div>
       </div>
     )
@@ -76,11 +76,11 @@ export default function ContentDetail() {
 
   if (error || !series) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-dark-900 flex items-center justify-center px-4">
+      <div className="min-h-screen flex items-center justify-center px-4" style={{ background: 'var(--background)' }}>
         <div className="text-center max-w-md">
           <ArrowLeft className="w-16 h-16 text-red-500 mx-auto mb-6" />
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Series Not Found</h1>
-          <p className="text-gray-600 dark:text-gray-400 mb-6">{error || "The series you're looking for doesn't exist."}</p>
+          <h1 className="text-2xl font-bold mb-4" style={{ color: 'var(--foreground)' }}>Series Not Found</h1>
+          <p className="mb-6" style={{ color: 'var(--foreground-secondary)' }}>{error || "The series you're looking for doesn't exist."}</p>
           <Link href="/dashboard" className="btn-primary inline-flex items-center space-x-2">
             <ArrowLeft className="w-5 h-5" /><span>Back to Dashboard</span>
           </Link>
@@ -93,17 +93,12 @@ export default function ContentDetail() {
   const isOngoing = series.status === 'ongoing' || series.status === 'Ongoing'
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-dark-900 overflow-x-hidden">
+    <div className="min-h-screen overflow-x-hidden" style={{ background: 'var(--background)' }}>
 
-      {/* ── Hero Banner ──
-          KEY FIX: the hero is a self-contained block with its own padding that
-          pushes content down. The background image sits inside it via
-          absolute inset-0 — so its height naturally matches the content height.
-          No more fixed h-[Xpx] on the background that mismatches the parent.
-      */}
+      {/* ── Hero Banner ── */}
       <div className="relative w-full overflow-hidden">
 
-        {/* Background fills the whole hero block */}
+        {/* Background — absolute inset-0 fills the hero's natural height */}
         <div className="absolute inset-0">
           {bannerImage ? (
             <>
@@ -123,7 +118,7 @@ export default function ContentDetail() {
           )}
         </div>
 
-        {/* Hero content — drives the height of the section via padding */}
+        {/* Hero content drives the section height */}
         <div className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row md:items-end gap-5 md:gap-8 pt-24 sm:pt-28 pb-10 sm:pb-14">
 
@@ -219,25 +214,32 @@ export default function ContentDetail() {
       </div>
       {/* ── END Hero ── */}
 
-      {/* ── Main Content — sits below the hero in normal document flow ── */}
+      {/* ── Main Content ── */}
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
         <div className="grid lg:grid-cols-3 gap-6 sm:gap-8 items-start">
 
           {/* Left Column */}
           <div className="lg:col-span-2 space-y-6 sm:space-y-8 min-w-0">
 
-            {/* Synopsis */}
-            <div className="bg-white dark:glass rounded-2xl p-5 sm:p-6 md:p-8 border border-gray-200 dark:border-transparent shadow-sm dark:shadow-none">
+            {/* Synopsis — glass handles both modes via CSS vars */}
+            <div className="glass rounded-2xl p-5 sm:p-6 md:p-8">
               <div className="flex items-center space-x-2 mb-4">
                 <BookOpen className="w-5 h-5 sm:w-6 sm:h-6 text-primary-500 flex-shrink-0" />
-                <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">Synopsis</h2>
+                <h2 className="text-lg sm:text-xl font-bold" style={{ color: 'var(--foreground)' }}>Synopsis</h2>
               </div>
               <div className="relative">
-                <div className={`text-gray-700 dark:text-gray-300 leading-relaxed text-sm sm:text-base md:text-lg ${synopsisExpanded ? '' : 'line-clamp-4 md:line-clamp-5'}`}>
+                <div
+                  className={`leading-relaxed text-sm sm:text-base md:text-lg ${synopsisExpanded ? '' : 'line-clamp-4 md:line-clamp-5'}`}
+                  style={{ color: 'var(--foreground-secondary)' }}
+                >
                   {formatSynopsis(series.description || series.description_vi || '')}
                 </div>
+                {/* Fade uses the CSS variable so it matches the card bg in both modes */}
                 {!synopsisExpanded && (series.description || series.description_vi) && (
-                  <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-white dark:from-dark-900 to-transparent pointer-events-none" />
+                  <div
+                    className="absolute bottom-0 left-0 right-0 h-10 pointer-events-none"
+                    style={{ background: 'linear-gradient(to top, var(--glass-bg), transparent)' }}
+                  />
                 )}
               </div>
               {(series.description || series.description_vi) && (
@@ -257,10 +259,10 @@ export default function ContentDetail() {
             )}
 
             {/* Information Grid */}
-            <div className="bg-white dark:glass rounded-2xl p-5 sm:p-6 md:p-8 border border-gray-200 dark:border-transparent shadow-sm dark:shadow-none">
+            <div className="glass rounded-2xl p-5 sm:p-6 md:p-8">
               <div className="flex items-center space-x-2 mb-5 sm:mb-6">
                 <Info className="w-5 h-5 sm:w-6 sm:h-6 text-primary-500 flex-shrink-0" />
-                <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">Information</h2>
+                <h2 className="text-lg sm:text-xl font-bold" style={{ color: 'var(--foreground)' }}>Information</h2>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
                 <InfoItem icon={BookOpen}   label="Type"        value={typeText} />
@@ -278,14 +280,18 @@ export default function ContentDetail() {
 
             {/* Tags */}
             {series.tags && series.tags.length > 0 && (
-              <div className="bg-white dark:glass rounded-2xl p-5 sm:p-6 border border-gray-200 dark:border-transparent shadow-sm dark:shadow-none">
+              <div className="glass rounded-2xl p-5 sm:p-6">
                 <div className="flex items-center space-x-2 mb-4">
                   <Tags className="w-4 h-4 sm:w-5 sm:h-5 text-primary-500 flex-shrink-0" />
-                  <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">Tags</h3>
+                  <h3 className="text-base sm:text-lg font-bold" style={{ color: 'var(--foreground)' }}>Tags</h3>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {series.tags.map((tag: string, i: number) => (
-                    <span key={`tag-${i}`} className="px-2.5 py-1 bg-gray-100 dark:bg-dark-800 text-gray-700 dark:text-gray-300 rounded-lg text-xs sm:text-sm hover:bg-gray-200 dark:hover:bg-dark-700 transition-colors cursor-pointer">
+                    <span
+                      key={`tag-${i}`}
+                      className="px-2.5 py-1 rounded-lg text-xs sm:text-sm transition-colors cursor-pointer"
+                      style={{ background: 'var(--background-secondary)', color: 'var(--foreground-secondary)' }}
+                    >
                       {tag}
                     </span>
                   ))}
@@ -294,22 +300,24 @@ export default function ContentDetail() {
             )}
 
             {/* Share */}
-            <div className="bg-white dark:glass rounded-2xl p-5 sm:p-6 border border-gray-200 dark:border-transparent shadow-sm dark:shadow-none">
+            <div className="glass rounded-2xl p-5 sm:p-6">
               <div className="flex items-center space-x-2 mb-4">
                 <Share2 className="w-4 h-4 sm:w-5 sm:h-5 text-primary-500 flex-shrink-0" />
-                <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">Share</h3>
+                <h3 className="text-base sm:text-lg font-bold" style={{ color: 'var(--foreground)' }}>Share</h3>
               </div>
               <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
                 <button
                   onClick={handleShare}
-                  className="p-2.5 sm:p-3 bg-gray-100 dark:bg-dark-800 hover:bg-gray-200 dark:hover:bg-dark-700 rounded-lg flex items-center justify-center gap-1.5 sm:gap-2 transition-colors text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white border border-gray-200 dark:border-transparent"
+                  className="p-2.5 sm:p-3 rounded-lg flex items-center justify-center gap-1.5 sm:gap-2 transition-colors"
+                  style={{ background: 'var(--background-secondary)', color: 'var(--foreground-secondary)', border: '1px solid var(--card-border)' }}
                 >
                   <Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                   <span className="text-xs sm:text-sm font-medium truncate">{copied ? 'Copied!' : 'Copy Link'}</span>
                 </button>
                 <button
                   onClick={handleShareTwitter}
-                  className="p-2.5 sm:p-3 bg-gray-100 dark:bg-dark-800 hover:bg-gray-200 dark:hover:bg-dark-700 rounded-lg flex items-center justify-center gap-1.5 sm:gap-2 transition-colors text-gray-700 dark:text-gray-300 hover:text-[#1d9bf0] border border-gray-200 dark:border-transparent"
+                  className="p-2.5 sm:p-3 rounded-lg flex items-center justify-center gap-1.5 sm:gap-2 transition-colors hover:text-[#1d9bf0]"
+                  style={{ background: 'var(--background-secondary)', color: 'var(--foreground-secondary)', border: '1px solid var(--card-border)' }}
                 >
                   <Twitter className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                   <span className="text-xs sm:text-sm font-medium">Twitter</span>
@@ -318,43 +326,45 @@ export default function ContentDetail() {
             </div>
 
             {/* External Links */}
-            <div className="bg-white dark:glass rounded-2xl p-5 sm:p-6 border border-gray-200 dark:border-transparent shadow-sm dark:shadow-none">
+            <div className="glass rounded-2xl p-5 sm:p-6">
               <div className="flex items-center space-x-2 mb-4">
                 <ExternalLink className="w-4 h-4 sm:w-5 sm:h-5 text-primary-500 flex-shrink-0" />
-                <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">External Links</h3>
+                <h3 className="text-base sm:text-lg font-bold" style={{ color: 'var(--foreground)' }}>External Links</h3>
               </div>
               <div className="space-y-2.5 sm:space-y-3">
                 <a
                   href={`https://anilist.co/search/${series.item_type || 'anime'}?search=${encodeURIComponent(series.title)}`}
                   target="_blank" rel="noopener noreferrer"
-                  className="flex items-center justify-between p-2.5 sm:p-3 bg-gray-100 dark:bg-dark-800 hover:bg-gray-200 dark:hover:bg-dark-700 rounded-lg transition-colors group border border-gray-200 dark:border-transparent"
+                  className="flex items-center justify-between p-2.5 sm:p-3 rounded-lg transition-colors group"
+                  style={{ background: 'var(--background-secondary)', border: '1px solid var(--card-border)' }}
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="w-2 h-2 rounded-full bg-[#02a9ff] flex-shrink-0" />
-                    <span className="text-xs sm:text-sm text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white font-medium truncate">AniList</span>
+                    <span className="text-xs sm:text-sm font-medium truncate group-hover:text-primary-500 transition-colors" style={{ color: 'var(--foreground-secondary)' }}>AniList</span>
                   </div>
-                  <ExternalLink className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 dark:text-gray-500 group-hover:text-primary-500 flex-shrink-0 ml-2" />
+                  <ExternalLink className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ml-2 group-hover:text-primary-500 transition-colors" style={{ color: 'var(--foreground-muted)' }} />
                 </a>
                 <a
                   href={`https://myanimelist.net/search.php?q=${encodeURIComponent(series.title)}`}
                   target="_blank" rel="noopener noreferrer"
-                  className="flex items-center justify-between p-2.5 sm:p-3 bg-gray-100 dark:bg-dark-800 hover:bg-gray-200 dark:hover:bg-dark-700 rounded-lg transition-colors group border border-gray-200 dark:border-transparent"
+                  className="flex items-center justify-between p-2.5 sm:p-3 rounded-lg transition-colors group"
+                  style={{ background: 'var(--background-secondary)', border: '1px solid var(--card-border)' }}
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="w-2 h-2 rounded-full bg-[#2e51a2] flex-shrink-0" />
-                    <span className="text-xs sm:text-sm text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white font-medium truncate">MyAnimeList</span>
+                    <span className="text-xs sm:text-sm font-medium truncate group-hover:text-primary-500 transition-colors" style={{ color: 'var(--foreground-secondary)' }}>MyAnimeList</span>
                   </div>
-                  <ExternalLink className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 dark:text-gray-500 group-hover:text-primary-500 flex-shrink-0 ml-2" />
+                  <ExternalLink className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ml-2 group-hover:text-primary-500 transition-colors" style={{ color: 'var(--foreground-muted)' }} />
                 </a>
               </div>
             </div>
 
             {/* Last Updated */}
-            <div className="bg-white dark:glass rounded-2xl p-5 sm:p-6 border border-gray-200 dark:border-transparent shadow-sm dark:shadow-none">
-              <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-3 sm:mb-4">Updated</h3>
+            <div className="glass rounded-2xl p-5 sm:p-6">
+              <h3 className="text-base sm:text-lg font-bold mb-3 sm:mb-4" style={{ color: 'var(--foreground)' }}>Updated</h3>
               <div className="flex items-center gap-2.5">
                 <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-primary-500 flex-shrink-0" />
-                <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                <span className="text-xs sm:text-sm" style={{ color: 'var(--foreground-secondary)' }}>
                   {new Date(series.updated_at).toLocaleDateString('en-US', {
                     year: 'numeric', month: 'long', day: 'numeric',
                     hour: '2-digit', minute: '2-digit'
@@ -371,12 +381,15 @@ export default function ContentDetail() {
 
 function InfoItem({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
   return (
-    <div className="p-2.5 sm:p-3 bg-gray-100 dark:bg-dark-800/50 rounded-lg border border-gray-200 dark:border-transparent">
-      <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400 mb-1">
+    <div
+      className="p-2.5 sm:p-3 rounded-lg"
+      style={{ background: 'var(--background-secondary)', border: '1px solid var(--card-border)' }}
+    >
+      <div className="flex items-center gap-1.5 mb-1" style={{ color: 'var(--foreground-muted)' }}>
         <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
         <span className="text-[0.65rem] sm:text-xs truncate">{label}</span>
       </div>
-      <p className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white truncate">{value}</p>
+      <p className="text-xs sm:text-sm font-semibold truncate" style={{ color: 'var(--foreground)' }}>{value}</p>
     </div>
   )
 }

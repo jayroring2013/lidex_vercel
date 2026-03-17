@@ -11,18 +11,11 @@ import {
   Legend,
   ChartOptions
 } from 'chart.js'
-import { Tv, Clock, Star, Users, Heart, TrendingUp, Calendar, Award } from 'lucide-react'
+import { Tv, Clock, TrendingUp, Users, Heart, Calendar, Award } from 'lucide-react'
 import { usePopularityStats } from '@/hooks/usePopularityStats'
 import { useEffect, useState } from 'react'
 
-ChartJS.register(
-  RadialLinearScale,
-  PointElement,
-  LineElement,
-  Filler,
-  Tooltip,
-  Legend
-)
+ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend)
 
 interface RadarChartProps {
   series: any
@@ -30,12 +23,10 @@ interface RadarChartProps {
 
 export default function RadarChart({ series }: RadarChartProps) {
   const { stats: popularityStats, loading } = usePopularityStats()
-  // Track dark mode so chart colors re-render correctly
   const [isDark, setIsDark] = useState(false)
 
   useEffect(() => {
-    const update = () =>
-      setIsDark(document.documentElement.classList.contains('dark'))
+    const update = () => setIsDark(document.documentElement.classList.contains('dark'))
     update()
     const observer = new MutationObserver(update)
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
@@ -45,36 +36,32 @@ export default function RadarChart({ series }: RadarChartProps) {
   if (series.item_type !== 'anime') return null
 
   const anime_meta = series.anime_meta || {}
-
   const popularityScore = calculatePopularityScore(anime_meta.popularity, popularityStats)
 
-  // Adaptive colors based on theme
-  const labelColor     = isDark ? 'rgba(148, 163, 184, 1)'   : 'rgba(71, 85, 105, 1)'
-  const gridColor      = isDark ? 'rgba(148, 163, 184, 0.2)' : 'rgba(100, 116, 139, 0.15)'
-  const angleLineColor = isDark ? 'rgba(148, 163, 184, 0.3)' : 'rgba(100, 116, 139, 0.2)'
+  const labelColor     = isDark ? 'rgba(148,163,184,1)'   : 'rgba(71,85,105,1)'
+  const gridColor      = isDark ? 'rgba(148,163,184,0.2)' : 'rgba(100,116,139,0.15)'
+  const angleLineColor = isDark ? 'rgba(148,163,184,0.3)' : 'rgba(100,116,139,0.2)'
 
   const data = {
     labels: ['Score', 'Popularity', 'Episodes', 'Duration', 'Favorites', 'Completion'],
-    datasets: [
-      {
-        label: series.title,
-        data: [
-          anime_meta.mean_score ? anime_meta.mean_score / 10 : 0,
-          popularityScore,
-          anime_meta.episodes ? Math.min(10, anime_meta.episodes / 50 * 10) : 5,
-          anime_meta.duration_min ? Math.min(10, anime_meta.duration_min / 30 * 10) : 5,
-          anime_meta.favourites ? Math.min(10, Math.log10(anime_meta.favourites + 1) * 2.5) : 5,
-          anime_meta.end_date ? 10 : anime_meta.start_date ? 5 : 0,
-        ],
-        backgroundColor: 'rgba(99, 102, 241, 0.15)',
-        borderColor: 'rgba(99, 102, 241, 0.8)',
-        borderWidth: 2,
-        pointBackgroundColor: 'rgba(99, 102, 241, 1)',
-        pointBorderColor: isDark ? '#1e293b' : '#ffffff',
-        pointHoverBackgroundColor: isDark ? '#fff' : '#4f46e5',
-        pointHoverBorderColor: 'rgba(99, 102, 241, 1)',
-      },
-    ],
+    datasets: [{
+      label: series.title,
+      data: [
+        anime_meta.mean_score   ? anime_meta.mean_score / 10                                     : 0,
+        popularityScore,
+        anime_meta.episodes     ? Math.min(10, anime_meta.episodes / 50 * 10)                   : 5,
+        anime_meta.duration_min ? Math.min(10, anime_meta.duration_min / 30 * 10)               : 5,
+        anime_meta.favourites   ? Math.min(10, Math.log10(anime_meta.favourites + 1) * 2.5)     : 5,
+        anime_meta.end_date     ? 10 : anime_meta.start_date ? 5 : 0,
+      ],
+      backgroundColor: 'rgba(99,102,241,0.15)',
+      borderColor:     'rgba(99,102,241,0.8)',
+      borderWidth: 2,
+      pointBackgroundColor:    'rgba(99,102,241,1)',
+      pointBorderColor:        isDark ? '#1e293b' : '#ffffff',
+      pointHoverBackgroundColor: isDark ? '#fff' : '#4f46e5',
+      pointHoverBorderColor:   'rgba(99,102,241,1)',
+    }],
   }
 
   const options: ChartOptions<'radar'> = {
@@ -84,10 +71,7 @@ export default function RadarChart({ series }: RadarChartProps) {
       r: {
         angleLines: { color: angleLineColor },
         grid:       { color: gridColor },
-        pointLabels: {
-          color: labelColor,
-          font: { size: 12, weight: 600 as any },
-        },
+        pointLabels: { color: labelColor, font: { size: 12, weight: 600 as any } },
         ticks: { display: false, stepSize: 2 },
         suggestedMin: 0,
         suggestedMax: 10,
@@ -108,10 +92,10 @@ export default function RadarChart({ series }: RadarChartProps) {
       <div className="glass rounded-2xl p-6 md:p-8">
         <div className="flex items-center space-x-2 mb-6">
           <TrendingUp className="w-6 h-6 text-primary-500" />
-          <h3 className="text-xl font-bold text-gray-900 dark:text-white">Statistics Overview</h3>
+          <h3 className="text-xl font-bold" style={{ color: 'var(--foreground)' }}>Statistics Overview</h3>
         </div>
         <div className="h-64 md:h-80 flex items-center justify-center">
-          <span className="text-sm text-gray-500 dark:text-gray-400">Loading stats…</span>
+          <span className="text-sm" style={{ color: 'var(--foreground-muted)' }}>Loading stats…</span>
         </div>
       </div>
     )
@@ -123,9 +107,9 @@ export default function RadarChart({ series }: RadarChartProps) {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center space-x-2">
           <TrendingUp className="w-6 h-6 text-primary-500" />
-          <h3 className="text-xl font-bold text-gray-900 dark:text-white">Statistics Overview</h3>
+          <h3 className="text-xl font-bold" style={{ color: 'var(--foreground)' }}>Statistics Overview</h3>
         </div>
-        <div className="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400">
+        <div className="flex items-center space-x-2 text-sm" style={{ color: 'var(--foreground-muted)' }}>
           <span className="w-3 h-3 rounded-full bg-primary-500" />
           <span>Rating</span>
         </div>
@@ -137,7 +121,10 @@ export default function RadarChart({ series }: RadarChartProps) {
       </div>
 
       {/* Stat grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-6 pt-6 border-t border-gray-200 dark:border-dark-700">
+      <div
+        className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-6 pt-6"
+        style={{ borderTop: '1px solid var(--card-border)' }}
+      >
         <StatItem icon={Tv}       label="Episodes"         value={anime_meta.episodes || 'N/A'} />
         <StatItem icon={Clock}    label="Duration"         value={anime_meta.duration_min ? `${anime_meta.duration_min} min` : 'N/A'} />
         <StatItem icon={Calendar} label="Season"           value={anime_meta.season ? `${anime_meta.season.toUpperCase()} ${anime_meta.season_year || ''}` : 'N/A'} />
@@ -170,11 +157,14 @@ function calculatePopularityScore(popularity: number | null | undefined, stats: 
 
 function StatItem({ icon: Icon, label, value }: { icon: any; label: string; value: string | number }) {
   return (
-    <div className="flex items-center space-x-3 p-3 bg-gray-100 dark:bg-dark-800/50 rounded-lg border border-gray-200 dark:border-transparent">
+    <div
+      className="flex items-center space-x-3 p-3 rounded-lg"
+      style={{ background: 'var(--background-secondary)', border: '1px solid var(--card-border)' }}
+    >
       <Icon className="w-5 h-5 text-primary-500 flex-shrink-0" />
       <div className="flex-1 min-w-0">
-        <div className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">{label}</div>
-        <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">{value}</div>
+        <div className="text-xs mb-0.5 truncate" style={{ color: 'var(--foreground-muted)' }}>{label}</div>
+        <div className="text-sm font-semibold truncate" style={{ color: 'var(--foreground)' }}>{value}</div>
       </div>
     </div>
   )

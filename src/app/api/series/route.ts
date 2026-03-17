@@ -13,13 +13,8 @@ export async function GET(request: NextRequest) {
 
     let query = supabase.from('series').select('*', { count: 'exact' })
 
-    if (type) {
-      query = query.eq('item_type', type)
-    }
-
-    if (search) {
-      query = query.ilike('title', `%${search}%`)
-    }
+    if (type) query = query.eq('item_type', type)
+    if (search) query = query.ilike('title', `%${search}%`)
 
     query = query.order('created_at', { ascending: false })
     query = query.range(offset, offset + limit - 1)
@@ -31,39 +26,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ data, count: count || 0 })
   } catch (error: any) {
     console.error('API Error:', error)
-    return NextResponse.json(
-      { error: error.message },
-      { status: 500 }
-    )
-  }
-}
-
-// POST /api/series
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json()
-
-    if (!body.title || !body.item_type) {
-      return NextResponse.json(
-        { error: 'Title and item_type are required' },
-        { status: 400 }
-      )
-    }
-
-    const { data, error } = await supabase
-      .from('series')
-      .insert([body])
-      .select()
-      .single()
-
-    if (error) throw new Error(error.message)
-
-    return NextResponse.json(data, { status: 201 })
-  } catch (error: any) {
-    console.error('API Error:', error)
-    return NextResponse.json(
-      { error: error.message },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }

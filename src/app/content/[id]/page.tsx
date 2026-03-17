@@ -6,10 +6,11 @@ import Link from 'next/link'
 import { 
   Star, Heart, Calendar, BookOpen, Info, Tags, 
   ExternalLink, Share2, Copy, Twitter, Loader2,
-  ArrowLeft, Bookmark, Book, Award, TrendingUp, Globe
+  ArrowLeft, Bookmark, Book, Award, TrendingUp, Globe, Tv, Clock, Users
 } from 'lucide-react'
 import { fetchSeries, fetchVoteCount, submitVote } from '@/lib/api'
 import { useRealtime } from '@/hooks/useRealtime'
+import RadarChart from '@/components/RadarChart'
 
 export default function ContentDetail() {
   const params = useParams()
@@ -20,7 +21,7 @@ export default function ContentDetail() {
   const [voting, setVoting] = useState(false)
   const [bookmarked, setBookmarked] = useState(false)
 
-  // ✅ Convert string to number (ONCE)
+  // Convert string to number
   const seriesId = params.id ? parseInt(params.id as string) : undefined
   const realtime = useRealtime(seriesId)
 
@@ -278,6 +279,11 @@ export default function ContentDetail() {
                 {series.description || series.description_vi || 'No description available.'}
               </p>
             </div>
+
+            {/* ✅ RADAR CHART (Anime Only) */}
+            {series.item_type === 'anime' && series.anime_meta && (
+              <RadarChart series={series} />
+            )}
             
             {/* Genres & Tags */}
             {(series.genres?.length > 0 || series.tags?.length > 0) && (

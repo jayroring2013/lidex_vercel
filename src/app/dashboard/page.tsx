@@ -1,45 +1,35 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
 import {
-  TrendingUp, BookOpen, Tv, Book,
-  Loader2, ArrowUpRight, Star, RefreshCw
+  BookOpen, Tv, Book, Loader2, Star, RefreshCw
 } from 'lucide-react'
 import {
   getSiteStats,
-  getTrendingSeries,
   getTopRatedSeries,
-  getSeriesCountByType,
 } from '../../lib/supabase'
 import StatsCard from '../../components/StatsCard'
 import SeriesTable from '../../components/SeriesTable'
 
-// ── Types ─────────────────────────────────────────────────────────────────────
 interface SiteStats {
   totalSeries: number
   totalAnime:  number
   totalManga:  number
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const [stats,    setStats]    = useState<SiteStats | null>(null)
-  const [trending, setTrending] = useState<any[]>([])
   const [topRated, setTopRated] = useState<any[]>([])
   const [loading,  setLoading]  = useState(true)
 
   useEffect(() => {
     async function loadDashboard() {
       try {
-        const [statsData, trendingData, topRatedData] = await Promise.all([
+        const [statsData, topRatedData] = await Promise.all([
           getSiteStats(),
-          getTrendingSeries({ limit: 5 }),
-          getTopRatedSeries({ limit: 5 }),
+          getTopRatedSeries({ limit: 10 }),
         ])
-
         setStats(statsData)
-        setTrending(trendingData.data || [])
         setTopRated(topRatedData.data || [])
       } catch (error) {
         console.error('Failed to load dashboard:', error)
@@ -111,49 +101,19 @@ export default function Dashboard() {
           />
         </div>
 
-        {/* ── Tables Row ── */}
-        <div className="grid lg:grid-cols-2 gap-6">
-
-          {/* Trending */}
-          <div className="glass rounded-xl overflow-hidden">
-            <div
-              className="flex items-center justify-between px-6 py-4"
-              style={{ borderBottom: '1px solid var(--card-border)' }}
-            >
-              <div className="flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-primary-500" />
-                <h3 className="text-base font-semibold" style={{ color: 'var(--foreground)' }}>
-                  Trending This Week
-                </h3>
-              </div>
-              <Link
-                href="/dashboard"
-                className="flex items-center gap-1 text-sm text-primary-500 hover:text-primary-400 transition-colors"
-              >
-                View All <ArrowUpRight className="w-4 h-4" />
-              </Link>
-            </div>
-            <div className="p-4">
-              <SeriesTable series={trending} type="trending" />
-            </div>
+        {/* ── Top Rated Table (full width) ── */}
+        <div className="glass rounded-xl overflow-hidden">
+          <div
+            className="flex items-center gap-2 px-6 py-4"
+            style={{ borderBottom: '1px solid var(--card-border)' }}
+          >
+            <Star className="w-5 h-5 text-yellow-500" />
+            <h3 className="text-base font-semibold" style={{ color: 'var(--foreground)' }}>
+              Top Rated
+            </h3>
           </div>
-
-          {/* Top Rated */}
-          <div className="glass rounded-xl overflow-hidden">
-            <div
-              className="flex items-center justify-between px-6 py-4"
-              style={{ borderBottom: '1px solid var(--card-border)' }}
-            >
-              <div className="flex items-center gap-2">
-                <Star className="w-5 h-5 text-yellow-500" />
-                <h3 className="text-base font-semibold" style={{ color: 'var(--foreground)' }}>
-                  Top Rated
-                </h3>
-              </div>
-            </div>
-            <div className="p-4">
-              <SeriesTable series={topRated} type="rated" />
-            </div>
+          <div className="p-4">
+            <SeriesTable series={topRated} type="rated" />
           </div>
         </div>
 

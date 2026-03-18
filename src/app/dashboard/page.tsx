@@ -45,7 +45,7 @@ export default function Dashboard() {
         setStats(statsData)
         setTrending(trendingData.data || [])
         setTopRated(topRatedData.data || [])
-        setTypeDistribution(typeData.data || [])
+        setTypeDistribution(Array.isArray(typeData.data) ? typeData.data : [0, 0, 0])
         setVoteStats(voteData.data || [])
       } catch (error) {
         console.error('Failed to load dashboard:', error)

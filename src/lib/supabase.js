@@ -84,7 +84,7 @@ export async function getSeriesCountByType() {
     const [anime, manga, ln] = await Promise.all([
       supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'anime'),
       supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'manga'),
-      supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'light_novel')
+      supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'novel')
     ])
     
     return { data: [anime.count || 0, manga.count || 0, ln.count || 0], error: null }

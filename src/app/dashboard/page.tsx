@@ -21,7 +21,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState(null)
   const [trending, setTrending] = useState([])
   const [topRated, setTopRated] = useState([])
-  const [typeDistribution, setTypeDistribution] = useState([])
+  const [typeDistribution, setTypeDistribution] = useState([0, 0, 0])
   const [voteStats, setVoteStats] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -45,8 +45,55 @@ export default function Dashboard() {
         setStats(statsData)
         setTrending(trendingData.data || [])
         setTopRated(topRatedData.data || [])
-        setTypeDistribution(Array.isArray(typeData.data) ? typeData.data : [0, 0, 0])
         setVoteStats(voteData.data || [])
+
+        // ── Fix: robustly parse whatever shape getSeriesCountByType returns ──
+        console.log('[DEBUG] typeData:', typeData) // remove after confirming it works
+
+        const rawTypes = Array.isArray(typeData?.data)
+          ? typeData.data
+          : Array.isArray(typeData)
+          ? typeData
+          : []
+
+        if (rawTypes.length > 0) {
+          const first = rawTypes[0]
+
+          if (typeof first === 'number') {
+            // Already a plain number array e.g. [150, 80, 45]
+            setTypeDistribution([
+              rawTypes[0] || 0,
+              rawTypes[1] || 0,
+              rawTypes[2] || 0,
+            ])
+          } else if (typeof first === 'object') {
+            // Object array — find count by item_type field
+            // Handles: { item_type, count } or { type, count } or { name, count }
+            const getCount = (row: any) =>
+              Number(row?.count ?? row?.total ?? row?.value ?? 0)
+
+            const getType = (row: any): string =>
+              (row?.item_type ?? row?.type ?? row?.name ?? '').toLowerCase()
+
+            // Build a map keyed by type name
+            const typeMap: Record<string, number> = {}
+            for (const row of rawTypes) {
+              typeMap[getType(row)] = getCount(row)
+            }
+
+            console.log('[DEBUG] typeMap:', typeMap) // remove after confirming
+
+            setTypeDistribution([
+              typeMap['anime']                                   || 0,
+              typeMap['manga']                                   || 0,
+              typeMap['light_novel'] ?? typeMap['novel'] ?? typeMap['ln'] ?? 0,
+            ])
+          }
+        } else {
+          // No data returned — keep [0, 0, 0]
+          setTypeDistribution([0, 0, 0])
+        }
+
       } catch (error) {
         console.error('Failed to load dashboard:', error)
       } finally {

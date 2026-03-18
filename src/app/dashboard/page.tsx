@@ -17,12 +17,19 @@ import StatsCard from '../../components/StatsCard'
 import DashboardChart from '../../components/DashboardChart'
 import SeriesTable from '../../components/SeriesTable'
 
+interface SiteStats {
+  totalSeries: number
+  totalAnime: number
+  totalManga: number
+  totalVotes: number
+}
+
 export default function Dashboard() {
-  const [stats, setStats] = useState(null)
-  const [trending, setTrending] = useState([])
-  const [topRated, setTopRated] = useState([])
-  const [typeDistribution, setTypeDistribution] = useState([0, 0, 0])
-  const [voteStats, setVoteStats] = useState([])
+  const [stats, setStats] = useState<SiteStats | null>(null)
+  const [trending, setTrending] = useState<any[]>([])
+  const [topRated, setTopRated] = useState<any[]>([])
+  const [typeDistribution, setTypeDistribution] = useState<number[]>([0, 0, 0])
+  const [voteStats, setVoteStats] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {

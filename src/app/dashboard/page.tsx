@@ -145,10 +145,10 @@ export default function Dashboard() {
 
       {/* Stats Overview */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <StatsCard icon={BookOpen} value={stats?.totalSeries?.toLocaleString() || '0'} label="Total Series"  color="primary" />
-        <StatsCard icon={Tv}       value={stats?.totalAnime?.toLocaleString()  || '0'} label="Anime Titles"  color="purple"  />
-        <StatsCard icon={Book}     value={stats?.totalManga?.toLocaleString()  || '0'} label="Manga Series"  color="pink"    />
-        <StatsCard icon={Heart}    value={stats?.totalVotes?.toLocaleString()  || '0'} label="Total Votes"   color="green"   />
+        <StatsCard icon={BookOpen} value={stats?.totalSeries?.toLocaleString() || '0'} label="Total Series"  color="primary" trend={null} />
+        <StatsCard icon={Tv}       value={stats?.totalAnime?.toLocaleString()  || '0'} label="Anime Titles"  color="purple"  trend={null} />
+        <StatsCard icon={Book}     value={stats?.totalManga?.toLocaleString()  || '0'} label="Manga Series"  color="pink"    trend={null} />
+        <StatsCard icon={Heart}    value={stats?.totalVotes?.toLocaleString()  || '0'} label="Total Votes"   color="green"   trend={null} />
       </div>
 
       {/* Charts Row */}

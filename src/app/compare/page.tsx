@@ -12,6 +12,7 @@ import {
   Legend,
 } from 'chart.js'
 import { Plus, X, Search, Loader2, GitCompare } from 'lucide-react'
+import { useLocale } from '@/contexts/LocaleContext'
 import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
 
@@ -33,16 +34,18 @@ const SERIES_COLORS = [
 
 const RADAR_LABELS = ['Score', 'Popularity', 'Favourites', 'Episodes', 'Duration', 'Completion']
 
-const STAT_COLS = [
-  { key: 'mean_score',   label: 'Mean Score'  },
-  { key: 'popularity',   label: 'Popularity'  },
-  { key: 'favourites',   label: 'Favourites'  },
-  { key: 'episodes',     label: 'Episodes'    },
-  { key: 'duration_min', label: 'Duration'    },
-  { key: 'status',       label: 'Status'      },
-  { key: 'format',       label: 'Format'      },
-  { key: 'season',       label: 'Season'      },
-]
+function buildStatCols(t: (k: any) => string) {
+  return [
+    { key: 'mean_score',   label: t('mean_score') },
+    { key: 'popularity',   label: t('popularity')  },
+    { key: 'favourites',   label: t('favourites')  },
+    { key: 'episodes',     label: t('episodes')    },
+    { key: 'duration_min', label: t('duration')    },
+    { key: 'status',       label: t('status')      },
+    { key: 'format',       label: t('format')      },
+    { key: 'season',       label: t('season')      },
+  ]
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface AnimeMeta {
@@ -99,6 +102,8 @@ function fmtStat(key: string, val: any): string {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function ComparePage() {
+  const { t } = useLocale()
+  const STAT_COLS = buildStatCols(t)
   const [query,        setQuery]        = useState('')
   const [searchResults,setSearchResults]= useState<SearchResult[]>([])
   const [searching,    setSearching]    = useState(false)
@@ -270,10 +275,10 @@ export default function ComparePage() {
           <div>
             <h1 className="text-3xl font-bold mb-1 flex items-center gap-2" style={{ color: 'var(--foreground)' }}>
               <GitCompare className="w-8 h-8 text-primary-500" />
-              Compare
+              {t('compare_title')}
             </h1>
             <p className="text-sm" style={{ color: 'var(--foreground-secondary)' }}>
-              Add up to 4 anime to compare stats side by side
+              {t('compare_subtitle')}
             </p>
           </div>
         </div>
@@ -294,7 +299,7 @@ export default function ComparePage() {
               value={query}
               onChange={e => setQuery(e.target.value)}
               onFocus={() => searchResults.length > 0 && setShowDropdown(true)}
-              placeholder="Enter anime title…"
+              placeholder={t('compare_placeholder')}
               className="flex-1 bg-transparent outline-none text-base"
               style={{ color: 'var(--foreground)' }}
               disabled={selected.length >= 4}
@@ -334,7 +339,7 @@ export default function ComparePage() {
                     {r.studio && <p className="text-xs truncate" style={{ color: 'var(--foreground-muted)' }}>{r.studio}</p>}
                   </div>
                   {selected.find(s => s.id === r.id) && (
-                    <span className="ml-auto text-xs text-primary-400 flex-shrink-0">Added</span>
+                    <span className="ml-auto text-xs text-primary-400 flex-shrink-0">{t('compare_added')}</span>
                   )}
                 </button>
               ))}
@@ -349,8 +354,8 @@ export default function ComparePage() {
             style={{ background: 'var(--glass-bg)', border: '1px solid var(--card-border)' }}
           >
             <GitCompare className="w-12 h-12 mb-4" style={{ color: 'var(--foreground-muted)' }} />
-            <p className="text-lg font-semibold mb-1" style={{ color: 'var(--foreground)' }}>No anime selected</p>
-            <p className="text-sm" style={{ color: 'var(--foreground-muted)' }}>Search above to add up to 4 anime to compare</p>
+            <p className="text-lg font-semibold mb-1" style={{ color: 'var(--foreground)' }}>{t('compare_empty')}</p>
+            <p className="text-sm" style={{ color: 'var(--foreground-muted)' }}>{t('compare_empty_sub')}</p>
           </div>
         ) : (
           <>
@@ -364,7 +369,7 @@ export default function ComparePage() {
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--card-border)' }}>
                       <th className="text-left px-5 py-3 font-semibold italic" style={{ color: 'var(--foreground-muted)', minWidth: 160 }}>
-                        Percentiles
+                        {t('percentiles')}
                       </th>
                       {STAT_COLS.map(c => (
                         <th key={c.key} className="px-4 py-3 font-semibold text-center whitespace-nowrap" style={{ color: 'var(--foreground-muted)' }}>
@@ -478,7 +483,7 @@ export default function ComparePage() {
               </div>
 
               <p className="text-center text-xs mt-4" style={{ color: 'var(--foreground-muted)' }}>
-                Values shown as percentile rank among all anime in the database
+                {t('radar_note')}
               </p>
             </div>
           </>

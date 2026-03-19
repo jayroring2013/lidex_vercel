@@ -229,10 +229,20 @@ export default function ChartsPage() {
         }
       }
 
-      // voting_result joined by title (one row per title — take latest period if dupes)
+      // Parse MM/YYYY string -> sortable number (YYYYMM) for correct chronological order
+      const parsePeriod = (p: string | null): number => {
+        if (!p) return 0
+        const parts = p.split('/')
+        if (parts.length !== 2) return 0
+        const mm = parseInt(parts[0]), yyyy = parseInt(parts[1])
+        return isNaN(mm) || isNaN(yyyy) ? 0 : yyyy * 100 + mm
+      }
+
+      // voting_result joined by title — keep the LATEST period when duplicates exist
       const voteMap: Record<string, { votes: number; period: string }> = {}
       for (const vr of voteData || []) {
-        if (!voteMap[vr.title] || vr.period > voteMap[vr.title].period) {
+        const existing = voteMap[vr.title]
+        if (!existing || parsePeriod(vr.period) > parsePeriod(existing.period)) {
           voteMap[vr.title] = { votes: Number(vr.votes) || 0, period: vr.period }
         }
       }
@@ -285,7 +295,14 @@ export default function ChartsPage() {
   const availablePeriods = useMemo(() => {
     const s = new Set<string>()
     allNovels.forEach(n => { if (n.period) s.add(n.period) })
-    return ['All', ...Array.from(s).sort().reverse()]
+    // Sort MM/YYYY periods chronologically (newest first)
+    return [
+      'All',
+      ...Array.from(s).sort((a, b) => {
+        const parse = (p: string) => { const [mm, yyyy] = p.split('/'); return parseInt(yyyy||'0')*100+parseInt(mm||'0') }
+        return parse(b) - parse(a)
+      })
+    ]
   }, [allNovels])
 
   const availablePublishers = useMemo(() => {

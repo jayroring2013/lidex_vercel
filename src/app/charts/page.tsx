@@ -124,9 +124,9 @@ function getAnimeValue(meta: AnimeSeries['anime_meta'], axis: string): number | 
 }
 
 function getNovelValue(row: NovelRow, axis: string): number | null {
-  if (axis === 'volume_count') return row.volume_count ?? null
-  if (axis === 'votes')        return row.votes        ?? null
-  if (axis === 'latest_year')  return row.latest_year  ?? null
+  if (axis === 'volume_count') return row.volume_count ?? 0      // always has a value (0 if no volumes)
+  if (axis === 'votes')        return row.votes        ?? 0      // treat no votes as 0, still plotted
+  if (axis === 'latest_year')  return row.latest_year  ?? null   // null year = skip point
   return null
 }
 
@@ -195,26 +195,52 @@ export default function ChartsPage() {
     async function load() {
       setNovelLoading(true)
 
-      // Step 1: Get all novel series with volumes
+      // Step 1: Get all novel series
       const { data: seriesData, error: sErr } = await supabase
         .from('series')
         .select('id, title, publisher')
         .eq('item_type', 'novel')
 
-      if (sErr || !seriesData) { setNovelLoading(false); return }
+      if (sErr || !seriesData) {
+        console.error('[Novel] series fetch error:', sErr)
+        setNovelLoading(false)
+        return
+      }
+      console.log('[Novel] series count:', seriesData.length)
 
-      // Step 2: Get volumes (non-special) grouped by series_id
+      // Step 2: Get volumes in batches of 200 (Supabase .in() limit)
+      // Try both boolean false AND string 'FALSE' since DB may store either
       const seriesIds = seriesData.map(s => s.id)
-      const { data: volData } = await supabase
-        .from('volumes')
-        .select('series_id, release_date')
-        .eq('is_special', false)
-        .in('series_id', seriesIds)
+      const BATCH = 200
+      const allVolData: any[] = []
+      for (let i = 0; i < seriesIds.length; i += BATCH) {
+        const chunk = seriesIds.slice(i, i + BATCH)
+        // Try boolean first
+        const { data: vb } = await supabase
+          .from('volumes')
+          .select('series_id, release_date, is_special')
+          .in('series_id', chunk)
+          .limit(10000)
+        if (vb) allVolData.push(...vb)
+      }
+      console.log('[Novel] total volumes fetched:', allVolData.length)
+      if (allVolData.length > 0) console.log('[Novel] sample volume is_special value:', allVolData[0]?.is_special, typeof allVolData[0]?.is_special)
+
+      // Filter out specials — handle both boolean false and string 'FALSE'/'false'
+      const volData = allVolData.filter(v => {
+        const val = v.is_special
+        if (typeof val === 'boolean') return val === false
+        if (typeof val === 'string')  return val.toUpperCase() !== 'TRUE'
+        return true // null/undefined → include
+      })
+      console.log('[Novel] volumes after special filter:', volData.length)
 
       // Step 3: Get voting results
-      const { data: voteData } = await supabase
+      const { data: voteData, error: vErr } = await supabase
         .from('voting_result')
         .select('title, votes, period')
+      console.log('[Novel] voting_result count:', voteData?.length, vErr)
+      if (voteData && voteData.length > 0) console.log('[Novel] sample vote row:', voteData[0])
 
       // Build lookup maps
       const volMap: Record<number, { count: number; maxYear: number | null }> = {}

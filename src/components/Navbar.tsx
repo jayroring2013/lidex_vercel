@@ -41,6 +41,7 @@ export default function Navbar() {
   const chartsChildren = [
     { href: '/charts',  label: t('nav_scatter') },
     { href: '/compare', label: t('nav_compare') },
+    { href: '/index',   label: t('nav_index')   },
   ]
 
   return (

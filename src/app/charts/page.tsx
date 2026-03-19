@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { Scatter } from 'react-chartjs-2'
 import {
   Chart as ChartJS,
@@ -468,7 +468,10 @@ export default function ChartsPage() {
           label: (ctx) => {
             const r = ctx.raw as PlotPoint
             const sub = mode === 'anime' ? `Format: ${r.label}` : `Publisher: ${r.label}`
-            return [r.title, sub, `${axisLabel(curX)}: ${r.x.toLocaleString()}`, `${axisLabel(curY)}: ${r.y.toLocaleString()}`]
+            // Don't format years with toLocaleString (2025 → "2.025" in some locales)
+            const fmtVal = (axis: string, val: number) =>
+              axis === 'latest_year' ? String(val) : val.toLocaleString()
+            return [r.title, sub, `${axisLabel(curX)}: ${fmtVal(curX, r.x)}`, `${axisLabel(curY)}: ${fmtVal(curY, r.y)}`]
           },
         },
         backgroundColor: isDark ? 'rgba(15,23,42,0.96)' : 'rgba(255,255,255,0.97)',
@@ -482,9 +485,16 @@ export default function ChartsPage() {
     },
   }
 
+  // Use a ref so the plugin always reads the LATEST values without stale closures
+  const pluginDataRef = useRef({ highlightPoints, medianX, medianY, isDark, mode })
+  useEffect(() => {
+    pluginDataRef.current = { highlightPoints, medianX, medianY, isDark, mode }
+  })
+
   const labelPlugin = useMemo(() => ({
-    id: `scatterLabels_${mode}`,
+    id: 'scatterLabels',
     afterDatasetsDraw(chart: any) {
+      const { highlightPoints, medianX, medianY, isDark } = pluginDataRef.current
       const ctx   = chart.ctx
       const meta1 = chart.getDatasetMeta(1)
       if (!meta1?.data?.length) return
@@ -531,7 +541,8 @@ export default function ChartsPage() {
       ctx.setLineDash([])
       ctx.restore()
     },
-  }), [highlightPoints, medianX, medianY, isDark])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), []) // created once — reads live data via ref
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--background)' }}>

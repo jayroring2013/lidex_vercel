@@ -1,5 +1,7 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { ChevronUp, ChevronDown, ChevronsUpDown, Search, Loader2, SlidersHorizontal, X } from 'lucide-react'

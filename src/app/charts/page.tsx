@@ -235,11 +235,22 @@ export default function ChartsPage() {
       })
       console.log('[Novel] volumes after special filter:', volData.length)
 
-      // Step 3: Get voting results
-      const { data: voteData, error: vErr } = await supabase
-        .from('voting_result')
-        .select('title, votes, period')
-      console.log('[Novel] voting_result count:', voteData?.length, vErr)
+      // Step 3: Get voting results — try both possible table names
+      let voteData: any[] | null = null
+      let voteTableUsed = ''
+
+      for (const tbl of ['voting_result', 'voting_results', 'vote_result', 'votes']) {
+        const { data, error } = await supabase.from(tbl).select('title, votes, period').limit(5)
+        console.log(`[Novel] trying table "${tbl}":`, data?.length ?? 0, error?.message ?? 'ok')
+        if (!error && data && data.length > 0) {
+          // Found it — now fetch all rows
+          const { data: allVotes } = await supabase.from(tbl).select('title, votes, period')
+          voteData = allVotes
+          voteTableUsed = tbl
+          break
+        }
+      }
+      console.log('[Novel] voting table used:', voteTableUsed, '| rows:', voteData?.length ?? 0)
       if (voteData && voteData.length > 0) console.log('[Novel] sample vote row:', voteData[0])
 
       // Build lookup maps
@@ -448,7 +459,7 @@ export default function ChartsPage() {
   }
 
   const labelPlugin = useMemo(() => ({
-    id: 'scatterLabels',
+    id: `scatterLabels_${mode}`,
     afterDatasetsDraw(chart: any) {
       const ctx   = chart.ctx
       const meta1 = chart.getDatasetMeta(1)
@@ -641,7 +652,7 @@ export default function ChartsPage() {
                 <p className="text-sm" style={{ color: 'var(--foreground-muted)' }}>No data for selected filters</p>
               </div>
             ) : (
-              <Scatter data={chartData} options={chartOptions} plugins={[labelPlugin as any]} />
+              <Scatter key={mode} data={chartData} options={chartOptions} plugins={[labelPlugin as any]} />
             )}
           </div>
 

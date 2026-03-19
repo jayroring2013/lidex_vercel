@@ -168,6 +168,11 @@ const selectStyle = {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function ChartsPage() {
+  const { t } = useLocale()
+  const ANIME_AXIS_OPTIONS = buildAnimeAxisOptions(t)
+  const NOVEL_AXIS_OPTIONS = buildNovelAxisOptions(t)
+  const AVG_PRICE_BUCKETS  = buildAvgPriceBuckets(t)
+
   const [mode, setMode] = useState<'anime' | 'novel'>('anime')
 
   // Anime state

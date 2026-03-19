@@ -6,14 +6,15 @@ export type Locale = 'vi' | 'en'
 export const translations = {
   vi: {
     // ── Navbar ──────────────────────────────────────────────────────────────
-    nav_home:       'Trang chủ',
-    nav_dashboard:  'Bảng điều khiển',
-    nav_charts:     'Biểu đồ',
-    nav_scatter:    'Phân tán',
-    nav_compare:    'So sánh',
+    nav_home:       'Home',
+    nav_dashboard:  'Dashboard',
+    nav_charts:     'Charts',
+    nav_scatter:    'Scatter',
+    nav_compare:    'Compare',
+    nav_index:     'Index',
 
     // ── Dashboard ───────────────────────────────────────────────────────────
-    dashboard_title:    'Bảng điều khiển',
+    dashboard_title:    'Dashboard',
     dashboard_subtitle: 'Tổng quan về nội dung và hoạt động cộng đồng',
     last_updated:       'Cập nhật lần cuối',
     total_series:       'Tổng số tựa',
@@ -91,7 +92,7 @@ export const translations = {
     studio:             'Studio',
     publisher_col:      'Nhà xuất bản',
     external_id:        'ID ngoài',
-    tags:               'Tags',
+    tags:               'Thẻ',
     not_found:          'Không tìm thấy',
     not_found_sub:      'Tựa bạn tìm không tồn tại.',
     back_dashboard:     'Về bảng điều khiển',
@@ -107,6 +108,7 @@ export const translations = {
     nav_charts:     'Charts',
     nav_scatter:    'Scatter',
     nav_compare:    'Compare',
+    nav_index:     'Index',
 
     // ── Dashboard ───────────────────────────────────────────────────────────
     dashboard_title:    'Dashboard',

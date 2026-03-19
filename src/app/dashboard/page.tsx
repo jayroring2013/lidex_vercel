@@ -91,36 +91,57 @@ export default function Dashboard() {
           href:      '#',
         }))
 
-        // Novel from series + voting_result
+        // Novel: get all novels first
         const { data: novelData } = await supabase
           .from('series')
-          .select('id, title, cover_url')
+          .select('id, title')
           .eq('item_type', 'novel')
-          .not('cover_url', 'is', null)
-          .limit(50)
+          .limit(500)
 
         const novelTitles = (novelData || []).map((n: any) => n.title)
+        const novelIds    = (novelData || []).map((n: any) => n.id)
+
+        // Fetch votes
         const { data: voteData } = await supabase
           .from('voting_result')
           .select('title, votes')
-          .in('title', novelTitles)
+          .in('title', novelTitles.slice(0, 200))
 
         const voteMap: Record<string, number> = {}
         for (const v of voteData || []) {
           if (!voteMap[v.title] || v.votes > voteMap[v.title]) voteMap[v.title] = Number(v.votes)
         }
 
-        const novelItems: CarouselItem[] = (novelData || [])
-          .map((n: any) => ({
-            id:        n.id,
-            title:     n.title,
-            cover_url: n.cover_url,
-            score:     voteMap[n.title] ?? null,
-            href:      `/content/${n.id}`,
-          }))
-          .filter(n => n.score != null)
-          .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+        // Find top 10 by votes
+        const top10Novel = (novelData || [])
+          .filter((n: any) => voteMap[n.title] != null)
+          .sort((a: any, b: any) => (voteMap[b.title] ?? 0) - (voteMap[a.title] ?? 0))
           .slice(0, 10)
+
+        // For each, fetch the cover_url of the newest non-special volume
+        const novelItemsWithCovers = await Promise.all(
+          top10Novel.map(async (n: any) => {
+            const { data: volData } = await supabase
+              .from('volumes')
+              .select('cover_url, release_date')
+              .eq('series_id', n.id)
+              .eq('is_special', false)
+              .order('release_date', { ascending: false })
+              .not('cover_url', 'is', null)
+              .limit(1)
+
+            const cover = volData?.[0]?.cover_url ?? null
+            return {
+              id:        n.id,
+              title:     n.title,
+              cover_url: cover,
+              score:     voteMap[n.title] ?? null,
+              href:      `/content/${n.id}`,
+            }
+          })
+        )
+
+        const novelItems: CarouselItem[] = novelItemsWithCovers.filter(n => n.cover_url != null)
 
         setCarouselData({ anime: animeItems, manga: mangaItems, novel: novelItems })
       } catch (error) {

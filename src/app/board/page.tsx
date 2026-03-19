@@ -17,25 +17,35 @@ type ItemType = 'anime' | 'manga' | 'novel'
 type SortDir  = 'asc' | 'desc' | null
 
 interface Row {
-  id:           number
-  title:        string
-  item_type:    string
-  studio:       string | null
-  publisher:    string | null
-  status:       string | null
+  id:               number | string
+  title:            string
+  item_type:        string
+  studio:           string | null
+  publisher:        string | null
+  status:           string | null
   // anime fields
-  mean_score:   number | null
-  popularity:   number | null
-  favourites:   number | null
-  episodes:     number | null
-  duration_min: number | null
-  format:       string | null
-  season:       string | null
-  season_year:  number | null
+  mean_score:       number | null
+  popularity:       number | null
+  favourites:       number | null
+  episodes:         number | null
+  duration_min:     number | null
+  format:           string | null
+  season:           string | null
+  season_year:      number | null
   // novel fields
-  volume_count: number | null
-  votes:        number | null
-  avg_price:    number | null
+  volume_count:     number | null
+  votes:            number | null
+  avg_price:        number | null
+  // manga fields (from manga table)
+  rating:           number | null
+  follows:          number | null
+  year:             number | null
+  author:           string | null
+  demographic:      string | null
+  content_rating:   string | null
+  original_language:string | null
+  genres:           string[] | null
+  themes:           string[] | null
 }
 
 // ── Column definitions ────────────────────────────────────────────────────────
@@ -60,11 +70,15 @@ const ANIME_COLS: ColDef[] = [
 ]
 
 const MANGA_COLS: ColDef[] = [
-  { key: 'mean_score',  label: 'Mean Score',  short: 'SCORE',    numeric: true  },
-  { key: 'popularity',  label: 'Popularity',  short: 'POP.',     numeric: true, invert: true },
-  { key: 'favourites',  label: 'Favourites',  short: 'FAVS',     numeric: true  },
-  { key: 'status',      label: 'Status',      short: 'STATUS',   numeric: false },
-  { key: 'publisher',   label: 'Publisher',   short: 'PUBLISHER',numeric: false },
+  { key: 'rating',           label: 'Rating',       short: 'RATING',   numeric: true  },
+  { key: 'follows',          label: 'Follows',      short: 'FOLLOWS',  numeric: true  },
+  { key: 'year',             label: 'Year',         short: 'YEAR',     numeric: false },
+  { key: 'author',           label: 'Author',       short: 'AUTHOR',   numeric: false },
+  { key: 'demographic',      label: 'Demographic',  short: 'DEMO',     numeric: false },
+  { key: 'content_rating',   label: 'Rating',       short: 'AGE',      numeric: false },
+  { key: 'original_language',label: 'Language',     short: 'LANG',     numeric: false },
+  { key: 'genres',           label: 'Genres',       short: 'GENRES',   numeric: false },
+  { key: 'status',           label: 'Status',       short: 'STATUS',   numeric: false },
 ]
 
 const NOVEL_COLS: ColDef[] = [
@@ -83,7 +97,7 @@ const COLS: Record<ItemType, ColDef[]> = {
 
 const FORMAT_OPTIONS = ['All', 'TV', 'MOVIE', 'OVA', 'ONA', 'SPECIAL']
 const SEASON_OPTIONS  = ['All', 'WINTER', 'SPRING', 'SUMMER', 'FALL']
-const STATUS_OPTIONS  = ['All', 'ongoing', 'completed', 'cancelled', 'hiatus']
+const STATUS_OPTIONS  = ['All', 'ongoing', 'completed', 'cancelled', 'hiatus', 'publishing', 'finished']
 
 const sel = {
   background: 'var(--background-secondary)',
@@ -122,18 +136,26 @@ function pctColor(pct: number, invert = false): string {
 
 function fmtVal(col: ColDef, val: any): string {
   if (val == null || val === '') return '—'
+  // Arrays (genres, themes) — show first 2 tags
+  if (Array.isArray(val)) {
+    if (val.length === 0) return '—'
+    return val.slice(0, 2).join(', ') + (val.length > 2 ? ` +${val.length - 2}` : '')
+  }
   if (col.numeric) {
     const n = Number(val)
     if (col.key === 'popularity') return `#${n.toLocaleString()}`
     if (col.key === 'avg_price')  return n.toLocaleString() + ' ₫'
-    if (col.key === 'favourites' || col.key === 'votes') {
+    if (col.key === 'follows' || col.key === 'favourites' || col.key === 'votes') {
       if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
       if (n >= 1_000)     return (n / 1_000).toFixed(1) + 'K'
       return String(n)
     }
+    if (col.key === 'rating') return n.toFixed(2)
     if (col.unit) return `${n.toLocaleString()} ${col.unit}`
     return n.toLocaleString()
   }
+  // year — don't uppercase
+  if (col.key === 'year' || col.key === 'author' || col.key === 'original_language') return String(val)
   return String(val).toUpperCase()
 }
 
@@ -158,6 +180,10 @@ export default function IndexPage() {
   const [maxPop,     setMaxPop]     = useState(999999)
   const [minEps,     setMinEps]     = useState(0)
   const [minVols,    setMinVols]    = useState(0)
+  const [minRating,  setMinRating]  = useState(0)
+  const [demographicF,  setDemographicF]   = useState('All')
+  const [contentRatingF,setContentRatingF] = useState('All')
+  const [langF,         setLangF]          = useState('All')
 
   // Fetch data when type changes
   useEffect(() => {
@@ -186,18 +212,33 @@ export default function IndexPage() {
 
       } else if (type === 'manga') {
         const { data } = await supabase
-          .from('series')
-          .select('id, title, item_type, publisher, status, anime_meta(mean_score, popularity, favourites)')
-          .eq('item_type', 'manga')
+          .from('manga')
+          .select('id, title_en, title_ja_ro, cover_url, status, demographic, content_rating, year, original_language, genres, themes, author, follows, rating')
+          .order('follows', { ascending: false })
           .limit(3000)
-        if (data) setAllRows(data.map((s: any) => ({
-          ...s,
-          mean_score:   s.anime_meta?.mean_score  ?? null,
-          popularity:   s.anime_meta?.popularity  ?? null,
-          favourites:   s.anime_meta?.favourites  ?? null,
+        if (data) setAllRows(data.map((m: any) => ({
+          id:                m.id,
+          title:             m.title_en || m.title_ja_ro || m.id,
+          item_type:         'manga',
+          studio:            null,
+          publisher:         null,
+          status:            m.status,
+          // anime fields — unused
+          mean_score: null, popularity: null, favourites: null,
           episodes: null, duration_min: null, format: null,
-          season: null, season_year: null, studio: null,
+          season: null, season_year: null,
+          // novel fields — unused
           volume_count: null, votes: null, avg_price: null,
+          // manga-specific
+          rating:            m.rating    != null ? Number(m.rating)  : null,
+          follows:           m.follows   != null ? Number(m.follows) : null,
+          year:              m.year      != null ? Number(m.year)    : null,
+          author:            m.author,
+          demographic:       m.demographic,
+          content_rating:    m.content_rating,
+          original_language: m.original_language,
+          genres:            Array.isArray(m.genres) ? m.genres : null,
+          themes:            Array.isArray(m.themes) ? m.themes : null,
         })))
 
       } else {
@@ -288,7 +329,7 @@ export default function IndexPage() {
     setSearch(''); setFormatF('All'); setSeasonF('All'); setStatusF('All')
     setYearF('All'); setPublisherF('All'); setMinScore(0); setMinPop(0)
     setMaxPop(999999); setMinEps(0); setMinVols(0)
-    const defaults: Partial<Record<ItemType, keyof Row>> = { anime: 'mean_score', manga: 'mean_score', novel: 'votes' }
+    const defaults: Partial<Record<ItemType, keyof Row>> = { anime: 'mean_score', manga: 'follows', novel: 'votes' }
     setSortKey(defaults[type]!); setSortDir('desc')
   }, [type])
 
@@ -301,6 +342,24 @@ export default function IndexPage() {
   const availablePublishers = useMemo(() => {
     const s = new Set<string>()
     allRows.forEach(r => { if (r.publisher) s.add(r.publisher) })
+    return ['All', ...Array.from(s).sort()]
+  }, [allRows])
+
+  const availableDemographics = useMemo(() => {
+    const s = new Set<string>()
+    allRows.forEach(r => { if (r.demographic) s.add(r.demographic) })
+    return ['All', ...Array.from(s).sort()]
+  }, [allRows])
+
+  const availableContentRatings = useMemo(() => {
+    const s = new Set<string>()
+    allRows.forEach(r => { if (r.content_rating) s.add(r.content_rating) })
+    return ['All', ...Array.from(s).sort()]
+  }, [allRows])
+
+  const availableLanguages = useMemo(() => {
+    const s = new Set<string>()
+    allRows.forEach(r => { if (r.original_language) s.add(r.original_language) })
     return ['All', ...Array.from(s).sort()]
   }, [allRows])
 
@@ -322,6 +381,12 @@ export default function IndexPage() {
       if (type === 'novel') {
         if (minVols > 0 && (r.volume_count ?? 0) < minVols) return false
       }
+      if (type === 'manga') {
+        if (demographicF   !== 'All' && (r.demographic   || '').toLowerCase() !== demographicF.toLowerCase())   return false
+        if (contentRatingF !== 'All' && (r.content_rating|| '').toLowerCase() !== contentRatingF.toLowerCase()) return false
+        if (langF          !== 'All' && (r.original_language || '') !== langF)                                  return false
+        if (minRating > 0  && (r.rating ?? 0) < minRating) return false
+      }
       return true
     })
 
@@ -340,7 +405,7 @@ export default function IndexPage() {
       })
     }
     return rows
-  }, [allRows, search, sortKey, sortDir, formatF, seasonF, statusF, yearF, publisherF, minScore, minPop, maxPop, minEps, minVols, type])
+  }, [allRows, search, sortKey, sortDir, formatF, seasonF, statusF, yearF, publisherF, minScore, minPop, maxPop, minEps, minVols, type, demographicF, contentRatingF, langF, minRating])
 
   const cols = COLS[type]
   const numericKeys = cols.filter(c => c.numeric).map(c => c.key)
@@ -456,9 +521,17 @@ export default function IndexPage() {
                 </>)}
 
                 {/* Manga-specific */}
-                {type === 'manga' && (
-                  <FilterSelect label="Publisher" value={publisherF} onChange={setPublisherF} options={availablePublishers.slice(0, 60)} />
-                )}
+                {type === 'manga' && (<>
+                  <FilterSelect label="Demographic"  value={demographicF}  onChange={setDemographicF}  options={availableDemographics}  />
+                  <FilterSelect label="Content"      value={contentRatingF}onChange={setContentRatingF}options={availableContentRatings} />
+                  <FilterSelect label="Language"     value={langF}         onChange={setLangF}         options={availableLanguages}      />
+                  <SliderFilter
+                    label="Min Rating"
+                    value={minRating} min={0} max={10} step={0.5}
+                    onChange={setMinRating}
+                    display={v => v === 0 ? 'Any' : `≥ ${v}`}
+                  />
+                </>)}
 
                 {/* Novel-specific */}
                 {type === 'novel' && (<>
@@ -477,6 +550,7 @@ export default function IndexPage() {
                     setSearch(''); setFormatF('All'); setSeasonF('All')
                     setStatusF('All'); setYearF('All'); setPublisherF('All')
                     setMinScore(0); setMinPop(0); setMaxPop(999999); setMinEps(0); setMinVols(0)
+                    setMinRating(0); setDemographicF('All'); setContentRatingF('All'); setLangF('All')
                   }}
                   className="w-full py-1.5 text-xs font-semibold rounded-lg transition-colors"
                   style={{ background: 'var(--background-secondary)', color: 'var(--foreground-secondary)', border: '1px solid var(--card-border)' }}
@@ -533,9 +607,13 @@ export default function IndexPage() {
                       >
                         {/* Title cell */}
                         <td className="px-5 py-3 sticky left-0 z-10" style={{ background: i % 2 === 0 ? 'var(--glass-bg)' : 'var(--background-secondary)' }}>
-                          <Link href={`/content/${row.id}`} className="hover:text-primary-400 transition-colors">
+                          {row.item_type === 'manga' ? (
                             <p className="font-semibold truncate max-w-[200px]" style={{ color: 'var(--foreground)' }}>{row.title}</p>
-                          </Link>
+                          ) : (
+                            <Link href={`/content/${row.id}`} className="hover:text-primary-400 transition-colors">
+                              <p className="font-semibold truncate max-w-[200px]" style={{ color: 'var(--foreground)' }}>{row.title}</p>
+                            </Link>
+                          )}
                           <p className="text-xs truncate max-w-[200px]" style={{ color: 'var(--foreground-muted)' }}>
                             {row.studio || row.publisher || row.item_type}
                           </p>

@@ -11,6 +11,7 @@ import {
   ChartOptions,
 } from 'chart.js'
 import { Loader2, RefreshCw, BarChart2, Tv, BookOpen } from 'lucide-react'
+import { useLocale } from '@/contexts/LocaleContext'
 import { createClient } from '@supabase/supabase-js'
 
 ChartJS.register(LinearScale, PointElement, Tooltip, Legend)
@@ -24,30 +25,36 @@ const supabase = createClient(
 // ── Shared constants ──────────────────────────────────────────────────────────
 const SCORE_DIST_KEYS = ['10','20','30','40','50','60','70','80','90','100']
 
-const ANIME_AXIS_OPTIONS = [
-  { value: 'popularity', label: 'Popularity' },
-  { value: 'favourites', label: 'Favourites' },
-  { value: 'mean_score', label: 'Mean Score' },
-  ...SCORE_DIST_KEYS.map(k => ({ value: `score_${k}`, label: `Score ${k} (voters)` })),
-]
-
-const NOVEL_AXIS_OPTIONS = [
-  { value: 'volume_count', label: 'Volume Count'       },
-  { value: 'votes',        label: 'Votes'              },
-  { value: 'price',        label: 'Total Price'        },
-  { value: 'avg_price',    label: 'Avg Price / Volume' },
-  { value: 'latest_year',  label: 'Latest Year'        },
-]
+// Axis options built dynamically so labels can be translated
+function buildAnimeAxisOptions(t: (k: any) => string) {
+  return [
+    { value: 'popularity', label: t('axis_popularity') },
+    { value: 'favourites', label: t('axis_favourites') },
+    { value: 'mean_score', label: t('axis_mean_score') },
+    ...SCORE_DIST_KEYS.map(k => ({ value: `score_${k}`, label: `Score ${k} (voters)` })),
+  ]
+}
+function buildNovelAxisOptions(t: (k: any) => string) {
+  return [
+    { value: 'volume_count', label: t('axis_volume_count') },
+    { value: 'votes',        label: t('axis_votes')        },
+    { value: 'price',        label: t('axis_total_price')  },
+    { value: 'avg_price',    label: t('axis_avg_price')    },
+    { value: 'latest_year',  label: t('axis_latest_year')  },
+  ]
+}
 
 const FORMAT_OPTIONS = ['All', 'TV', 'MOVIE', 'OVA', 'ONA', 'SPECIAL']
 
-const AVG_PRICE_BUCKETS = [
-  { value: 'All',       label: 'All Avg Prices'  },
-  { value: 'under50k',  label: '< 50,000 ₫'      },
-  { value: '50-100k',   label: '50,000–100,000 ₫' },
-  { value: '100-150k',  label: '100,000–150,000 ₫'},
-  { value: 'over150k',  label: '> 150,000 ₫'     },
-]
+function buildAvgPriceBuckets(t: (k: any) => string) {
+  return [
+    { value: 'All',       label: t('all_avg_prices')   },
+    { value: 'under50k',  label: '< 50,000 ₫'          },
+    { value: '50-100k',   label: '50,000–100,000 ₫'    },
+    { value: '100-150k',  label: '100,000–150,000 ₫'   },
+    { value: 'over150k',  label: '> 150,000 ₫'         },
+  ]
+}
 
 function matchAvgPrice(avg: number | null, bucket: string): boolean {
   if (bucket === 'All' || avg == null) return true
@@ -587,10 +594,10 @@ export default function ChartsPage() {
           <div>
             <h1 className="text-3xl font-bold mb-1 flex items-center gap-2" style={{ color: 'var(--foreground)' }}>
               <BarChart2 className="w-8 h-8 text-primary-500" />
-              Charts
+              {t('charts_title')}
             </h1>
             <p className="text-sm" style={{ color: 'var(--foreground-secondary)' }}>
-              {mode === 'anime' ? 'Anime' : 'Novel'} scatter analysis — {points.length.toLocaleString()} series plotted
+              {mode === 'anime' ? t('charts_subtitle_anime') : t('charts_subtitle_novel')} — {points.length.toLocaleString()} {t('series_plotted')}
             </p>
           </div>
           <div className="mt-4 md:mt-0 flex items-center gap-3">
@@ -613,7 +620,7 @@ export default function ChartsPage() {
                   ? { background: '#6366f1', color: '#fff' }
                   : { background: 'var(--background-secondary)', color: 'var(--foreground-secondary)' }}
               >
-                <BookOpen className="w-4 h-4" /> Novel
+                <BookOpen className="w-4 h-4" /> {t('nav_charts') === 'Biểu đồ' ? 'Tiểu thuyết' : 'Novel'}
               </button>
             </div>
 
@@ -643,10 +650,10 @@ export default function ChartsPage() {
               ))}
               <div className="ml-auto flex items-center gap-2 flex-wrap">
                 <select value={seasonFilter} onChange={e => setSeasonFilter(e.target.value)} className="text-sm rounded-lg px-3 py-1.5 outline-none" style={selectStyle}>
-                  {SEASON_OPTIONS.map(s => <option key={s} value={s}>{s === 'All' ? 'All Seasons' : s}</option>)}
+                  {SEASON_OPTIONS.map(s => <option key={s} value={s}>{s === 'All' ? t('all_seasons') : s}</option>)}
                 </select>
                 <select value={yearFilter} onChange={e => setYearFilter(e.target.value)} className="text-sm rounded-lg px-3 py-1.5 outline-none" style={selectStyle}>
-                  {availableYears.map(y => <option key={y} value={y}>{y === 'All' ? 'All Years' : y}</option>)}
+                  {availableYears.map(y => <option key={y} value={y}>{y === 'All' ? t('all_years') : y}</option>)}
                 </select>
               </div>
             </div>
@@ -655,17 +662,17 @@ export default function ChartsPage() {
           {/* ── NOVEL: Row 1 — period + publisher filters ── */}
           {mode === 'novel' && (
             <div className="flex flex-wrap items-center gap-2 px-6 py-4" style={{ borderBottom: '1px solid var(--card-border)' }}>
-              <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--foreground-muted)' }}>Period</span>
+              <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--foreground-muted)' }}>{t('period_label')}</span>
               <select value={periodFilter} onChange={e => setPeriodFilter(e.target.value)} className="text-sm rounded-lg px-3 py-1.5 outline-none" style={selectStyle}>
-                {availablePeriods.map(p => <option key={p} value={p}>{p === 'All' ? 'All Periods' : p}</option>)}
+                {availablePeriods.map(p => <option key={p} value={p}>{p === 'All' ? t('all_periods') : p}</option>)}
               </select>
 
-              <span className="text-xs font-semibold uppercase tracking-wide ml-2" style={{ color: 'var(--foreground-muted)' }}>Publisher</span>
+              <span className="text-xs font-semibold uppercase tracking-wide ml-2" style={{ color: 'var(--foreground-muted)' }}>{t('publisher_label')}</span>
               <select value={publisherFilter} onChange={e => setPublisherFilter(e.target.value)} className="text-sm rounded-lg px-3 py-1.5 outline-none max-w-[200px]" style={selectStyle}>
-                {availablePublishers.map(p => <option key={p} value={p}>{p === 'All' ? 'All Publishers' : p}</option>)}
+                {availablePublishers.map(p => <option key={p} value={p}>{p === 'All' ? t('all_publishers') : p}</option>)}
               </select>
 
-              <span className="text-xs font-semibold uppercase tracking-wide ml-2" style={{ color: 'var(--foreground-muted)' }}>Avg Vol. Price</span>
+              <span className="text-xs font-semibold uppercase tracking-wide ml-2" style={{ color: 'var(--foreground-muted)' }}>{t('avg_vol_price')}</span>
               <select value={avgPriceFilter} onChange={e => setAvgPriceFilter(e.target.value)} className="text-sm rounded-lg px-3 py-1.5 outline-none" style={selectStyle}>
                 {AVG_PRICE_BUCKETS.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
               </select>
@@ -675,7 +682,7 @@ export default function ChartsPage() {
           {/* ── Row 2: X / Y axes + search ── */}
           <div className="flex flex-wrap items-center gap-3 px-6 py-4" style={{ borderBottom: '1px solid var(--card-border)' }}>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--foreground-muted)' }}>X</span>
+              <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--foreground-muted)' }}>{t('axis_x')}</span>
               <select
                 value={mode === 'anime' ? xAxis : nxAxis}
                 onChange={e => mode === 'anime' ? setXAxis(e.target.value) : setNxAxis(e.target.value)}
@@ -689,7 +696,7 @@ export default function ChartsPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--foreground-muted)' }}>Y</span>
+              <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--foreground-muted)' }}>{t('axis_y')}</span>
               <select
                 value={mode === 'anime' ? yAxis : nyAxis}
                 onChange={e => mode === 'anime' ? setYAxis(e.target.value) : setNyAxis(e.target.value)}
@@ -704,7 +711,7 @@ export default function ChartsPage() {
 
             <input
               type="text"
-              placeholder={`Search ${mode === 'anime' ? 'anime' : 'novel'}…`}
+              placeholder={mode === 'anime' ? t('search_anime') : t('search_novel')}
               value={mode === 'anime' ? animeSearch : novelSearch}
               onChange={e => mode === 'anime' ? setAnimeSearch(e.target.value) : setNovelSearch(e.target.value)}
               className="text-sm rounded-lg px-3 py-1.5 outline-none ml-auto min-w-[200px]"
@@ -718,12 +725,12 @@ export default function ChartsPage() {
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="flex flex-col items-center gap-3">
                   <Loader2 className="w-10 h-10 text-primary-500 animate-spin" />
-                  <span className="text-sm" style={{ color: 'var(--foreground-muted)' }}>Loading {mode} data…</span>
+                  <span className="text-sm" style={{ color: 'var(--foreground-muted)' }}>{t('loading_data')}…</span>
                 </div>
               </div>
             ) : points.length === 0 ? (
               <div className="absolute inset-0 flex items-center justify-center">
-                <p className="text-sm" style={{ color: 'var(--foreground-muted)' }}>No data for selected filters</p>
+                <p className="text-sm" style={{ color: 'var(--foreground-muted)' }}>{t('no_data')}</p>
               </div>
             ) : (
               <Scatter key={mode} data={chartData} options={chartOptions} plugins={[labelPlugin as any]} />
@@ -744,7 +751,7 @@ export default function ChartsPage() {
             {/* Novel legend: top publishers */}
             {mode === 'novel' && (
               <>
-                <span className="text-xs font-semibold uppercase tracking-wide mr-1" style={{ color: 'var(--foreground-muted)' }}>Publishers</span>
+                <span className="text-xs font-semibold uppercase tracking-wide mr-1" style={{ color: 'var(--foreground-muted)' }}>{t('publishers_label')}</span>
                 {novelLegend.map(([pub, count]) => (
                   <button
                     key={pub}
@@ -763,7 +770,7 @@ export default function ChartsPage() {
 
             <div className="flex items-center gap-1.5 ml-auto">
               <span className="inline-block w-6 border-t-2 border-dashed" style={{ borderColor: 'rgba(148,163,184,0.5)' }} />
-              <span className="text-xs" style={{ color: 'var(--foreground-muted)' }}>Median</span>
+              <span className="text-xs" style={{ color: 'var(--foreground-muted)' }}>{t('median')}</span>
             </div>
           </div>
 

@@ -32,12 +32,31 @@ const ANIME_AXIS_OPTIONS = [
 ]
 
 const NOVEL_AXIS_OPTIONS = [
-  { value: 'volume_count', label: 'Volume Count' },
-  { value: 'votes',        label: 'Votes'        },
-  { value: 'latest_year',  label: 'Latest Year'  },
+  { value: 'volume_count', label: 'Volume Count'       },
+  { value: 'votes',        label: 'Votes'              },
+  { value: 'price',        label: 'Total Price'        },
+  { value: 'avg_price',    label: 'Avg Price / Volume' },
+  { value: 'latest_year',  label: 'Latest Year'        },
 ]
 
 const FORMAT_OPTIONS = ['All', 'TV', 'MOVIE', 'OVA', 'ONA', 'SPECIAL']
+
+const AVG_PRICE_BUCKETS = [
+  { value: 'All',       label: 'All Avg Prices'  },
+  { value: 'under50k',  label: '< 50,000 ₫'      },
+  { value: '50-100k',   label: '50,000–100,000 ₫' },
+  { value: '100-150k',  label: '100,000–150,000 ₫'},
+  { value: 'over150k',  label: '> 150,000 ₫'     },
+]
+
+function matchAvgPrice(avg: number | null, bucket: string): boolean {
+  if (bucket === 'All' || avg == null) return true
+  if (bucket === 'under50k')  return avg < 50_000
+  if (bucket === '50-100k')   return avg >= 50_000  && avg < 100_000
+  if (bucket === '100-150k')  return avg >= 100_000 && avg < 150_000
+  if (bucket === 'over150k')  return avg >= 150_000
+  return true
+}
 const SEASON_OPTIONS = ['All', 'WINTER', 'SPRING', 'SUMMER', 'FALL']
 
 const FORMAT_COLORS: Record<string, string> = {
@@ -90,6 +109,8 @@ interface NovelRow {
   title:        string
   publisher:    string | null
   volume_count: number
+  price:        number | null   // sum of volume prices
+  avg_price:    number | null   // price / volume_count
   latest_year:  number | null
   votes:        number | null
   period:       string | null
@@ -124,9 +145,11 @@ function getAnimeValue(meta: AnimeSeries['anime_meta'], axis: string): number | 
 }
 
 function getNovelValue(row: NovelRow, axis: string): number | null {
-  if (axis === 'volume_count') return row.volume_count ?? 0      // always has a value (0 if no volumes)
-  if (axis === 'votes')        return row.votes        ?? 0      // treat no votes as 0, still plotted
-  if (axis === 'latest_year')  return row.latest_year  ?? null   // null year = skip point
+  if (axis === 'volume_count') return row.volume_count ?? 0
+  if (axis === 'votes')        return row.votes        ?? 0
+  if (axis === 'price')        return row.price        ?? null
+  if (axis === 'avg_price')    return row.avg_price    ?? null
+  if (axis === 'latest_year')  return row.latest_year  ?? null
   return null
 }
 
@@ -163,9 +186,10 @@ export default function ChartsPage() {
   // Novel controls
   const [nxAxis,         setNxAxis]         = useState('volume_count')
   const [nyAxis,         setNyAxis]         = useState('votes')
-  const [periodFilter,   setPeriodFilter]   = useState('All')
-  const [publisherFilter,setPublisherFilter]= useState('All')
-  const [novelSearch,    setNovelSearch]    = useState('')
+  const [periodFilter,    setPeriodFilter]    = useState('All')
+  const [publisherFilter, setPublisherFilter] = useState('All')
+  const [avgPriceFilter,  setAvgPriceFilter]  = useState('All')  // 'All' | 'under50k' | '50-100k' | '100-150k' | 'over150k'
+  const [novelSearch,     setNovelSearch]     = useState('')
 
   // Dark mode observer
   useEffect(() => {
@@ -211,16 +235,14 @@ export default function ChartsPage() {
       console.log('[Novel] series count:', seriesData.length)
 
       // Step 2: Get volumes in batches of 200 (Supabase .in() limit)
-      // Try both boolean false AND string 'FALSE' since DB may store either
       const seriesIds = seriesData.map(s => s.id)
       const BATCH = 200
       const allVolData: any[] = []
       for (let i = 0; i < seriesIds.length; i += BATCH) {
         const chunk = seriesIds.slice(i, i + BATCH)
-        // Try boolean first
         const { data: vb } = await supabase
           .from('volumes')
-          .select('series_id, release_date, is_special')
+          .select('series_id, release_date, is_special, price')   // ← include price
           .in('series_id', chunk)
           .limit(10000)
         if (vb) allVolData.push(...vb)
@@ -278,10 +300,11 @@ export default function ChartsPage() {
       setVotesByPeriod(byPeriod)
 
       // Build lookup maps
-      const volMap: Record<number, { count: number; maxYear: number | null }> = {}
+      const volMap: Record<number, { count: number; price: number; maxYear: number | null }> = {}
       for (const v of volData || []) {
-        if (!volMap[v.series_id]) volMap[v.series_id] = { count: 0, maxYear: null }
+        if (!volMap[v.series_id]) volMap[v.series_id] = { count: 0, price: 0, maxYear: null }
         volMap[v.series_id].count++
+        volMap[v.series_id].price += Number(v.price) || 0
         if (v.release_date) {
           const yr = new Date(v.release_date).getFullYear()
           if (!volMap[v.series_id].maxYear || yr > volMap[v.series_id].maxYear!) {
@@ -308,15 +331,22 @@ export default function ChartsPage() {
         }
       }
 
-      const rows: NovelRow[] = seriesData.map(s => ({
-        id:           s.id,
-        title:        s.title,
-        publisher:    s.publisher,
-        volume_count: volMap[s.id]?.count    ?? 0,
-        latest_year:  volMap[s.id]?.maxYear  ?? null,
-        votes:        voteMap[s.title]?.votes ?? null,
-        period:       voteMap[s.title]?.period ?? null,
-      }))
+      const rows: NovelRow[] = seriesData.map(s => {
+        const vol   = volMap[s.id]
+        const count = vol?.count ?? 0
+        const price = vol?.price ? vol.price : null
+        return {
+          id:           s.id,
+          title:        s.title,
+          publisher:    s.publisher,
+          volume_count: count,
+          price:        price,
+          avg_price:    price != null && count > 0 ? Math.round(price / count) : null,
+          latest_year:  vol?.maxYear  ?? null,
+          votes:        voteMap[s.title]?.votes ?? null,
+          period:       voteMap[s.title]?.period ?? null,
+        }
+      })
 
       setAllNovels(rows)
       setNovelLoading(false)
@@ -371,6 +401,7 @@ export default function ChartsPage() {
       // Period filter: include novel if it has a vote entry in the selected period
       if (periodFilter !== 'All' && periodVotes && !(n.title in periodVotes)) return false
       if (publisherFilter !== 'All' && n.publisher !== publisherFilter) return false
+      if (!matchAvgPrice(n.avg_price, avgPriceFilter)) return false
       if (novelSearch && !n.title.toLowerCase().includes(novelSearch.toLowerCase())) return false
       return true
     })
@@ -387,7 +418,7 @@ export default function ChartsPage() {
       pts.push({ x, y, title: n.title, id: n.id, color: publisherColor(n.publisher), label: n.publisher || 'Unknown' })
     }
     return pts
-  }, [allNovels, nxAxis, nyAxis, periodFilter, publisherFilter, novelSearch, votesByPeriod])
+  }, [allNovels, nxAxis, nyAxis, periodFilter, publisherFilter, avgPriceFilter, novelSearch, votesByPeriod])
 
   // ── Active points (based on mode) ────────────────────────────────────────
   const points  = mode === 'anime' ? animePoints  : novelPoints
@@ -469,8 +500,11 @@ export default function ChartsPage() {
             const r = ctx.raw as PlotPoint
             const sub = mode === 'anime' ? `Format: ${r.label}` : `Publisher: ${r.label}`
             // Don't format years with toLocaleString (2025 → "2.025" in some locales)
-            const fmtVal = (axis: string, val: number) =>
-              axis === 'latest_year' ? String(val) : val.toLocaleString()
+            const fmtVal = (axis: string, val: number) => {
+              if (axis === 'latest_year') return String(val)
+              if (axis === 'price' || axis === 'avg_price') return val.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' ₫'
+              return val.toLocaleString()
+            }
             return [r.title, sub, `${axisLabel(curX)}: ${fmtVal(curX, r.x)}`, `${axisLabel(curY)}: ${fmtVal(curY, r.y)}`]
           },
         },
@@ -629,6 +663,11 @@ export default function ChartsPage() {
               <span className="text-xs font-semibold uppercase tracking-wide ml-2" style={{ color: 'var(--foreground-muted)' }}>Publisher</span>
               <select value={publisherFilter} onChange={e => setPublisherFilter(e.target.value)} className="text-sm rounded-lg px-3 py-1.5 outline-none max-w-[200px]" style={selectStyle}>
                 {availablePublishers.map(p => <option key={p} value={p}>{p === 'All' ? 'All Publishers' : p}</option>)}
+              </select>
+
+              <span className="text-xs font-semibold uppercase tracking-wide ml-2" style={{ color: 'var(--foreground-muted)' }}>Avg Vol. Price</span>
+              <select value={avgPriceFilter} onChange={e => setAvgPriceFilter(e.target.value)} className="text-sm rounded-lg px-3 py-1.5 outline-none" style={selectStyle}>
+                {AVG_PRICE_BUCKETS.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
               </select>
             </div>
           )}

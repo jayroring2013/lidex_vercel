@@ -201,40 +201,71 @@ export default function IndexPage() {
         })))
 
       } else {
-        // Novel — join volumes + voting_result in memory
-        const [{ data: sData }, { data: vData }, { data: vtData }] = await Promise.all([
-          supabase.from('series').select('id, title, item_type, publisher, status').eq('item_type', 'novel').limit(2000),
-          supabase.from('volumes').select('series_id, price').eq('is_special', false).limit(20000),
-          supabase.from('voting_result').select('title, votes, period').limit(5000),
-        ])
+        // Novel — series + volumes (batched) + voting_result
+        const { data: sData } = await supabase
+          .from('series')
+          .select('id, title, item_type, publisher, status')
+          .eq('item_type', 'novel')
+          .limit(2000)
 
+        if (!sData) { setLoading(false); return }
+
+        // Fetch volumes in batches of 200 to avoid .in() limit
+        const seriesIds = sData.map((s: any) => s.id)
+        const allVolData: any[] = []
+        for (let i = 0; i < seriesIds.length; i += 200) {
+          const chunk = seriesIds.slice(i, i + 200)
+          const { data: vBatch } = await supabase
+            .from('volumes')
+            .select('series_id, price, is_special')
+            .in('series_id', chunk)
+            .limit(10000)
+          if (vBatch) allVolData.push(...vBatch)
+        }
+
+        // Filter out specials — handle both boolean and string storage
+        const volData = allVolData.filter(v => {
+          const val = v.is_special
+          if (typeof val === 'boolean') return val === false
+          if (typeof val === 'string')  return val.toUpperCase() !== 'TRUE'
+          return true
+        })
+
+        // Build vol map: series_id → { count, priceSum }
         const volMap: Record<number, { count: number; priceSum: number }> = {}
-        for (const v of vData || []) {
+        for (const v of volData) {
           if (!volMap[v.series_id]) volMap[v.series_id] = { count: 0, priceSum: 0 }
           volMap[v.series_id].count++
           volMap[v.series_id].priceSum += Number(v.price) || 0
         }
-        const parsePeriod = (p: string) => { const [mm,yy] = p.split('/'); return parseInt(yy)*100+parseInt(mm) }
-        const voteMap: Record<string, number> = {}
-        for (const vr of vtData || []) {
-          if (!voteMap[vr.title] || parsePeriod(vr.period) > parsePeriod(voteMap[vr.title] as any)) {
-            voteMap[vr.title] = Number(vr.votes) || 0
-          }
+
+        // Fetch voting results
+        const { data: vtData } = await supabase
+          .from('voting_result')
+          .select('title, votes, period')
+          .limit(10000)
+
+        // Parse MM/YYYY → sortable int
+        const parsePeriod = (p: string | null): number => {
+          if (!p) return 0
+          const parts = p.split('/')
+          if (parts.length !== 2) return 0
+          return parseInt(parts[1]) * 100 + parseInt(parts[0])
         }
-        // rebuild with correct latest votes
-        const latestVote: Record<string, { votes: number }> = {}
+
+        // Keep only the latest-period vote per title
+        const latestVote: Record<string, { votes: number; _period: number }> = {}
         for (const vr of vtData || []) {
-          if (!latestVote[vr.title]) latestVote[vr.title] = { votes: 0 }
           const cur = parsePeriod(vr.period)
-          const prev = latestVote[vr.title] as any
-          if (!prev._period || cur > prev._period) {
-            latestVote[vr.title] = { votes: Number(vr.votes) || 0, _period: cur } as any
+          const existing = latestVote[vr.title]
+          if (!existing || cur > existing._period) {
+            latestVote[vr.title] = { votes: Number(vr.votes) || 0, _period: cur }
           }
         }
 
-        if (sData) setAllRows(sData.map((s: any) => {
-          const vol = volMap[s.id]
-          const cnt = vol?.count ?? 0
+        setAllRows(sData.map((s: any) => {
+          const vol   = volMap[s.id]
+          const cnt   = vol?.count    ?? 0
           const price = vol?.priceSum ?? null
           return {
             ...s, studio: null,
@@ -243,7 +274,7 @@ export default function IndexPage() {
             season: null, season_year: null,
             volume_count: cnt,
             votes:        latestVote[s.title]?.votes ?? null,
-            avg_price:    price && cnt > 0 ? Math.round(price / cnt) : null,
+            avg_price:    price != null && cnt > 0 ? Math.round(price / cnt) : null,
           }
         }))
       }

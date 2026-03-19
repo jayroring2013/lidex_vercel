@@ -145,8 +145,10 @@ export default function ChartsPage() {
   const [animeLoading, setAnimeLoading] = useState(true)
 
   // Novel state
-  const [allNovels, setAllNovels] = useState<NovelRow[]>([])
-  const [novelLoading, setNovelLoading] = useState(true)
+  const [allNovels,   setAllNovels]   = useState<NovelRow[]>([])
+  const [allPeriods,   setAllPeriods]   = useState<string[]>([])
+  const [votesByPeriod,setVotesByPeriod] = useState<Record<string, Record<string, number>>>({}) // period -> title -> votes
+  const [novelLoading, setNovelLoading]  = useState(true)
 
   const [isDark, setIsDark] = useState(false)
 
@@ -253,6 +255,28 @@ export default function ChartsPage() {
       console.log('[Novel] voting table used:', voteTableUsed, '| rows:', voteData?.length ?? 0)
       if (voteData && voteData.length > 0) console.log('[Novel] sample vote row:', voteData[0])
 
+      // Collect ALL unique periods from raw data (before per-title dedup)
+      const periodSet = new Set<string>()
+      for (const vr of voteData || []) {
+        if (vr.period) periodSet.add(vr.period)
+      }
+      const parsePeriodSort = (p: string) => {
+        const parts = p.split('/')
+        if (parts.length !== 2) return 0
+        return parseInt(parts[1]) * 100 + parseInt(parts[0])
+      }
+      const sortedPeriods = ['All', ...Array.from(periodSet).sort((a, b) => parsePeriodSort(b) - parsePeriodSort(a))]
+      setAllPeriods(sortedPeriods)
+
+      // Build period → title → votes map so period filter works correctly
+      const byPeriod: Record<string, Record<string, number>> = {}
+      for (const vr of voteData || []) {
+        if (!vr.period) continue
+        if (!byPeriod[vr.period]) byPeriod[vr.period] = {}
+        byPeriod[vr.period][vr.title] = Number(vr.votes) || 0
+      }
+      setVotesByPeriod(byPeriod)
+
       // Build lookup maps
       const volMap: Record<number, { count: number; maxYear: number | null }> = {}
       for (const v of volData || []) {
@@ -329,18 +353,8 @@ export default function ChartsPage() {
   }, [allAnime, xAxis, yAxis, formatFilter, seasonFilter, yearFilter, animeSearch])
 
   // ── Novel derived data ────────────────────────────────────────────────────
-  const availablePeriods = useMemo(() => {
-    const s = new Set<string>()
-    allNovels.forEach(n => { if (n.period) s.add(n.period) })
-    // Sort MM/YYYY periods chronologically (newest first)
-    return [
-      'All',
-      ...Array.from(s).sort((a, b) => {
-        const parse = (p: string) => { const [mm, yyyy] = p.split('/'); return parseInt(yyyy||'0')*100+parseInt(mm||'0') }
-        return parse(b) - parse(a)
-      })
-    ]
-  }, [allNovels])
+  // Periods come directly from raw voting_result rows (all periods, not just latest-per-novel)
+  const availablePeriods = allPeriods
 
   const availablePublishers = useMemo(() => {
     const counts: Record<string, number> = {}
@@ -349,21 +363,31 @@ export default function ChartsPage() {
   }, [allNovels])
 
   const novelPoints = useMemo(() => {
+    // When a specific period is selected, use that period's vote counts
+    // Otherwise fall back to the latest-period votes stored on each row
+    const periodVotes = periodFilter !== 'All' ? (votesByPeriod[periodFilter] ?? {}) : null
+
     const filtered = allNovels.filter(n => {
-      if (periodFilter    !== 'All' && n.period    !== periodFilter)    return false
+      // Period filter: include novel if it has a vote entry in the selected period
+      if (periodFilter !== 'All' && periodVotes && !(n.title in periodVotes)) return false
       if (publisherFilter !== 'All' && n.publisher !== publisherFilter) return false
       if (novelSearch && !n.title.toLowerCase().includes(novelSearch.toLowerCase())) return false
       return true
     })
+
     const pts: PlotPoint[] = []
     for (const n of filtered) {
-      const x = getNovelValue(n, nxAxis)
-      const y = getNovelValue(n, nyAxis)
+      // Override votes with period-specific value when a period is selected
+      const rowWithVotes: NovelRow = periodVotes
+        ? { ...n, votes: periodVotes[n.title] ?? 0 }
+        : n
+      const x = getNovelValue(rowWithVotes, nxAxis)
+      const y = getNovelValue(rowWithVotes, nyAxis)
       if (x == null || y == null || isNaN(x) || isNaN(y)) continue
       pts.push({ x, y, title: n.title, id: n.id, color: publisherColor(n.publisher), label: n.publisher || 'Unknown' })
     }
     return pts
-  }, [allNovels, nxAxis, nyAxis, periodFilter, publisherFilter, novelSearch])
+  }, [allNovels, nxAxis, nyAxis, periodFilter, publisherFilter, novelSearch, votesByPeriod])
 
   // ── Active points (based on mode) ────────────────────────────────────────
   const points  = mode === 'anime' ? animePoints  : novelPoints

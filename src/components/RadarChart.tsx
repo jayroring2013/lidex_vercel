@@ -21,6 +21,43 @@ interface RadarChartProps {
   series: any
 }
 
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+interface PopularityStats {
+  min: number; max: number
+  p50: number; p75: number; p90: number; p95: number; p99: number
+}
+
+function calculatePopularityScore(
+  popularity: number | null | undefined,
+  stats: PopularityStats | null
+): number {
+  if (!popularity || !stats) return 5
+  const { min, max, p50, p75, p90, p95, p99 } = stats
+  // Guard against division by zero
+  if (p50 === min || p75 === p50 || p90 === p75 || p95 === p90 || p99 === p95 || max === p99) return 5
+  if (popularity <= min) return 0
+  if (popularity <= p50) return 2.5 + ((popularity - min)  / (p50 - min))  * 2.5
+  if (popularity <= p75) return 5.0 + ((popularity - p50)  / (p75 - p50))  * 1.5
+  if (popularity <= p90) return 6.5 + ((popularity - p75)  / (p90 - p75))  * 1.5
+  if (popularity <= p95) return 8.0 + ((popularity - p90)  / (p95 - p90))  * 1.0
+  if (popularity <= p99) return 9.0 + ((popularity - p95)  / (p99 - p95))  * 0.5
+  return Math.min(10, 9.5 + ((popularity - p99) / (max - p99)) * 0.5)
+}
+
+// Clamp all values strictly to [0, 10] so the radar scale never rescales
+function clamp(val: number): number {
+  return Math.min(10, Math.max(0, val))
+}
+
+function formatNumber(num: number): string {
+  if (num >= 1_000_000) return (num / 1_000_000).toFixed(1) + 'M'
+  if (num >= 1_000)     return (num / 1_000).toFixed(1) + 'K'
+  return num.toString()
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
 export default function RadarChart({ series }: RadarChartProps) {
   const { stats: popularityStats, loading } = usePopularityStats()
   const [isDark, setIsDark] = useState(false)
@@ -35,8 +72,30 @@ export default function RadarChart({ series }: RadarChartProps) {
 
   if (series.item_type !== 'anime') return null
 
-  const anime_meta = series.anime_meta || {}
-  const popularityScore = calculatePopularityScore(anime_meta.popularity, popularityStats)
+  const m = series.anime_meta || {}
+
+  const popularityScore = calculatePopularityScore(m.popularity, popularityStats)
+
+  // ── Normalized radar values (all clamped 0–10) ────────────────────────────
+  const radarValues = [
+    clamp(m.mean_score   ? m.mean_score / 10                              : 0),
+    clamp(popularityScore),
+    clamp(m.episodes     ? m.episodes / 50 * 10                           : 5),
+    clamp(m.duration_min ? m.duration_min / 30 * 10                       : 5),
+    clamp(m.favourites   ? Math.log10(m.favourites + 1) * 2.5             : 5),
+    clamp(m.end_date     ? 10 : m.start_date ? 5                          : 0),
+  ]
+
+  // ── Human-readable values for tooltip ────────────────────────────────────
+  // These are what get shown in the hover popup — the ACTUAL stats, not 0-10
+  const tooltipValues = [
+    m.mean_score   ? `${m.mean_score}/100`                  : 'N/A',
+    m.popularity   ? `#${m.popularity.toLocaleString()}`    : 'N/A',
+    m.episodes     ? `${m.episodes} eps`                    : 'N/A',
+    m.duration_min ? `${m.duration_min} min`                : 'N/A',
+    m.favourites   ? formatNumber(m.favourites)             : 'N/A',
+    m.end_date     ? 'Hoàn thành' : m.start_date ? 'Đang chiếu' : 'Chưa phát sóng',
+  ]
 
   const labelColor     = isDark ? 'rgba(148,163,184,1)'   : 'rgba(71,85,105,1)'
   const gridColor      = isDark ? 'rgba(148,163,184,0.2)' : 'rgba(100,116,139,0.15)'
@@ -46,21 +105,14 @@ export default function RadarChart({ series }: RadarChartProps) {
     labels: ['Score', 'Popularity', 'Episodes', 'Duration', 'Favorites', 'Completion'],
     datasets: [{
       label: series.title,
-      data: [
-        anime_meta.mean_score   ? anime_meta.mean_score / 10                                     : 0,
-        popularityScore,
-        anime_meta.episodes     ? Math.min(10, anime_meta.episodes / 50 * 10)                   : 5,
-        anime_meta.duration_min ? Math.min(10, anime_meta.duration_min / 30 * 10)               : 5,
-        anime_meta.favourites   ? Math.min(10, Math.log10(anime_meta.favourites + 1) * 2.5)     : 5,
-        anime_meta.end_date     ? 10 : anime_meta.start_date ? 5 : 0,
-      ],
-      backgroundColor: 'rgba(99,102,241,0.15)',
-      borderColor:     'rgba(99,102,241,0.8)',
-      borderWidth: 2,
-      pointBackgroundColor:    'rgba(99,102,241,1)',
-      pointBorderColor:        isDark ? '#1e293b' : '#ffffff',
-      pointHoverBackgroundColor: isDark ? '#fff' : '#4f46e5',
-      pointHoverBorderColor:   'rgba(99,102,241,1)',
+      data:  radarValues,
+      backgroundColor:           'rgba(99,102,241,0.15)',
+      borderColor:               'rgba(99,102,241,0.8)',
+      borderWidth:               2,
+      pointBackgroundColor:      'rgba(99,102,241,1)',
+      pointBorderColor:          isDark ? '#1e293b' : '#ffffff',
+      pointHoverBackgroundColor: isDark ? '#fff'    : '#4f46e5',
+      pointHoverBorderColor:     'rgba(99,102,241,1)',
     }],
   }
 
@@ -73,15 +125,23 @@ export default function RadarChart({ series }: RadarChartProps) {
         grid:       { color: gridColor },
         pointLabels: { color: labelColor, font: { size: 12, weight: 600 as any } },
         ticks: { display: false, stepSize: 2 },
-        suggestedMin: 0,
-        suggestedMax: 10,
+        // Use min/max (not suggested) so the scale is ALWAYS 0–10
+        // regardless of the data values — this prevents rescaling bugs
+        min: 0,
+        max: 10,
       },
     },
     plugins: {
       legend: { display: false },
       tooltip: {
         callbacks: {
-          label: (ctx) => `${ctx.label}: ${(ctx.parsed.r || 0).toFixed(1)}/10`,
+          // Show the axis name + actual stat value, not the normalized score
+          label: (ctx) => {
+            const axisName = (ctx.chart.data.labels?.[ctx.dataIndex] as string) ?? ''
+            const actual   = tooltipValues[ctx.dataIndex] ?? '—'
+            const norm     = (ctx.parsed.r ?? 0).toFixed(1)
+            return `${axisName}: ${actual}  (${norm}/10)`
+          },
         },
       },
     },
@@ -125,34 +185,15 @@ export default function RadarChart({ series }: RadarChartProps) {
         className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-6 pt-6"
         style={{ borderTop: '1px solid var(--card-border)' }}
       >
-        <StatItem icon={Tv}       label="Episodes"         value={anime_meta.episodes || 'N/A'} />
-        <StatItem icon={Clock}    label="Duration"         value={anime_meta.duration_min ? `${anime_meta.duration_min} min` : 'N/A'} />
-        <StatItem icon={Calendar} label="Season"           value={anime_meta.season ? `${anime_meta.season.toUpperCase()} ${anime_meta.season_year || ''}` : 'N/A'} />
-        <StatItem icon={Users}    label="Popularity Score" value={anime_meta.popularity ? anime_meta.popularity.toLocaleString() : 'N/A'} />
-        <StatItem icon={Heart}    label="Favorites"        value={anime_meta.favourites ? formatNumber(anime_meta.favourites) : 'N/A'} />
-        <StatItem icon={Award}    label="Mean Score"       value={anime_meta.mean_score ? `${anime_meta.mean_score}/100` : 'N/A'} />
+        <StatItem icon={Tv}       label="Episodes"         value={m.episodes     ? `${m.episodes} tập`                                      : 'N/A'} />
+        <StatItem icon={Clock}    label="Duration"         value={m.duration_min ? `${m.duration_min} min`                                   : 'N/A'} />
+        <StatItem icon={Calendar} label="Season"           value={m.season       ? `${m.season.toUpperCase()} ${m.season_year || ''}`        : 'N/A'} />
+        <StatItem icon={Users}    label="Popularity"       value={m.popularity   ? `#${m.popularity.toLocaleString()}`                       : 'N/A'} />
+        <StatItem icon={Heart}    label="Favorites"        value={m.favourites   ? formatNumber(m.favourites)                                : 'N/A'} />
+        <StatItem icon={Award}    label="Mean Score"       value={m.mean_score   ? `${m.mean_score}/100`                                     : 'N/A'} />
       </div>
     </div>
   )
-}
-
-// ── helpers ──────────────────────────────────────────────────────────────────
-
-interface PopularityStats {
-  min: number; max: number
-  p50: number; p75: number; p90: number; p95: number; p99: number
-}
-
-function calculatePopularityScore(popularity: number | null | undefined, stats: PopularityStats | null): number {
-  if (!popularity || !stats) return 5
-  const { min, max, p50, p75, p90, p95, p99 } = stats
-  if (popularity <= min) return 0
-  if (popularity <= p50) return 2.5 + ((popularity - min)  / (p50 - min))  * 2.5
-  if (popularity <= p75) return 5.0 + ((popularity - p50)  / (p75 - p50))  * 1.5
-  if (popularity <= p90) return 6.5 + ((popularity - p75)  / (p90 - p75))  * 1.5
-  if (popularity <= p95) return 8.0 + ((popularity - p90)  / (p95 - p90))  * 1.0
-  if (popularity <= p99) return 9.0 + ((popularity - p95)  / (p99 - p95))  * 0.5
-  return 9.5 + ((popularity - p99) / (max - p99)) * 0.5
 }
 
 function StatItem({ icon: Icon, label, value }: { icon: any; label: string; value: string | number }) {
@@ -168,10 +209,4 @@ function StatItem({ icon: Icon, label, value }: { icon: any; label: string; valu
       </div>
     </div>
   )
-}
-
-function formatNumber(num: number): string {
-  if (num >= 1_000_000) return (num / 1_000_000).toFixed(1) + 'M'
-  if (num >= 1_000)     return (num / 1_000).toFixed(1) + 'K'
-  return num.toString()
 }

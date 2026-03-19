@@ -3,9 +3,11 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { BarChart3, Github, Menu, Moon, Sun, ChevronDown } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
+import { useLocale } from '@/contexts/LocaleContext'
 
 export default function Navbar() {
   const pathname = usePathname()
+  const { locale, setLocale, t } = useLocale()
   const [isDark, setIsDark] = useState(true)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [chartsOpen, setChartsOpen] = useState(false)
@@ -16,7 +18,6 @@ export default function Navbar() {
     setIsDark(isDarkMode)
   }, [])
 
-  // Close dropdown on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (!chartsRef.current?.contains(e.target as Node)) setChartsOpen(false)
@@ -33,13 +34,13 @@ export default function Navbar() {
   const isChartsActive = pathname === '/charts' || pathname === '/compare'
 
   const flatLinks = [
-    { href: '/',          label: 'Home'      },
-    { href: '/dashboard', label: 'Dashboard' },
+    { href: '/',          label: t('nav_home')      },
+    { href: '/dashboard', label: t('nav_dashboard') },
   ]
 
   const chartsChildren = [
-    { href: '/charts',  label: 'Scatter'  },
-    { href: '/compare', label: 'Compare'  },
+    { href: '/charts',  label: t('nav_scatter') },
+    { href: '/compare', label: t('nav_compare') },
   ]
 
   return (
@@ -57,8 +58,6 @@ export default function Navbar() {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-8">
-
-            {/* Flat links */}
             {flatLinks.map(link => (
               <Link
                 key={link.href}
@@ -75,7 +74,7 @@ export default function Navbar() {
                 onClick={() => setChartsOpen(o => !o)}
                 className={`nav-link flex items-center gap-1 ${isChartsActive ? 'active' : ''}`}
               >
-                Charts
+                {t('nav_charts')}
                 <ChevronDown
                   className="w-3.5 h-3.5 transition-transform"
                   style={{ transform: chartsOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
@@ -85,12 +84,8 @@ export default function Navbar() {
               {chartsOpen && (
                 <div
                   className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-36 rounded-xl overflow-hidden shadow-xl z-50"
-                  style={{
-                    background: 'var(--card-bg)',
-                    border: '1px solid var(--card-border)',
-                  }}
+                  style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)' }}
                 >
-                  {/* Small arrow pointer */}
                   <div
                     className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 rotate-45"
                     style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderBottom: 'none', borderRight: 'none' }}
@@ -102,14 +97,13 @@ export default function Navbar() {
                       onClick={() => setChartsOpen(false)}
                       className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors"
                       style={{
-                        color: pathname === child.href ? '#6366f1' : 'var(--foreground-secondary)',
+                        color:        pathname === child.href ? '#6366f1' : 'var(--foreground-secondary)',
                         borderBottom: i < chartsChildren.length - 1 ? '1px solid var(--card-border)' : 'none',
-                        background: pathname === child.href ? 'var(--background-secondary)' : 'transparent',
+                        background:   pathname === child.href ? 'var(--background-secondary)' : 'transparent',
                       }}
                       onMouseEnter={e => { if (pathname !== child.href) e.currentTarget.style.background = 'var(--background-secondary)' }}
                       onMouseLeave={e => { if (pathname !== child.href) e.currentTarget.style.background = 'transparent' }}
                     >
-                      {/* Active dot */}
                       {pathname === child.href && (
                         <span className="w-1.5 h-1.5 rounded-full bg-primary-500 flex-shrink-0" />
                       )}
@@ -130,14 +124,45 @@ export default function Navbar() {
             </a>
           </div>
 
-          {/* Right Side */}
-          <div className="flex items-center space-x-4">
+          {/* Right side: language toggle + theme + mobile menu */}
+          <div className="flex items-center space-x-3">
+
+            {/* VI / EN pill toggle */}
+            <div
+              className="flex rounded-lg overflow-hidden text-xs font-bold"
+              style={{ border: '1px solid var(--card-border)' }}
+            >
+              <button
+                onClick={() => setLocale('vi')}
+                className="px-2.5 py-1.5 transition-colors"
+                style={locale === 'vi'
+                  ? { background: '#6366f1', color: '#fff' }
+                  : { background: 'var(--background-secondary)', color: 'var(--foreground-secondary)' }
+                }
+                title="Tiếng Việt"
+              >
+                VI
+              </button>
+              <button
+                onClick={() => setLocale('en')}
+                className="px-2.5 py-1.5 transition-colors"
+                style={locale === 'en'
+                  ? { background: '#6366f1', color: '#fff' }
+                  : { background: 'var(--background-secondary)', color: 'var(--foreground-secondary)' }
+                }
+                title="English"
+              >
+                EN
+              </button>
+            </div>
+
             <button
               onClick={toggleTheme}
               className="theme-toggle p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-dark-800 transition-colors"
             >
               {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
+
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="md:hidden theme-toggle p-2"
@@ -162,9 +187,8 @@ export default function Navbar() {
                 {link.label}
               </Link>
             ))}
-            {/* Charts group label */}
             <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--foreground-muted)' }}>
-              Charts
+              {t('nav_charts')}
             </p>
             {chartsChildren.map(child => (
               <Link

@@ -91,61 +91,36 @@ export default function Dashboard() {
           href:      '#',
         }))
 
-        // Novel: get all novels first
+        // Novel from series + voting_result
         const { data: novelData } = await supabase
           .from('series')
-          .select('id, title')
+          .select('id, title, cover_url')
           .eq('item_type', 'novel')
-          .limit(500)
+          .not('cover_url', 'is', null)
+          .limit(50)
 
         const novelTitles = (novelData || []).map((n: any) => n.title)
-        const novelIds    = (novelData || []).map((n: any) => n.id)
-
-        // Fetch votes
         const { data: voteData } = await supabase
           .from('voting_result')
           .select('title, votes')
-          .in('title', novelTitles.slice(0, 200))
+          .in('title', novelTitles)
 
         const voteMap: Record<string, number> = {}
         for (const v of voteData || []) {
           if (!voteMap[v.title] || v.votes > voteMap[v.title]) voteMap[v.title] = Number(v.votes)
         }
 
-        // Find top 10 by votes
-        const top10Novel = (novelData || [])
-          .filter((n: any) => voteMap[n.title] != null)
-          .sort((a: any, b: any) => (voteMap[b.title] ?? 0) - (voteMap[a.title] ?? 0))
-          .slice(0, 10)
-
-        // Single batch query: get all volumes for top 10 novels, sorted by release_date
-        const top10Ids = top10Novel.map((n: any) => n.id)
-        const { data: volData } = await supabase
-          .from('volumes')
-          .select('series_id, cover_url, release_date, is_special')
-          .in('series_id', top10Ids)
-          .not('cover_url', 'is', null)
-          .order('release_date', { ascending: false })
-          .limit(500)
-
-        // Build map: series_id → cover_url of newest non-special volume
-        const coverMap: Record<number, string> = {}
-        for (const v of volData || []) {
-          // handle both boolean false and string 'FALSE'
-          const isSpecial = typeof v.is_special === 'boolean' ? v.is_special : v.is_special?.toUpperCase() === 'TRUE'
-          if (isSpecial) continue
-          if (!coverMap[v.series_id]) coverMap[v.series_id] = v.cover_url
-        }
-
-        const novelItems: CarouselItem[] = top10Novel
+        const novelItems: CarouselItem[] = (novelData || [])
           .map((n: any) => ({
             id:        n.id,
             title:     n.title,
-            cover_url: coverMap[n.id] ?? null,
+            cover_url: n.cover_url,
             score:     voteMap[n.title] ?? null,
             href:      `/content/${n.id}`,
           }))
-          .filter(n => n.cover_url != null)
+          .filter(n => n.score != null)
+          .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+          .slice(0, 10)
 
         setCarouselData({ anime: animeItems, manga: mangaItems, novel: novelItems })
       } catch (error) {

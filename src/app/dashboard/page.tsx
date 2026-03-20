@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { BookOpen, Tv, Book, Loader2, RefreshCw } from 'lucide-react'
-import { getSiteStats, getTopRatedSeries } from '../../lib/supabase'
+import { getTopRatedSeries } from '../../lib/supabase'
 import { createClient } from '@supabase/supabase-js'
 import StatsCard from '../../components/StatsCard'
 import Link from 'next/link'
@@ -16,6 +16,7 @@ interface SiteStats {
   totalSeries: number
   totalAnime:  number
   totalManga:  number
+  totalNovel:  number
 }
 
 interface CarouselItem {
@@ -60,11 +61,28 @@ export default function Dashboard() {
   useEffect(() => {
     async function loadDashboard() {
       try {
-        const [statsData, topAnimeData] = await Promise.all([
-          getSiteStats(),
+        const [
+          topAnimeData,
+          { count: animeCount },
+          { count: novelCount },
+          { count: mangaCount },
+        ] = await Promise.all([
           getTopRatedSeries({ limit: 10 }),
+          supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'anime'),
+          supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'novel'),
+          supabase.from('manga').select('id', { count: 'exact', head: true }),
         ])
-        setStats(statsData)
+
+        const anime = animeCount ?? 0
+        const novel = novelCount ?? 0
+        const manga = mangaCount ?? 0
+
+        setStats({
+          totalAnime:  anime,
+          totalNovel:  novel,
+          totalManga:  manga,
+          totalSeries: anime + novel + manga,
+        })
 
         // Anime from existing function
         const animeItems: CarouselItem[] = (topAnimeData.data || []).map((s: any) => ({
@@ -91,36 +109,61 @@ export default function Dashboard() {
           href:      '#',
         }))
 
-        // Novel from series + voting_result
+        // Novel: get all novels first
         const { data: novelData } = await supabase
           .from('series')
-          .select('id, title, cover_url')
+          .select('id, title')
           .eq('item_type', 'novel')
-          .not('cover_url', 'is', null)
-          .limit(50)
+          .limit(500)
 
         const novelTitles = (novelData || []).map((n: any) => n.title)
+        const novelIds    = (novelData || []).map((n: any) => n.id)
+
+        // Fetch votes
         const { data: voteData } = await supabase
           .from('voting_result')
           .select('title, votes')
-          .in('title', novelTitles)
+          .in('title', novelTitles.slice(0, 200))
 
         const voteMap: Record<string, number> = {}
         for (const v of voteData || []) {
           if (!voteMap[v.title] || v.votes > voteMap[v.title]) voteMap[v.title] = Number(v.votes)
         }
 
-        const novelItems: CarouselItem[] = (novelData || [])
+        // Find top 10 by votes
+        const top10Novel = (novelData || [])
+          .filter((n: any) => voteMap[n.title] != null)
+          .sort((a: any, b: any) => (voteMap[b.title] ?? 0) - (voteMap[a.title] ?? 0))
+          .slice(0, 10)
+
+        // Single batch query: get all volumes for top 10 novels, sorted by release_date
+        const top10Ids = top10Novel.map((n: any) => n.id)
+        const { data: volData } = await supabase
+          .from('volumes')
+          .select('series_id, cover_url, release_date, is_special')
+          .in('series_id', top10Ids)
+          .not('cover_url', 'is', null)
+          .order('release_date', { ascending: false })
+          .limit(500)
+
+        // Build map: series_id → cover_url of newest non-special volume
+        const coverMap: Record<number, string> = {}
+        for (const v of volData || []) {
+          // handle both boolean false and string 'FALSE'
+          const isSpecial = typeof v.is_special === 'boolean' ? v.is_special : v.is_special?.toUpperCase() === 'TRUE'
+          if (isSpecial) continue
+          if (!coverMap[v.series_id]) coverMap[v.series_id] = v.cover_url
+        }
+
+        const novelItems: CarouselItem[] = top10Novel
           .map((n: any) => ({
             id:        n.id,
             title:     n.title,
-            cover_url: n.cover_url,
+            cover_url: coverMap[n.id] ?? null,
             score:     voteMap[n.title] ?? null,
             href:      `/content/${n.id}`,
           }))
-          .filter(n => n.score != null)
-          .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-          .slice(0, 10)
+          .filter(n => n.cover_url != null)
 
         setCarouselData({ anime: animeItems, manga: mangaItems, novel: novelItems })
       } catch (error) {
@@ -185,10 +228,11 @@ export default function Dashboard() {
         </div>
 
         {/* ── Stats ── */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
-          <StatsCard icon={BookOpen} value={stats?.totalSeries?.toLocaleString() || '0'} label="Total Series"  color="primary" trend={null} />
-          <StatsCard icon={Tv}       value={stats?.totalAnime?.toLocaleString()  || '0'} label="Anime Titles"  color="purple"  trend={null} />
-          <StatsCard icon={Book}     value={stats?.totalManga?.toLocaleString()  || '0'} label="Manga Series"  color="pink"    trend={null} />
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
+          <StatsCard icon={BookOpen} value={stats?.totalSeries?.toLocaleString() || '0'} label="Total Series"   color="primary" trend={null} />
+          <StatsCard icon={Tv}       value={stats?.totalAnime?.toLocaleString()  || '0'} label="Anime"          color="purple"  trend={null} />
+          <StatsCard icon={Book}     value={stats?.totalManga?.toLocaleString()  || '0'} label="Manga"          color="pink"    trend={null} />
+          <StatsCard icon={BookOpen} value={(stats as any)?.totalNovel?.toLocaleString() || '0'} label="Tiểu thuyết" color="green" trend={null} />
         </div>
 
         {/* ── Carousel section ── */}

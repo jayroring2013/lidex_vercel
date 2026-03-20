@@ -10,26 +10,71 @@ import {
 } from 'lucide-react'
 import { fetchSeries, fetchVoteCount } from '@/lib/api'
 import RadarChart from '@/components/RadarChart'
+import { createClient } from '@supabase/supabase-js'
+import {
+  calculateLiDexScore,
+  buildPopulationStats,
+  type LiDexScoreBreakdown,
+} from '@/lib/lidexScore'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
+
+// ── Score helpers ─────────────────────────────────────────────────────────────
+
+function scoreColor(s: number) {
+  if (s >= 80) return '#4ade80'
+  if (s >= 65) return '#86efac'
+  if (s >= 50) return '#fbbf24'
+  if (s >= 35) return '#fb923c'
+  return '#f87171'
+}
+
+function scoreGrade(s: number) {
+  if (s >= 85) return 'S'
+  if (s >= 75) return 'A'
+  if (s >= 60) return 'B'
+  if (s >= 45) return 'C'
+  if (s >= 30) return 'D'
+  return 'F'
+}
+
+const COMPONENT_META: { key: keyof LiDexScoreBreakdown; label: string; weight: number }[] = [
+  { key: 'community',        label: 'Community Score',   weight: 30 },
+  { key: 'popularity',       label: 'Popularity',        weight: 18 },
+  { key: 'favourites',       label: 'Favourites',        weight: 17 },
+  { key: 'distribution',     label: 'Score Distribution',weight: 13 },
+  { key: 'viewerEngagement', label: 'Viewer Engagement', weight: 12 },
+  { key: 'animeStatus',      label: 'Status',            weight:  5 },
+  { key: 'studio',           label: 'Studio Rep.',       weight:  5 },
+]
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export default function ContentDetail() {
   const params = useParams()
-  const [series, setSeries] = useState<any>(null)
-  const [voteCount, setVoteCount] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [imageError, setImageError] = useState(false)
+  const [series,      setSeries]      = useState<any>(null)
+  const [voteCount,   setVoteCount]   = useState(0)
+  const [loading,     setLoading]     = useState(true)
+  const [error,       setError]       = useState<string | null>(null)
+  const [imageError,  setImageError]  = useState(false)
   const [synopsisExpanded, setSynopsisExpanded] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const [copied,      setCopied]      = useState(false)
+  const [lidexScore,  setLidexScore]  = useState<LiDexScoreBreakdown | null>(null)
+  const [scoreLoading,setScoreLoading]= useState(false)
 
-  const seriesId = params.id ? parseInt(params.id as string) : undefined
+  const seriesId   = params.id ? parseInt(params.id as string) : undefined
   const coverImage = !imageError && series?.cover_url ? series.cover_url : null
   const bannerImage = series?.banner_url || series?.cover_url
 
+  // Load series + votes
   useEffect(() => {
     async function loadData() {
       if (!seriesId) { setError('No series ID provided'); setLoading(false); return }
       try {
-        const data = await fetchSeries(seriesId)
+        const data  = await fetchSeries(seriesId)
         setSeries(data)
         const votes = await fetchVoteCount(seriesId)
         setVoteCount(votes.count)
@@ -43,6 +88,63 @@ export default function ContentDetail() {
     loadData()
   }, [seriesId])
 
+  // Calculate LiDex Score once series is loaded (anime only)
+  useEffect(() => {
+    if (!series || series.item_type !== 'anime' || !series.anime_meta) return
+
+    async function calcScore() {
+      setScoreLoading(true)
+      try {
+        // Fetch population data for percentile baselines
+        const { data: popData } = await supabase
+          .from('anime_meta')
+          .select('mean_score, popularity, favourites')
+          .limit(3000)
+
+        // Also fetch studio data for studio reputation component
+        const { data: studioData } = await supabase
+          .from('series')
+          .select('studio, anime_meta(mean_score)')
+          .eq('item_type', 'anime')
+          .not('studio', 'is', null)
+          .limit(3000)
+
+        const studioRows = (studioData || []).map((s: any) => ({
+          studio:     s.studio,
+          mean_score: s.anime_meta?.mean_score ?? null,
+          popularity: null,
+          favourites: null,
+        }))
+
+        const allRows = [
+          ...(popData || []).map((r: any) => ({ ...r, studio: null })),
+          ...studioRows,
+        ]
+
+        const stats = buildPopulationStats(allRows)
+
+        const breakdown = calculateLiDexScore(
+          {
+            mean_score:          series.anime_meta.mean_score,
+            popularity:          series.anime_meta.popularity,
+            favourites:          series.anime_meta.favourites,
+            status:              series.status,
+            score_distribution:  series.anime_meta.score_distribution,
+            status_distribution: series.anime_meta.status_distribution,
+          },
+          series.studio ?? null,
+          stats
+        )
+        setLidexScore(breakdown)
+      } catch (e) {
+        console.error('LiDex score calc failed:', e)
+      } finally {
+        setScoreLoading(false)
+      }
+    }
+    calcScore()
+  }, [series])
+
   const handleShare = async () => {
     await navigator.clipboard.writeText(window.location.href)
     setCopied(true)
@@ -51,7 +153,7 @@ export default function ContentDetail() {
 
   const handleShareTwitter = () => {
     const text = encodeURIComponent(`Check out "${series?.title}" on LiDex Analytics!`)
-    const url = encodeURIComponent(window.location.href)
+    const url  = encodeURIComponent(window.location.href)
     window.open(`https://twitter.com/intent/tweet?text=${text}&url=${url}`, '_blank')
   }
 
@@ -91,22 +193,17 @@ export default function ContentDetail() {
 
   const typeText = (series.item_type || 'Series').replace('_', ' ').toUpperCase()
   const isOngoing = series.status === 'ongoing' || series.status === 'Ongoing'
+  const isAnime   = series.item_type === 'anime'
 
   return (
     <div className="min-h-screen overflow-x-hidden" style={{ background: 'var(--background)' }}>
 
       {/* ── Hero Banner ── */}
       <div className="relative w-full overflow-hidden">
-
-        {/* Background — absolute inset-0 fills the hero's natural height */}
         <div className="absolute inset-0">
           {bannerImage ? (
             <>
-              <img
-                src={bannerImage} alt=""
-                className="w-full h-full object-cover object-center"
-                onError={() => setImageError(true)}
-              />
+              <img src={bannerImage} alt="" className="w-full h-full object-cover object-center" onError={() => setImageError(true)} />
               <div className="absolute inset-0 backdrop-blur-md bg-dark-900/55" />
               <div className="absolute inset-0 bg-gradient-to-t from-dark-900 via-dark-900/40 to-transparent" />
             </>
@@ -118,19 +215,15 @@ export default function ContentDetail() {
           )}
         </div>
 
-        {/* Hero content drives the section height */}
         <div className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Outer row: cover | meta | score box */}
           <div className="flex flex-col md:flex-row md:items-end gap-5 md:gap-8 pt-24 sm:pt-28 pb-10 sm:pb-14">
 
             {/* Cover */}
             <div className="flex-shrink-0 mx-auto md:mx-0">
               <div className="w-36 sm:w-44 md:w-52 lg:w-60 rounded-xl overflow-hidden shadow-2xl border-2 border-white/20 bg-dark-800">
                 {coverImage ? (
-                  <img
-                    src={coverImage} alt={series.title}
-                    className="w-full h-auto block"
-                    onError={() => setImageError(true)}
-                  />
+                  <img src={coverImage} alt={series.title} className="w-full h-auto block" onError={() => setImageError(true)} />
                 ) : (
                   <div className="w-full h-52 sm:h-64 bg-gradient-to-br from-primary-600 to-purple-700 flex items-center justify-center">
                     <BookOpen className="w-16 h-16 sm:w-20 sm:h-20 text-white/50" />
@@ -139,14 +232,10 @@ export default function ContentDetail() {
               </div>
             </div>
 
-            {/* Meta */}
+            {/* Meta — flex-1 so it takes remaining space */}
             <div className="flex-1 min-w-0 text-center md:text-left">
-
-              {/* Badges */}
               <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mb-3">
-                <span className="px-3 py-1 bg-primary-500/90 rounded-full text-xs font-semibold text-white whitespace-nowrap">
-                  {typeText}
-                </span>
+                <span className="px-3 py-1 bg-primary-500/90 rounded-full text-xs font-semibold text-white whitespace-nowrap">{typeText}</span>
                 <span className={`px-3 py-1 rounded-full text-xs font-semibold text-white whitespace-nowrap ${isOngoing ? 'bg-green-500/90' : 'bg-blue-500/90'}`}>
                   {(series.status || 'Unknown').toUpperCase()}
                 </span>
@@ -157,12 +246,10 @@ export default function ContentDetail() {
                 )}
               </div>
 
-              {/* Title */}
               <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-2 leading-tight break-words">
                 {series.title}
               </h1>
 
-              {/* Alt titles */}
               {(series.title_vi || series.title_native) && (
                 <div className="mb-3">
                   {series.title_vi     && <p className="text-base sm:text-lg text-gray-300 mb-0.5 break-words">{series.title_vi}</p>}
@@ -170,7 +257,6 @@ export default function ContentDetail() {
                 </div>
               )}
 
-              {/* Stats */}
               <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 sm:gap-6 mb-4">
                 {series.score && (
                   <div className="flex items-center gap-1.5">
@@ -186,7 +272,6 @@ export default function ContentDetail() {
                 </div>
               </div>
 
-              {/* Studio / Publisher / Author */}
               {(series.author || series.studio || series.publisher) && (
                 <div className="flex flex-wrap items-center justify-center md:justify-start gap-x-4 gap-y-1 text-xs sm:text-sm text-gray-300 mb-4">
                   {series.author    && <span><span className="text-gray-500 mr-1">Author</span><span className="break-words">{series.author}</span></span>}
@@ -195,20 +280,97 @@ export default function ContentDetail() {
                 </div>
               )}
 
-              {/* Genres */}
               {series.genres && series.genres.length > 0 && (
                 <div className="flex flex-wrap items-center justify-center md:justify-start gap-1.5 sm:gap-2">
                   {series.genres.slice(0, 6).map((genre: string, i: number) => (
-                    <span
-                      key={`genre-${i}`}
-                      className="px-2.5 py-1 sm:px-3 sm:py-1.5 bg-white/20 backdrop-blur-sm rounded-full text-xs font-medium text-white hover:bg-white/30 transition-colors whitespace-nowrap"
-                    >
+                    <span key={`genre-${i}`} className="px-2.5 py-1 sm:px-3 sm:py-1.5 bg-white/20 backdrop-blur-sm rounded-full text-xs font-medium text-white hover:bg-white/30 transition-colors whitespace-nowrap">
                       {genre}
                     </span>
                   ))}
                 </div>
               )}
             </div>
+
+            {/* ── LiDex Score Box — only for anime ── */}
+            {isAnime && (
+              <div className="flex-shrink-0 mx-auto md:mx-0 w-52 sm:w-56">
+                <div
+                  className="rounded-2xl overflow-hidden"
+                  style={{ background: 'rgba(15,23,42,0.75)', border: '1px solid rgba(255,255,255,0.12)', backdropFilter: 'blur(12px)' }}
+                >
+                  {/* Header */}
+                  <div className="px-4 py-3 flex items-center gap-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                    <TrendingUp className="w-4 h-4 text-primary-400 flex-shrink-0" />
+                    <span className="text-xs font-bold uppercase tracking-widest text-gray-300">LiDex Score</span>
+                  </div>
+
+                  <div className="p-4">
+                    {scoreLoading ? (
+                      <div className="flex flex-col items-center py-4 gap-2">
+                        <Loader2 className="w-6 h-6 text-primary-400 animate-spin" />
+                        <span className="text-xs text-gray-500">Calculating…</span>
+                      </div>
+                    ) : lidexScore ? (
+                      <>
+                        {/* Big score + grade */}
+                        <div className="flex items-end justify-between mb-4">
+                          <div>
+                            <span
+                              className="text-5xl font-black leading-none"
+                              style={{ color: scoreColor(lidexScore.total) }}
+                            >
+                              {lidexScore.total.toFixed(1)}
+                            </span>
+                            <span className="text-gray-500 text-sm ml-1">/100</span>
+                          </div>
+                          <div
+                            className="w-10 h-10 rounded-xl flex items-center justify-center text-xl font-black"
+                            style={{
+                              background: `${scoreColor(lidexScore.total)}22`,
+                              color:      scoreColor(lidexScore.total),
+                              border:     `2px solid ${scoreColor(lidexScore.total)}66`,
+                            }}
+                          >
+                            {scoreGrade(lidexScore.total)}
+                          </div>
+                        </div>
+
+                        {/* Component bars */}
+                        <div className="space-y-2">
+                          {COMPONENT_META.map(({ key, label, weight }) => {
+                            const val = lidexScore[key] as number
+                            return (
+                              <div key={key}>
+                                <div className="flex items-center justify-between mb-0.5">
+                                  <span className="text-[0.65rem] text-gray-400 truncate flex-1">{label}</span>
+                                  <span className="text-[0.65rem] font-bold ml-2 flex-shrink-0" style={{ color: scoreColor(val) }}>
+                                    {val.toFixed(0)}
+                                  </span>
+                                </div>
+                                <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                                  <div
+                                    className="h-full rounded-full transition-all duration-500"
+                                    style={{ width: `${val}%`, background: scoreColor(val) }}
+                                  />
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+
+                        {/* Weight note */}
+                        <p className="text-[0.6rem] text-gray-600 text-center mt-3">
+                          Composite of 7 signals
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-xs text-gray-500 text-center py-4">Score unavailable</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
           </div>
         </div>
       </div>
@@ -221,7 +383,7 @@ export default function ContentDetail() {
           {/* Left Column */}
           <div className="lg:col-span-2 space-y-6 sm:space-y-8 min-w-0">
 
-            {/* Synopsis — glass handles both modes via CSS vars */}
+            {/* Synopsis */}
             <div className="glass rounded-2xl p-5 sm:p-6 md:p-8">
               <div className="flex items-center space-x-2 mb-4">
                 <BookOpen className="w-5 h-5 sm:w-6 sm:h-6 text-primary-500 flex-shrink-0" />
@@ -234,12 +396,9 @@ export default function ContentDetail() {
                 >
                   {formatSynopsis(series.description || series.description_vi || '')}
                 </div>
-                {/* Fade uses the CSS variable so it matches the card bg in both modes */}
                 {!synopsisExpanded && (series.description || series.description_vi) && (
-                  <div
-                    className="absolute bottom-0 left-0 right-0 h-10 pointer-events-none"
-                    style={{ background: 'linear-gradient(to top, var(--glass-bg), transparent)' }}
-                  />
+                  <div className="absolute bottom-0 left-0 right-0 h-10 pointer-events-none"
+                    style={{ background: 'linear-gradient(to top, var(--glass-bg), transparent)' }} />
                 )}
               </div>
               {(series.description || series.description_vi) && (
@@ -287,11 +446,8 @@ export default function ContentDetail() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {series.tags.map((tag: string, i: number) => (
-                    <span
-                      key={`tag-${i}`}
-                      className="px-2.5 py-1 rounded-lg text-xs sm:text-sm transition-colors cursor-pointer"
-                      style={{ background: 'var(--background-secondary)', color: 'var(--foreground-secondary)' }}
-                    >
+                    <span key={`tag-${i}`} className="px-2.5 py-1 rounded-lg text-xs sm:text-sm transition-colors cursor-pointer"
+                      style={{ background: 'var(--background-secondary)', color: 'var(--foreground-secondary)' }}>
                       {tag}
                     </span>
                   ))}
@@ -306,19 +462,13 @@ export default function ContentDetail() {
                 <h3 className="text-base sm:text-lg font-bold" style={{ color: 'var(--foreground)' }}>Share</h3>
               </div>
               <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
-                <button
-                  onClick={handleShare}
-                  className="p-2.5 sm:p-3 rounded-lg flex items-center justify-center gap-1.5 sm:gap-2 transition-colors"
-                  style={{ background: 'var(--background-secondary)', color: 'var(--foreground-secondary)', border: '1px solid var(--card-border)' }}
-                >
+                <button onClick={handleShare} className="p-2.5 sm:p-3 rounded-lg flex items-center justify-center gap-1.5 sm:gap-2 transition-colors"
+                  style={{ background: 'var(--background-secondary)', color: 'var(--foreground-secondary)', border: '1px solid var(--card-border)' }}>
                   <Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                   <span className="text-xs sm:text-sm font-medium truncate">{copied ? 'Copied!' : 'Copy Link'}</span>
                 </button>
-                <button
-                  onClick={handleShareTwitter}
-                  className="p-2.5 sm:p-3 rounded-lg flex items-center justify-center gap-1.5 sm:gap-2 transition-colors hover:text-[#1d9bf0]"
-                  style={{ background: 'var(--background-secondary)', color: 'var(--foreground-secondary)', border: '1px solid var(--card-border)' }}
-                >
+                <button onClick={handleShareTwitter} className="p-2.5 sm:p-3 rounded-lg flex items-center justify-center gap-1.5 sm:gap-2 transition-colors hover:text-[#1d9bf0]"
+                  style={{ background: 'var(--background-secondary)', color: 'var(--foreground-secondary)', border: '1px solid var(--card-border)' }}>
                   <Twitter className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                   <span className="text-xs sm:text-sm font-medium">Twitter</span>
                 </button>
@@ -332,24 +482,20 @@ export default function ContentDetail() {
                 <h3 className="text-base sm:text-lg font-bold" style={{ color: 'var(--foreground)' }}>External Links</h3>
               </div>
               <div className="space-y-2.5 sm:space-y-3">
-                <a
-                  href={`https://anilist.co/search/${series.item_type || 'anime'}?search=${encodeURIComponent(series.title)}`}
+                <a href={`https://anilist.co/search/${series.item_type || 'anime'}?search=${encodeURIComponent(series.title)}`}
                   target="_blank" rel="noopener noreferrer"
                   className="flex items-center justify-between p-2.5 sm:p-3 rounded-lg transition-colors group"
-                  style={{ background: 'var(--background-secondary)', border: '1px solid var(--card-border)' }}
-                >
+                  style={{ background: 'var(--background-secondary)', border: '1px solid var(--card-border)' }}>
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="w-2 h-2 rounded-full bg-[#02a9ff] flex-shrink-0" />
                     <span className="text-xs sm:text-sm font-medium truncate group-hover:text-primary-500 transition-colors" style={{ color: 'var(--foreground-secondary)' }}>AniList</span>
                   </div>
                   <ExternalLink className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ml-2 group-hover:text-primary-500 transition-colors" style={{ color: 'var(--foreground-muted)' }} />
                 </a>
-                <a
-                  href={`https://myanimelist.net/search.php?q=${encodeURIComponent(series.title)}`}
+                <a href={`https://myanimelist.net/search.php?q=${encodeURIComponent(series.title)}`}
                   target="_blank" rel="noopener noreferrer"
                   className="flex items-center justify-between p-2.5 sm:p-3 rounded-lg transition-colors group"
-                  style={{ background: 'var(--background-secondary)', border: '1px solid var(--card-border)' }}
-                >
+                  style={{ background: 'var(--background-secondary)', border: '1px solid var(--card-border)' }}>
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="w-2 h-2 rounded-full bg-[#2e51a2] flex-shrink-0" />
                     <span className="text-xs sm:text-sm font-medium truncate group-hover:text-primary-500 transition-colors" style={{ color: 'var(--foreground-secondary)' }}>MyAnimeList</span>
@@ -381,10 +527,7 @@ export default function ContentDetail() {
 
 function InfoItem({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
   return (
-    <div
-      className="p-2.5 sm:p-3 rounded-lg"
-      style={{ background: 'var(--background-secondary)', border: '1px solid var(--card-border)' }}
-    >
+    <div className="p-2.5 sm:p-3 rounded-lg" style={{ background: 'var(--background-secondary)', border: '1px solid var(--card-border)' }}>
       <div className="flex items-center gap-1.5 mb-1" style={{ color: 'var(--foreground-muted)' }}>
         <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
         <span className="text-[0.65rem] sm:text-xs truncate">{label}</span>

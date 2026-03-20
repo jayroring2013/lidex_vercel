@@ -125,15 +125,26 @@ export default function Dashboard() {
           .select('title, votes')
           .in('title', novelTitles.slice(0, 200))
 
-        const voteMap: Record<string, number> = {}
+        // Parse MM/YYYY → sortable int for chronological comparison
+        const parsePeriod = (p: string | null): number => {
+          if (!p) return 0
+          const parts = p.split('/')
+          return parts.length === 2 ? parseInt(parts[1]) * 100 + parseInt(parts[0]) : 0
+        }
+
+        // Keep only the latest-period vote count per title
+        const voteMap: Record<string, { votes: number; period: number }> = {}
         for (const v of voteData || []) {
-          if (!voteMap[v.title] || v.votes > voteMap[v.title]) voteMap[v.title] = Number(v.votes)
+          const cur = parsePeriod(v.period)
+          if (!voteMap[v.title] || cur > voteMap[v.title].period) {
+            voteMap[v.title] = { votes: Number(v.votes) || 0, period: cur }
+          }
         }
 
         // Find top 10 by votes
         const top10Novel = (novelData || [])
           .filter((n: any) => voteMap[n.title] != null)
-          .sort((a: any, b: any) => (voteMap[b.title] ?? 0) - (voteMap[a.title] ?? 0))
+          .sort((a: any, b: any) => (voteMap[b.title]?.votes ?? 0) - (voteMap[a.title]?.votes ?? 0))
           .slice(0, 10)
 
         // Single batch query: get all volumes for top 10 novels, sorted by release_date
@@ -160,7 +171,7 @@ export default function Dashboard() {
             id:        n.id,
             title:     n.title,
             cover_url: coverMap[n.id] ?? null,
-            score:     voteMap[n.title] ?? null,
+            score:     voteMap[n.title]?.votes ?? null,
             href:      `/content/${n.id}`,
           }))
           .filter(n => n.cover_url != null)

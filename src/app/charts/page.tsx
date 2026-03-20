@@ -547,26 +547,54 @@ export default function ChartsPage() {
 
       ctx.save()
       ctx.font = '600 11px system-ui, sans-serif'
-      ctx.textBaseline = 'bottom'
+      ctx.textBaseline = 'middle'
+
+      // Max label width before truncating (px) — keeps labels readable without overflow
+      const MAX_LABEL_W = 160
 
       meta1.data.forEach((el: any, i: number) => {
         const pt = highlightPoints[i]
         if (!pt) return
         const { x, y } = el.getProps(['x','y'], true)
-        const text  = pt.title.split(':')[0].split(' ').slice(0, 3).join(' ')
-        const color = pt.color.replace('cc','ff')
 
-        const m  = ctx.measureText(text)
-        const pw = m.width + 12, ph = 18
-        const px = x - pw / 2,  py = y - 15 - ph
+        // Truncate only if text is too wide — use full title, trim to fit MAX_LABEL_W
+        let text = pt.title
+        // Remove subtitle after ' - ' or ': '
+        text = text.split(' - ')[0].split(': ')[0].trim()
 
-        ctx.fillStyle   = isDark ? 'rgba(15,23,42,0.88)' : 'rgba(255,255,255,0.94)'
-        ctx.strokeStyle = color
-        ctx.lineWidth   = 1.5
-        ctx.beginPath(); ctx.roundRect(px, py, pw, ph, 4); ctx.fill(); ctx.stroke()
+        // Measure and trim word-by-word until it fits
+        let measured = ctx.measureText(text).width
+        if (measured > MAX_LABEL_W) {
+          const words = text.split(' ')
+          let trimmed = ''
+          for (const word of words) {
+            const candidate = trimmed ? trimmed + ' ' + word : word
+            if (ctx.measureText(candidate + '…').width > MAX_LABEL_W) break
+            trimmed = candidate
+          }
+          text = trimmed + '…'
+          measured = ctx.measureText(text).width
+        }
 
+        const padX = 8, padY = 5
+        const pw   = measured + padX * 2
+        const ph   = 20
+        // Center above the point; clamp horizontally inside chart area
+        const chartLeft  = chart.chartArea?.left  ?? 0
+        const chartRight = chart.chartArea?.right ?? chart.width
+        let px = x - pw / 2
+        px = Math.max(chartLeft + 2, Math.min(px, chartRight - pw - 2))
+        const py = y - 14 - ph
+
+        // Background pill — no border, just semi-transparent fill
+        ctx.fillStyle = isDark ? 'rgba(15,23,42,0.82)' : 'rgba(241,245,249,0.92)'
+        ctx.beginPath()
+        ctx.roundRect(px, py, pw, ph, ph / 2)
+        ctx.fill()
+
+        // Text
         ctx.fillStyle = isDark ? '#f1f5f9' : '#1e293b'
-        ctx.fillText(text, x - m.width / 2, y - 15)
+        ctx.fillText(text, px + padX, py + ph / 2)
       })
 
       // Median lines

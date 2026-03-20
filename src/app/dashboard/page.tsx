@@ -122,7 +122,7 @@ export default function Dashboard() {
         // Fetch votes
         const { data: voteData } = await supabase
           .from('voting_result')
-          .select('title, votes')
+          .select('title, votes, period')
           .in('title', novelTitles.slice(0, 200))
 
         // Parse MM/YYYY → sortable int for chronological comparison

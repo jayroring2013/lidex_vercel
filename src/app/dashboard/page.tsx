@@ -111,20 +111,18 @@ export default function Dashboard() {
           href:      '#',
         }))
 
-        // Novel: single query to materialized view (pre-aggregated votes + latest volume cover)
+        // Novel: single query to pre-computed top 10 table
         const { data: novelViewData } = await supabase
-          .from('novel_dashboard')
-          .select('id, title, latest_votes, latest_volume_cover')
-          .not('latest_volume_cover', 'is', null)
-          .order('latest_votes', { ascending: false })
-          .limit(10)
+          .from('dashboard_top_novels')
+          .select('series_id, title, latest_votes, cover_url')
+          .order('rank')
 
         const novelItems: CarouselItem[] = (novelViewData || []).map((n: any) => ({
-          id:        n.id,
+          id:        n.series_id,
           title:     n.title,
-          cover_url: n.latest_volume_cover,
+          cover_url: n.cover_url,
           score:     n.latest_votes ?? null,
-          href:      `/content/${n.id}`,
+          href:      `/content/${n.series_id}`,
         }))
 
         setCarouselData({ anime: animeItems, manga: mangaItems, novel: novelItems })

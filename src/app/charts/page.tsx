@@ -36,11 +36,11 @@ function buildAnimeAxisOptions(t: (k: any) => string) {
 }
 function buildNovelAxisOptions(t: (k: any) => string) {
   return [
-    { value: 'volume_count', label: t('axis_volume_count') },
-    { value: 'votes',        label: t('axis_votes')        },
-    { value: 'price',        label: t('axis_total_price')  },
-    { value: 'avg_price',    label: t('axis_avg_price')    },
-    { value: 'latest_year',  label: t('axis_latest_year')  },
+    { value: 'volume_count', label: 'Volumes'       },
+    { value: 'votes',        label: t('axis_votes') },
+    { value: 'price',        label: 'Price'         },
+    { value: 'avg_price',    label: 'Average Price' },
+    // latest_year removed — moved to filter
   ]
 }
 
@@ -180,7 +180,8 @@ export default function ChartsPage() {
   const [animeLoading, setAnimeLoading] = useState(true)
 
   // Novel state
-  const [allNovels,   setAllNovels]   = useState<NovelRow[]>([])
+  const [allNovels,         setAllNovels]         = useState<NovelRow[]>([])
+  const [rawVolsBySeriesId, setRawVolsBySeriesId] = useState<Record<number, {year: number|null, price: number}[]>>({})
   const [allPeriods,   setAllPeriods]   = useState<string[]>([])
   const [votesByPeriod,setVotesByPeriod] = useState<Record<string, Record<string, number>>>({}) // period -> title -> votes
   const [novelLoading, setNovelLoading]  = useState(true)
@@ -202,6 +203,7 @@ export default function ChartsPage() {
   const [publisherFilter, setPublisherFilter] = useState('All')
   const [avgPriceFilter,  setAvgPriceFilter]  = useState('All')  // 'All' | 'under50k' | '50-100k' | '100-150k' | 'over150k'
   const [novelSearch,     setNovelSearch]     = useState('')
+  const [novelYearFilter, setNovelYearFilter] = useState('All')
 
   // Dark mode observer
   useEffect(() => {
@@ -311,7 +313,16 @@ export default function ChartsPage() {
       }
       setVotesByPeriod(byPeriod)
 
-      // Build lookup maps
+      // Build raw volumes map: series_id → [{year, price}] for dynamic year filtering
+      const rawVols: Record<number, {year: number|null, price: number}[]> = {}
+      for (const v of volData || []) {
+        if (!rawVols[v.series_id]) rawVols[v.series_id] = []
+        const yr = v.release_date ? new Date(v.release_date).getFullYear() : null
+        rawVols[v.series_id].push({ year: yr, price: Number(v.price) || 0 })
+      }
+      setRawVolsBySeriesId(rawVols)
+
+      // Build lookup maps (all-time totals — used for latest_year only now)
       const volMap: Record<number, { count: number; price: number; maxYear: number | null }> = {}
       for (const v of volData || []) {
         if (!volMap[v.series_id]) volMap[v.series_id] = { count: 0, price: 0, maxYear: null }
@@ -398,6 +409,12 @@ export default function ChartsPage() {
   // Periods come directly from raw voting_result rows (all periods, not just latest-per-novel)
   const availablePeriods = allPeriods
 
+  const availableNovelYears = useMemo(() => {
+    const s = new Set<number>()
+    allNovels.forEach(n => { if (n.latest_year) s.add(n.latest_year) })
+    return ['All', ...Array.from(s).sort((a, b) => b - a).map(String)]
+  }, [allNovels])
+
   const availablePublishers = useMemo(() => {
     const counts: Record<string, number> = {}
     allNovels.forEach(n => { if (n.publisher) counts[n.publisher] = (counts[n.publisher] || 0) + 1 })
@@ -405,32 +422,48 @@ export default function ChartsPage() {
   }, [allNovels])
 
   const novelPoints = useMemo(() => {
-    // When a specific period is selected, use that period's vote counts
-    // Otherwise fall back to the latest-period votes stored on each row
     const periodVotes = periodFilter !== 'All' ? (votesByPeriod[periodFilter] ?? {}) : null
-
-    const filtered = allNovels.filter(n => {
-      // Period filter: include novel if it has a vote entry in the selected period
-      if (periodFilter !== 'All' && periodVotes && !(n.title in periodVotes)) return false
-      if (publisherFilter !== 'All' && n.publisher !== publisherFilter) return false
-      if (!matchAvgPrice(n.avg_price, avgPriceFilter)) return false
-      if (novelSearch && !n.title.toLowerCase().includes(novelSearch.toLowerCase())) return false
-      return true
-    })
-
     const pts: PlotPoint[] = []
-    for (const n of filtered) {
-      // Override votes with period-specific value when a period is selected
-      const rowWithVotes: NovelRow = periodVotes
-        ? { ...n, votes: periodVotes[n.title] ?? 0 }
-        : n
-      const x = getNovelValue(rowWithVotes, nxAxis)
-      const y = getNovelValue(rowWithVotes, nyAxis)
+
+    for (const n of allNovels) {
+      // ── Filters ──────────────────────────────────────────────────────────
+      if (periodFilter    !== 'All' && periodVotes && !(n.title in periodVotes)) continue
+      if (publisherFilter !== 'All' && n.publisher !== publisherFilter)          continue
+      if (novelSearch && !n.title.toLowerCase().includes(novelSearch.toLowerCase())) continue
+
+      // ── Year-aware volume/price aggregation ───────────────────────────────
+      // Re-compute volume_count, price, avg_price from raw volume data
+      // scoped to the selected year. If 'All', use all volumes.
+      const rawVols = rawVolsBySeriesId[n.id as number] ?? []
+      const filteredVols = novelYearFilter === 'All'
+        ? rawVols
+        : rawVols.filter(v => v.year != null && String(v.year) === novelYearFilter)
+
+      // Skip series with no volumes in the selected year
+      if (novelYearFilter !== 'All' && filteredVols.length === 0) continue
+
+      const dynCount    = filteredVols.length
+      const dynPrice    = filteredVols.reduce((sum, v) => sum + v.price, 0)
+      const dynAvgPrice = dynCount > 0 && dynPrice > 0 ? Math.round(dynPrice / dynCount) : null
+
+      const dynRow: NovelRow = {
+        ...n,
+        volume_count: dynCount,
+        price:        dynPrice > 0 ? dynPrice : null,
+        avg_price:    dynAvgPrice,
+        votes:        periodVotes ? (periodVotes[n.title] ?? 0) : n.votes,
+      }
+
+      if (!matchAvgPrice(dynRow.avg_price, avgPriceFilter)) continue
+
+      const x = getNovelValue(dynRow, nxAxis)
+      const y = getNovelValue(dynRow, nyAxis)
       if (x == null || y == null || isNaN(x) || isNaN(y)) continue
+
       pts.push({ x, y, title: n.title, id: n.id, color: publisherColor(n.publisher), label: n.publisher || 'Unknown' })
     }
     return pts
-  }, [allNovels, nxAxis, nyAxis, periodFilter, publisherFilter, avgPriceFilter, novelSearch, votesByPeriod])
+  }, [allNovels, rawVolsBySeriesId, nxAxis, nyAxis, periodFilter, publisherFilter, avgPriceFilter, novelSearch, votesByPeriod, novelYearFilter])
 
   // ── Active points (based on mode) ────────────────────────────────────────
   const points  = mode === 'anime' ? animePoints  : novelPoints
@@ -513,7 +546,7 @@ export default function ChartsPage() {
             const sub = mode === 'anime' ? `Format: ${r.label}` : `Publisher: ${r.label}`
             // Don't format years with toLocaleString (2025 → "2.025" in some locales)
             const fmtVal = (axis: string, val: number) => {
-              if (axis === 'latest_year') return String(val)
+              if (axis === 'latest_year' || axis === 'year') return String(val)
               if (axis === 'price' || axis === 'avg_price') return val.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' ₫'
               return val.toLocaleString()
             }
@@ -708,6 +741,11 @@ export default function ChartsPage() {
               <span className="text-xs font-semibold uppercase tracking-wide ml-2" style={{ color: 'var(--foreground-muted)' }}>{t('avg_vol_price')}</span>
               <select value={avgPriceFilter} onChange={e => setAvgPriceFilter(e.target.value)} className="text-sm rounded-lg px-3 py-1.5 outline-none" style={selectStyle}>
                 {AVG_PRICE_BUCKETS.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
+              </select>
+
+              <span className="text-xs font-semibold uppercase tracking-wide ml-2" style={{ color: 'var(--foreground-muted)' }}>Year</span>
+              <select value={novelYearFilter} onChange={e => setNovelYearFilter(e.target.value)} className="text-sm rounded-lg px-3 py-1.5 outline-none" style={selectStyle}>
+                {availableNovelYears.map(y => <option key={y} value={y}>{y === 'All' ? 'All Years' : y}</option>)}
               </select>
             </div>
           )}

@@ -111,19 +111,75 @@ export default function Dashboard() {
           href:      '#',
         }))
 
-        // Novel: single query to pre-computed top 10 table
-        const { data: novelViewData } = await supabase
-          .from('dashboard_top_novels')
-          .select('series_id, title, latest_votes, cover_url')
-          .order('rank')
+        // Novel: get all novels first
+        const { data: novelData } = await supabase
+          .from('series')
+          .select('id, title')
+          .eq('item_type', 'novel')
+          .limit(500)
 
-        const novelItems: CarouselItem[] = (novelViewData || []).map((n: any) => ({
-          id:        n.series_id,
-          title:     n.title,
-          cover_url: n.cover_url,
-          score:     n.latest_votes ?? null,
-          href:      `/content/${n.series_id}`,
-        }))
+        const novelTitles = (novelData || []).map((n: any) => n.title)
+
+        // Fetch votes
+        const { data: voteData } = await supabase
+          .from('voting_result')
+          .select('title, votes, period')
+          .in('title', novelTitles.slice(0, 200))
+
+        // Parse Thg-format period → sortable int
+        const parsePeriod = (p: string | null): number => {
+          if (!p) return 0
+          const cleaned = p.replace('Thg', '')
+          const parts   = cleaned.split('-')
+          if (parts.length === 2) return (2000 + parseInt(parts[1])) * 100 + parseInt(parts[0])
+          // fallback MM/YYYY
+          const slash = p.split('/')
+          if (slash.length === 2) return parseInt(slash[1]) * 100 + parseInt(slash[0])
+          return 0
+        }
+
+        // Keep only the latest-period vote count per title
+        const voteMap: Record<string, { votes: number; period: number }> = {}
+        for (const v of voteData || []) {
+          const cur = parsePeriod(v.period)
+          if (!voteMap[v.title] || cur > voteMap[v.title].period) {
+            voteMap[v.title] = { votes: Number(v.votes) || 0, period: cur }
+          }
+        }
+
+        // Find top 10 by votes
+        const top10Novel = (novelData || [])
+          .filter((n: any) => voteMap[n.title] != null)
+          .sort((a: any, b: any) => (voteMap[b.title]?.votes ?? 0) - (voteMap[a.title]?.votes ?? 0))
+          .slice(0, 10)
+
+        // Single batch query: get all volumes for top 10 novels
+        const top10Ids = top10Novel.map((n: any) => n.id)
+        const { data: volData } = await supabase
+          .from('volumes')
+          .select('series_id, cover_url, release_date, is_special')
+          .in('series_id', top10Ids)
+          .not('cover_url', 'is', null)
+          .order('release_date', { ascending: false })
+          .limit(500)
+
+        // Build map: series_id → cover_url of newest non-special volume
+        const coverMap: Record<number, string> = {}
+        for (const v of volData || []) {
+          const isSpecial = typeof v.is_special === 'boolean' ? v.is_special : v.is_special?.toUpperCase() === 'TRUE'
+          if (isSpecial) continue
+          if (!coverMap[v.series_id]) coverMap[v.series_id] = v.cover_url
+        }
+
+        const novelItems: CarouselItem[] = top10Novel
+          .map((n: any) => ({
+            id:        n.id,
+            title:     n.title,
+            cover_url: coverMap[n.id] ?? null,
+            score:     voteMap[n.title]?.votes ?? null,
+            href:      `/content/${n.id}`,
+          }))
+          .filter(n => n.cover_url != null)
 
         setCarouselData({ anime: animeItems, manga: mangaItems, novel: novelItems })
       } catch (error) {

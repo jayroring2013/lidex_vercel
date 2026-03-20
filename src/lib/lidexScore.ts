@@ -12,7 +12,7 @@
  *
  * Component weights (sum = 1.0):
  *   A. Community Score      30% — AniList mean_score, percentile-normalised
- *   B. Popularity           18% — rank inverted (lower rank = more popular)
+ *   B. Popularity           18% — higher points = more popular, percentile-normalised
  *   C. Favourites           17% — log-scaled to dampen extreme outliers
  *   D. Score Distribution   13% — shape analysis of rating distribution
  *   E. Viewer Engagement    12% — completion/drop behaviour from status_distribution
@@ -49,7 +49,7 @@ export interface AnimeMeta {
 export interface PopulationStats {
   // Percentile breakpoints for mean_score (0–100 scale)
   score: { p25: number; p50: number; p75: number; p90: number; p99: number }
-  // Percentile breakpoints for popularity rank (lower = more popular)
+  // Percentile breakpoints for popularity points (higher = more popular)
   pop:   { p10: number; p25: number; p50: number; p75: number; p90: number; min: number; max: number }
   // Percentile breakpoints for log10(favourites)
   fav:   { p25: number; p50: number; p75: number; p90: number; p99: number }
@@ -106,20 +106,20 @@ function scoreComponent(mean_score: number | null, stats: PopulationStats): numb
 }
 
 // ── Component B: Popularity ───────────────────────────────────────────────────
-// Lower rank number = more popular → invert
+// Higher point value = more popular → normalise directly (no inversion)
 
 function popularityComponent(popularity: number | null, stats: PopulationStats): number {
   if (!popularity) return 0
   const { min, max, p10, p25, p50, p75, p90 } = stats.pop
-  // Normalise inversely: rank=min (most popular) → 1.0, rank=max → 0.0
+  // Higher value → higher score
   return piecewiseNormalise(popularity, [
-    [min, 1.00],  // most popular
-    [p10, 0.90],
-    [p25, 0.75],
+    [min, 0.00],
+    [p10, 0.10],
+    [p25, 0.25],
     [p50, 0.50],
-    [p75, 0.25],
-    [p90, 0.10],
-    [max, 0.00],
+    [p75, 0.75],
+    [p90, 0.90],
+    [max, 1.00],
   ])
 }
 
@@ -338,7 +338,7 @@ export function buildPopulationStats(
   }
 
   const scores = rows.map(r => r.mean_score).filter((v): v is number => v != null)
-  const pops   = rows.map(r => r.popularity).filter((v): v is number => v != null)
+  const pops   = rows.map(r => r.popularity).filter((v): v is number => v != null && v > 0)
   const favs   = rows.map(r => r.favourites).filter((v): v is number => v != null && v > 0)
                      .map(v => Math.log10(v + 1))
 

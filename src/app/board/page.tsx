@@ -5,14 +5,10 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useState, useCallback } from 'react'
 import { BookOpen, Tv, Book, Loader2, RefreshCw } from 'lucide-react'
 import { getTopRatedSeries } from '../../lib/supabase'
-import { createClient } from '@supabase/supabase-js'
+import supabase from '@/lib/supabaseClient'
 import StatsCard from '../../components/StatsCard'
 import Link from 'next/link'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
 
 interface SiteStats {
   totalSeries: number

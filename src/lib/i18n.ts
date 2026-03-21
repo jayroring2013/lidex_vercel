@@ -6,15 +6,24 @@ export type Locale = 'vi' | 'en'
 export const translations = {
   vi: {
     // ── Navbar ──────────────────────────────────────────────────────────────
-    nav_home:       'Home',
+    nav_home:       'Trang chủ',
     nav_dashboard:  'Dashboard',
-    nav_charts:     'Charts',
+    nav_charts:     'Biểu đồ',
     nav_scatter:    'Scatter',
-    nav_compare:    'Compare',
+    nav_compare:    'So sánh',
     nav_index:     'Index',
+    nav_browse:    'Khám phá',
+
+    // ── Browse page ─────────────────────────────────────────────────────────
+    browse_discover: 'Khám phá',
+    browse_subtitle: 'Tìm kiếm và khám phá trong cơ sở dữ liệu LiDex',
+    browse_search:   'Tìm',
+    browse_all:      'Xem tất cả',
+    browse_popular:  'Phổ biến nhất',
+    browse_recent:   'Mới nhất',
 
     // ── Dashboard ───────────────────────────────────────────────────────────
-    dashboard_title:    'Dashboard',
+    dashboard_title:    'Bảng điều khiển',
     dashboard_subtitle: 'Tổng quan về nội dung và hoạt động cộng đồng',
     last_updated:       'Cập nhật lần cuối',
     total_series:       'Tổng số tựa',
@@ -109,6 +118,15 @@ export const translations = {
     nav_scatter:    'Scatter',
     nav_compare:    'Compare',
     nav_index:     'Index',
+    nav_browse:    'Browse',
+
+    // ── Browse page ─────────────────────────────────────────────────────────
+    browse_discover: 'Browse',
+    browse_subtitle: 'Search and discover content in the LiDex database',
+    browse_search:   'Search',
+    browse_all:      'Browse all',
+    browse_popular:  'Most Popular',
+    browse_recent:   'Recently Added',
 
     // ── Dashboard ───────────────────────────────────────────────────────────
     dashboard_title:    'Dashboard',

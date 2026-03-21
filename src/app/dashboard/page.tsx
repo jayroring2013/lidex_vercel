@@ -164,18 +164,18 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--background)' }}>
-      <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-5 sm:py-8">
 
         {/* ── Header ── */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
+        <div className="flex items-center justify-between mb-5 sm:mb-8">
           <div>
-            <h1 className="text-3xl font-bold mb-1" style={{ color: 'var(--foreground)' }}>Dashboard</h1>
-            <p className="text-sm" style={{ color: 'var(--foreground-secondary)' }}>
+            <h1 className="text-2xl sm:text-3xl font-bold mb-0.5" style={{ color: 'var(--foreground)' }}>Dashboard</h1>
+            <p className="text-xs sm:text-sm" style={{ color: 'var(--foreground-secondary)' }}>
               Tổng quan nội dung và hoạt động cộng đồng
             </p>
           </div>
-          <div className="mt-4 md:mt-0 flex items-center gap-3">
-            <span className="text-sm" style={{ color: 'var(--foreground-secondary)' }}>
+          <div className="flex items-center gap-2">
+            <span className="hidden sm:block text-sm" style={{ color: 'var(--foreground-secondary)' }}>
               {new Date().toLocaleTimeString()}
             </span>
             <button onClick={() => window.location.reload()} className="p-2 glass rounded-lg transition-colors" title="Refresh">
@@ -185,7 +185,7 @@ export default function Dashboard() {
         </div>
 
         {/* ── Stats ── */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-8 sm:mb-10">
           <StatsCard icon={BookOpen} value={stats?.totalSeries?.toLocaleString() || '0'} label="Total Series"   color="primary" trend={null} />
           <StatsCard icon={Tv}       value={stats?.totalAnime?.toLocaleString()  || '0'} label="Anime"          color="purple"  trend={null} />
           <StatsCard icon={Book}     value={stats?.totalManga?.toLocaleString()  || '0'} label="Manga"          color="pink"    trend={null} />
@@ -194,43 +194,43 @@ export default function Dashboard() {
 
         {/* ── Carousel section ── */}
         <div>
-          {/* Header row */}
-          <div className="flex items-center justify-between mb-6">
+          {/* Header row — stacks on mobile */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black" style={{ color: 'var(--foreground)' }}>Top</span>
-              <span className="text-3xl font-black" style={{ color }}>10</span>
+              <span className="text-2xl sm:text-3xl font-black" style={{ color: 'var(--foreground)' }}>Top</span>
+              <span className="text-2xl sm:text-3xl font-black" style={{ color }}>10</span>
               <span
-                className="text-lg font-bold ml-1 transition-colors duration-300"
+                className="text-base sm:text-lg font-bold ml-1 transition-colors duration-300"
                 style={{ color }}
               >
                 {SECTION_LABELS[activeSection]}
               </span>
             </div>
 
-            {/* Dot indicators + section pills */}
-            <div className="flex items-center gap-3">
+            {/* Section pills — equal width on mobile so Tiểu thuyết doesn't overflow */}
+            <div className="flex items-center gap-2">
               {sections.map(s => (
                 <button
                   key={s}
                   onClick={() => { setAutoRotate(false); goToSection(s) }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-200"
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 whitespace-nowrap"
                   style={{
                     background: activeSection === s ? SECTION_COLORS[s] : 'var(--background-secondary)',
                     color:      activeSection === s ? '#fff' : 'var(--foreground-secondary)',
                     border:     `1px solid ${activeSection === s ? SECTION_COLORS[s] : 'var(--card-border)'}`,
-                    transform:  activeSection === s ? 'scale(1.05)' : 'scale(1)',
+                    transform:  activeSection === s ? 'scale(1.02)' : 'scale(1)',
                   }}
                 >
                   <span
-                    className="w-2 h-2 rounded-full"
+                    className="w-1.5 h-1.5 rounded-full flex-shrink-0"
                     style={{ background: activeSection === s ? '#fff' : SECTION_COLORS[s] }}
                   />
                   {SECTION_LABELS[s]}
                 </button>
               ))}
-              {/* Auto-rotate indicator */}
+              {/* Auto-rotate progress bars */}
               {autoRotate && (
-                <div className="flex gap-1 ml-1">
+                <div className="hidden sm:flex gap-1 ml-1">
                   {sections.map(s => (
                     <div
                       key={s}
@@ -248,7 +248,7 @@ export default function Dashboard() {
 
           {/* Cards grid */}
           <div
-            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-x-3 gap-y-10 transition-opacity duration-250"
+            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-x-2 sm:gap-x-3 gap-y-8 sm:gap-y-10 transition-opacity duration-250"
             style={{ opacity: transitioning ? 0 : 1 }}
           >
             {items.length === 0 ? (
@@ -300,15 +300,15 @@ function TopCard({
       <span
         className="absolute select-none pointer-events-none font-black z-0"
         style={{
-          fontSize:         'clamp(64px, 9vw, 100px)',
+          fontSize:         'clamp(48px, 8vw, 100px)',
           color:            'transparent',
           WebkitTextStroke: `2px ${accentColor}55`,
           bottom:           '-4px',
           left:             '0',
-          transform:        'translateX(-32%)',
+          transform:        'translateX(-30%)',
           lineHeight:       1,
           fontFamily:       '"Arial Black", Impact, sans-serif',
-          letterSpacing:    '-3px',
+          letterSpacing:    '-2px',
         }}
       >
         {rank}

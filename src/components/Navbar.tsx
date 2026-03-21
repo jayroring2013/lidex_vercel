@@ -36,13 +36,12 @@ export default function Navbar() {
   const flatLinks = [
     { href: '/',          label: t('nav_home')      },
     { href: '/dashboard', label: t('nav_dashboard') },
-    { href: '/browse', label: 'Khám phá' },
+    { href: '/browse',    label: t('nav_browse')    },
   ]
 
   const chartsChildren = [
     { href: '/charts',  label: t('nav_scatter') },
     { href: '/compare', label: t('nav_compare') },
-    { href: '/board',   label: t('nav_index')   },
   ]
 
   return (

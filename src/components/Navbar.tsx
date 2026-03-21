@@ -36,6 +36,7 @@ export default function Navbar() {
   const flatLinks = [
     { href: '/',          label: t('nav_home')      },
     { href: '/dashboard', label: t('nav_dashboard') },
+    { href: '/browse', label: 'Khám phá' },
   ]
 
   const chartsChildren = [

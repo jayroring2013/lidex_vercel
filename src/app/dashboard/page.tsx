@@ -70,6 +70,7 @@ export default function Dashboard() {
           { count: novelCount },
           { count: mangaCount },
           mangaCarouselData,
+          novelTableData,
         ] = await Promise.all([
           getTopRatedSeries({ limit: 10 }),
           supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'anime'),
@@ -79,6 +80,9 @@ export default function Dashboard() {
             .order('rating', { ascending: false })
             .not('cover_url', 'is', null)
             .limit(10),
+          supabase.from('dashboard_top_novels')
+            .select('series_id, title, latest_votes, cover_url')
+            .order('rank'),
         ])
 
         const anime = animeCount ?? 0
@@ -110,81 +114,19 @@ export default function Dashboard() {
           href:      '#',
         }))
 
-        // Show anime + manga immediately, novel loads async
-        setCarouselData(prev => ({ ...prev, anime: animeItems, manga: mangaItems }))
+        const novelItems: CarouselItem[] = ((novelTableData as any)?.data || novelTableData || []).map((n: any) => ({
+          id:        n.series_id,
+          title:     n.title,
+          cover_url: n.cover_url,
+          score:     n.latest_votes ?? null,
+          href:      `/content/${n.series_id}`,
+        }))
+
+        setCarouselData({ anime: animeItems, manga: mangaItems, novel: novelItems })
       } catch (error) {
         console.error('Failed to load dashboard:', error)
       } finally {
         setLoading(false)
-      }
-
-      // ── Slow query: novel (runs after page is already visible) ──
-      try {
-        const { data: novelData } = await supabase
-          .from('series')
-          .select('id, title')
-          .eq('item_type', 'novel')
-          .limit(500)
-
-        const novelTitles = (novelData || []).map((n: any) => n.title)
-
-        const { data: voteData } = await supabase
-          .from('voting_result')
-          .select('title, votes, period')
-          .in('title', novelTitles.slice(0, 200))
-
-        const parsePeriod = (p: string | null): number => {
-          if (!p) return 0
-          const cleaned = p.replace('Thg', '')
-          const parts   = cleaned.split('-')
-          if (parts.length === 2) return (2000 + parseInt(parts[1])) * 100 + parseInt(parts[0])
-          const slash = p.split('/')
-          if (slash.length === 2) return parseInt(slash[1]) * 100 + parseInt(slash[0])
-          return 0
-        }
-
-        const voteMap: Record<string, { votes: number; period: number }> = {}
-        for (const v of voteData || []) {
-          const cur = parsePeriod(v.period)
-          if (!voteMap[v.title] || cur > voteMap[v.title].period) {
-            voteMap[v.title] = { votes: Number(v.votes) || 0, period: cur }
-          }
-        }
-
-        const top10Novel = (novelData || [])
-          .filter((n: any) => voteMap[n.title] != null)
-          .sort((a: any, b: any) => (voteMap[b.title]?.votes ?? 0) - (voteMap[a.title]?.votes ?? 0))
-          .slice(0, 10)
-
-        const top10Ids = top10Novel.map((n: any) => n.id)
-        const { data: volData } = await supabase
-          .from('volumes')
-          .select('series_id, cover_url, release_date, is_special')
-          .in('series_id', top10Ids)
-          .not('cover_url', 'is', null)
-          .order('release_date', { ascending: false })
-          .limit(500)
-
-        const coverMap: Record<number, string> = {}
-        for (const v of volData || []) {
-          const isSpecial = typeof v.is_special === 'boolean' ? v.is_special : v.is_special?.toUpperCase() === 'TRUE'
-          if (isSpecial) continue
-          if (!coverMap[v.series_id]) coverMap[v.series_id] = v.cover_url
-        }
-
-        const novelItems: CarouselItem[] = top10Novel
-          .map((n: any) => ({
-            id:        n.id,
-            title:     n.title,
-            cover_url: coverMap[n.id] ?? null,
-            score:     voteMap[n.title]?.votes ?? null,
-            href:      `/content/${n.id}`,
-          }))
-          .filter(n => n.cover_url != null)
-
-        setCarouselData(prev => ({ ...prev, novel: novelItems }))
-      } catch (error) {
-        console.error('Failed to load novel carousel:', error)
       }
     }
     loadDashboard()

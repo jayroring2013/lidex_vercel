@@ -2,422 +2,800 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState, useCallback } from 'react'
-import { BookOpen, Tv, Book, Loader2, RefreshCw } from 'lucide-react'
-import { getTopRatedSeries } from '../../lib/supabase'
-import supabase from '@/lib/supabaseClient'
-import StatsCard from '../../components/StatsCard'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import Link from 'next/link'
+import {
+  Search, SlidersHorizontal, X, ChevronDown, Loader2,
+  BookOpen, Tv, Book, TrendingUp, Clock, ArrowRight, ExternalLink, LayoutGrid
+} from 'lucide-react'
+import supabase from '@/lib/supabaseClient'
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+type ContentType = 'anime' | 'manga' | 'novel'
 
-interface SiteStats {
-  totalSeries: number
-  totalAnime:  number
-  totalManga:  number
-  totalNovel:  number
+interface SeriesCard {
+  id:         string | number
+  title:      string
+  cover_url:  string | null
+  scoreLabel: string
+  status:     string | null
+  type:       ContentType
+  meta:       string | null
+  year:       number | null
+  genres:     string[]
+  href:       string
+  external:   boolean
 }
 
-interface CarouselItem {
-  id:        string | number
-  title:     string
-  cover_url: string | null
-  score:     number | null
-  href:      string
+// ── Config ────────────────────────────────────────────────────────────────────
+const TYPE_CONFIG = {
+  anime: { label: 'Anime',       color: '#6366f1', icon: Tv       },
+  manga: { label: 'Manga',       color: '#ec4899', icon: Book     },
+  novel: { label: 'Tiểu thuyết', color: '#22c55e', icon: BookOpen },
 }
 
-type CarouselSection = 'anime' | 'manga' | 'novel'
+const STATUS_OPTS_ANIME = ['all','ongoing','completed','cancelled','hiatus','not_yet_released']
+const STATUS_OPTS_MANGA = ['all','ongoing','completed','cancelled','hiatus']
+const FORMAT_OPTS       = ['all','TV','MOVIE','OVA','ONA','SPECIAL']
+const PAGE_SIZE_OPTS    = [12, 24, 48, 96]
 
-const SECTION_LABELS: Record<CarouselSection, string> = {
-  anime: 'Anime',
-  manga: 'Manga',
-  novel: 'Tiểu thuyết',
+const SORT_OPTS: Record<ContentType, { id: string; label: string }[]> = {
+  anime: [
+    { id: 'score_desc',   label: 'Điểm cao nhất'    },
+    { id: 'popular_desc', label: 'Phổ biến nhất'    },
+    { id: 'year_desc',    label: 'Mới nhất'          },
+    { id: 'title_asc',    label: 'Tên A–Z'           },
+  ],
+  manga: [
+    { id: 'rating_desc',  label: 'Điểm cao nhất'    },
+    { id: 'follows_desc', label: 'Nhiều follow nhất' },
+    { id: 'year_desc',    label: 'Mới nhất'          },
+    { id: 'title_asc',    label: 'Tên A–Z'           },
+  ],
+  novel: [
+    { id: 'votes_desc',   label: 'Nhiều votes nhất' },
+    { id: 'title_asc',    label: 'Tên A–Z'          },
+  ],
 }
 
-const SECTION_COLORS: Record<CarouselSection, string> = {
-  anime: '#6366f1',
-  manga: '#ec4899',
-  novel: '#22c55e',
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function useDebounce<T>(value: T, ms = 300): T {
+  const [dv, setDv] = useState(value)
+  useEffect(() => { const t = setTimeout(() => setDv(value), ms); return () => clearTimeout(t) }, [value, ms])
+  return dv
 }
 
-const ROTATE_INTERVAL = 6000 // 6s per section
+// Proxy ALL external images — not just MangaDex — to avoid CORS / hotlink issues
+function proxyImg(url: string | null): string | null {
+  if (!url) return null
+  try {
+    const h = new URL(url).hostname
+    if (!h.includes('supabase') && !h.includes('localhost') && !url.startsWith('/'))
+      return `/api/image-proxy?url=${encodeURIComponent(url)}`
+  } catch {}
+  return url
+}
 
-export default function Dashboard() {
-  const [stats,    setStats]    = useState<SiteStats | null>(null)
-  const [loading,  setLoading]  = useState(true)
+function fmtNum(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000)     return `${(n / 1_000).toFixed(1)}K`
+  return String(n)
+}
 
-  // Carousel
-  const [carouselData, setCarouselData] = useState<Record<CarouselSection, CarouselItem[]>>({
-    anime: [], manga: [], novel: [],
-  })
-  const [activeSection, setActiveSection] = useState<CarouselSection>('anime')
-  const [transitioning, setTransitioning] = useState(false)
-  const [autoRotate, setAutoRotate] = useState(true)
+function statusLabel(s: string | null): string {
+  const map: Record<string, string> = {
+    ongoing: 'Đang tiếp', completed: 'Hoàn thành', cancelled: 'Đã hủy',
+    hiatus: 'Tạm dừng', publishing: 'Đang XB', finished: 'Hoàn thành',
+    not_yet_released: 'Sắp ra', upcoming: 'Sắp ra', releasing: 'Đang chiếu',
+  }
+  return map[(s || '').toLowerCase()] || s || ''
+}
 
-  const sections: CarouselSection[] = ['anime', 'manga', 'novel']
+function statusColor(s: string | null): string {
+  const sl = (s || '').toLowerCase()
+  if (['ongoing','publishing','releasing'].includes(sl)) return '#22c55e'
+  if (['completed','finished'].includes(sl))             return '#6366f1'
+  if (['cancelled','discontinued'].includes(sl))         return '#f87171'
+  if (['hiatus'].includes(sl))                           return '#fb923c'
+  return '#64748b'
+}
 
-  // Fetch stats
-  useEffect(() => {
-    async function loadDashboard() {
-      try {
-        const [
-          topAnimeData,
-          { count: animeCount },
-          { count: novelCount },
-          { count: mangaCount },
-        ] = await Promise.all([
-          getTopRatedSeries({ limit: 10 }),
-          supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'anime'),
-          supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'novel'),
-          supabase.from('manga').select('id', { count: 'exact', head: true }),
-        ])
+function gridCols(size: number): string {
+  if (size <= 12) return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4'
+  if (size <= 24) return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6'
+  return 'grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8'
+}
 
-        const anime = animeCount ?? 0
-        const novel = novelCount ?? 0
-        const manga = mangaCount ?? 0
+// ── Card mappers ──────────────────────────────────────────────────────────────
+function toAnimeCards(rows: any[]): SeriesCard[] {
+  return rows.map(s => ({
+    id: s.id, title: s.title,
+    cover_url:  s.cover_url ?? null,
+    scoreLabel: s.anime_meta?.mean_score ? `★ ${s.anime_meta.mean_score}` : '',
+    status:     s.status,
+    type:       'anime' as ContentType,
+    meta:       s.studio ?? null,
+    year:       s.anime_meta?.season_year ?? null,
+    genres:     [],
+    href:       `/content/${s.id}`,
+    external:   false,
+  }))
+}
 
-        setStats({
-          totalAnime:  anime,
-          totalNovel:  novel,
-          totalManga:  manga,
-          totalSeries: anime + novel + manga,
-        })
+function toMangaCards(rows: any[]): SeriesCard[] {
+  return rows.map(m => ({
+    id:         m.id,
+    title:      m.title_en || m.title_ja_ro || String(m.id),
+    cover_url:  proxyImg(m.cover_url),
+    scoreLabel: m.rating ? `★ ${Number(m.rating).toFixed(2)}` : m.follows ? `♥ ${fmtNum(m.follows)}` : '',
+    status:     m.status,
+    type:       'manga' as ContentType,
+    meta:       m.author ?? null,
+    year:       m.year   ?? null,
+    genres:     Array.isArray(m.genres) ? m.genres : [],
+    href:       `https://mangadex.org/title/${m.id}`,
+    external:   true,
+  }))
+}
 
-        // Anime from existing function
-        const animeItems: CarouselItem[] = (topAnimeData.data || []).map((s: any) => ({
-          id:        s.id,
-          title:     s.title,
-          cover_url: s.cover_url,
-          score:     s.score,
-          href:      `/content/${s.id}`,
-        }))
+function toNovelCards(rows: any[]): SeriesCard[] {
+  return (rows || []).filter(Boolean).map(n => ({
+    id:         n.series_id ?? n.id,
+    title:      n.title,
+    cover_url:  n.cover_url ?? n.latest_volume_cover ?? null,
+    scoreLabel: (n.latest_votes ?? n.votes) ? `★ ${fmtNum(n.latest_votes ?? n.votes)}` : '',
+    status:     null,
+    type:       'novel' as ContentType,
+    meta:       n.publisher ?? null,
+    year:       null,
+    genres:     [],
+    href:       `/content/${n.series_id ?? n.id}`,
+    external:   false,
+  }))
+}
 
-        // Manga from manga table
-        const { data: mangaData } = await supabase
-          .from('manga')
-          .select('id, title_en, title_ja_ro, cover_url, rating')
-          .order('rating', { ascending: false })
-          .not('cover_url', 'is', null)
-          .limit(10)
+// ── Aceternity-style Glow Card ────────────────────────────────────────────────
+function GlowCard({ children, color }: { children: React.ReactNode; color: string }) {
+  const ref  = useRef<HTMLDivElement>(null)
+  const [g,  setG] = useState({ x: 0, y: 0, on: false })
+  return (
+    <div ref={ref}
+      onMouseMove={e => { if (!ref.current) return; const r = ref.current.getBoundingClientRect(); setG({ x: e.clientX - r.left, y: e.clientY - r.top, on: true }) }}
+      onMouseLeave={() => setG(p => ({ ...p, on: false }))}
+      className="relative group rounded-2xl overflow-hidden transition-all duration-200 hover:scale-[1.02] hover:-translate-y-0.5"
+      style={{ background: 'var(--glass-bg)', border: '1px solid var(--card-border)' }}
+    >
+      {/* Spotlight effect */}
+      <div className="pointer-events-none absolute inset-0 z-10 rounded-2xl transition-opacity duration-300"
+        style={{ opacity: g.on ? 1 : 0, background: `radial-gradient(200px circle at ${g.x}px ${g.y}px, ${color}20, transparent 70%)` }} />
+      {/* Border glow on hover */}
+      <div className="pointer-events-none absolute inset-0 z-10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+        style={{ boxShadow: `inset 0 0 0 1px ${color}50` }} />
+      {children}
+    </div>
+  )
+}
 
-        const mangaItems: CarouselItem[] = (mangaData || []).map((m: any) => ({
-          id:        m.id,
-          title:     m.title_en || m.title_ja_ro || m.id,
-          cover_url: m.cover_url,
-          score:     m.rating ? Number(m.rating) : null,
-          href:      '#',
-        }))
+// ── Skeleton ──────────────────────────────────────────────────────────────────
+function SkeletonCard() {
+  return (
+    <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid var(--card-border)' }}>
+      <div className="aspect-[2/3] animate-pulse" style={{ background: 'var(--background-secondary)' }} />
+      <div className="p-3 space-y-2">
+        <div className="h-3 rounded-full w-5/6 animate-pulse" style={{ background: 'var(--background-secondary)' }} />
+        <div className="h-2.5 rounded-full w-2/5 animate-pulse" style={{ background: 'var(--background-secondary)' }} />
+      </div>
+    </div>
+  )
+}
 
-        // Novel: get all novels first
-        const { data: novelData } = await supabase
-          .from('series')
-          .select('id, title')
-          .eq('item_type', 'novel')
-          .limit(500)
-
-        const novelTitles = (novelData || []).map((n: any) => n.title)
-
-        // Fetch votes
-        const { data: voteData } = await supabase
-          .from('voting_result')
-          .select('title, votes, period')
-          .in('title', novelTitles.slice(0, 200))
-
-        // Parse Thg-format period → sortable int
-        const parsePeriod = (p: string | null): number => {
-          if (!p) return 0
-          const cleaned = p.replace('Thg', '')
-          const parts   = cleaned.split('-')
-          if (parts.length === 2) return (2000 + parseInt(parts[1])) * 100 + parseInt(parts[0])
-          // fallback MM/YYYY
-          const slash = p.split('/')
-          if (slash.length === 2) return parseInt(slash[1]) * 100 + parseInt(slash[0])
-          return 0
+// ── Series Card (grid) ────────────────────────────────────────────────────────
+function CardItem({ card, color }: { card: SeriesCard; color: string }) {
+  const [err, setErr] = useState(false)
+  const inner = (
+    <GlowCard color={color}>
+      <div className="relative aspect-[2/3] overflow-hidden">
+        {card.cover_url && !err
+          ? <img src={card.cover_url} alt={card.title} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" onError={() => setErr(true)} />
+          : <div className="w-full h-full flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${color}20, ${color}06)` }}>
+              <BookOpen className="w-8 h-8 opacity-20" style={{ color }} />
+            </div>
         }
-
-        // Keep only the latest-period vote count per title
-        const voteMap: Record<string, { votes: number; period: number }> = {}
-        for (const v of voteData || []) {
-          const cur = parsePeriod(v.period)
-          if (!voteMap[v.title] || cur > voteMap[v.title].period) {
-            voteMap[v.title] = { votes: Number(v.votes) || 0, period: cur }
+        {/* Score */}
+        {card.scoreLabel && (
+          <div className="absolute top-2 right-2 px-2 py-0.5 rounded-lg text-xs font-bold"
+            style={{ background: 'rgba(0,0,0,0.80)', color: '#fbbf24', backdropFilter: 'blur(6px)' }}>
+            {card.scoreLabel}
+          </div>
+        )}
+        {/* Status */}
+        {card.status && (
+          <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-bold text-white"
+            style={{ background: `${statusColor(card.status)}dd`, backdropFilter: 'blur(4px)' }}>
+            {statusLabel(card.status)}
+          </div>
+        )}
+        {/* External icon */}
+        {card.external && (
+          <div className="absolute top-2 left-2 w-5 h-5 rounded-md flex items-center justify-center"
+            style={{ background: 'rgba(0,0,0,0.65)' }}>
+            <ExternalLink className="w-2.5 h-2.5 text-white/70" />
+          </div>
+        )}
+        {/* Hover overlay */}
+        <div className="absolute inset-0 flex items-end opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+          style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.88) 40%, transparent)' }}>
+          <div className="p-3 w-full">
+            <p className="text-white text-xs font-semibold line-clamp-2">{card.title}</p>
+            {card.meta && <p className="text-white/50 text-[10px] truncate mt-0.5">{card.meta}</p>}
+          </div>
+        </div>
+      </div>
+      {/* Fixed-height info strip — keeps all cards same total height */}
+      <div className="px-3 pt-2 pb-3 h-[72px] flex flex-col justify-between">
+        <div>
+          <p className="text-xs font-semibold line-clamp-2 leading-snug" style={{ color: 'var(--foreground)' }}>{card.title}</p>
+        </div>
+        <div className="flex items-center justify-between mt-1">
+          {card.meta
+            ? <p className="text-[10px] truncate flex-1" style={{ color: 'var(--foreground-muted)' }}>{card.meta}</p>
+            : <span />
           }
+          {card.genres.length > 0 && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded-md font-semibold ml-1 flex-shrink-0"
+              style={{ background: `${color}18`, color }}>{card.genres[0]}</span>
+          )}
+        </div>
+      </div>
+    </GlowCard>
+  )
+  return card.external
+    ? <a href={card.href} target="_blank" rel="noopener noreferrer">{inner}</a>
+    : <Link href={card.href}>{inner}</Link>
+}
+
+// ── Mini Carousel Card ────────────────────────────────────────────────────────
+function MiniCard({ card, color }: { card: SeriesCard; color: string }) {
+  const [err, setErr] = useState(false)
+  const inner = (
+    <div className="flex-shrink-0 w-28 sm:w-32 group cursor-pointer">
+      <div className="relative aspect-[2/3] rounded-xl overflow-hidden mb-2 transition-all duration-200 group-hover:scale-[1.04] group-hover:-translate-y-0.5"
+        style={{ border: `1px solid ${color}30` }}>
+        {card.cover_url && !err
+          ? <img src={card.cover_url} alt={card.title} className="w-full h-full object-cover" onError={() => setErr(true)} />
+          : <div className="w-full h-full" style={{ background: `linear-gradient(135deg, ${color}22, ${color}08)` }} />
         }
+        {card.scoreLabel && (
+          <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-md text-[10px] font-bold"
+            style={{ background: 'rgba(0,0,0,0.78)', color: '#fbbf24' }}>{card.scoreLabel}</div>
+        )}
+      </div>
+      <p className="text-[11px] font-semibold line-clamp-2 leading-tight" style={{ color: 'var(--foreground)' }}>{card.title}</p>
+      {card.meta && <p className="text-[10px] truncate mt-0.5" style={{ color: 'var(--foreground-muted)' }}>{card.meta}</p>}
+    </div>
+  )
+  return card.external
+    ? <a href={card.href} target="_blank" rel="noopener noreferrer">{inner}</a>
+    : <Link href={card.href}>{inner}</Link>
+}
 
-        // Find top 10 by votes
-        const top10Novel = (novelData || [])
-          .filter((n: any) => voteMap[n.title] != null)
-          .sort((a: any, b: any) => (voteMap[b.title]?.votes ?? 0) - (voteMap[a.title]?.votes ?? 0))
-          .slice(0, 10)
-
-        // Single batch query: get all volumes for top 10 novels
-        const top10Ids = top10Novel.map((n: any) => n.id)
-        const { data: volData } = await supabase
-          .from('volumes')
-          .select('series_id, cover_url, release_date, is_special')
-          .in('series_id', top10Ids)
-          .not('cover_url', 'is', null)
-          .order('release_date', { ascending: false })
-          .limit(500)
-
-        // Build map: series_id → cover_url of newest non-special volume
-        const coverMap: Record<number, string> = {}
-        for (const v of volData || []) {
-          const isSpecial = typeof v.is_special === 'boolean' ? v.is_special : v.is_special?.toUpperCase() === 'TRUE'
-          if (isSpecial) continue
-          if (!coverMap[v.series_id]) coverMap[v.series_id] = v.cover_url
+// ── Carousel row ──────────────────────────────────────────────────────────────
+function Carousel({ title, icon: Icon, items, loading, color }: {
+  title: string; icon: any; items: SeriesCard[]; loading: boolean; color: string
+}) {
+  return (
+    <div className="mb-10">
+      <div className="flex items-center gap-2.5 mb-4">
+        <div className="w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0"
+          style={{ background: `${color}20` }}>
+          <Icon className="w-3.5 h-3.5" style={{ color }} />
+        </div>
+        <h3 className="text-sm font-bold" style={{ color: 'var(--foreground)' }}>{title}</h3>
+      </div>
+      <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        {loading
+          ? Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="flex-shrink-0 w-28 sm:w-32 animate-pulse">
+                <div className="aspect-[2/3] rounded-xl mb-2" style={{ background: 'var(--background-secondary)' }} />
+                <div className="h-2.5 rounded w-4/5 mb-1" style={{ background: 'var(--background-secondary)' }} />
+                <div className="h-2 rounded w-3/5" style={{ background: 'var(--background-secondary)' }} />
+              </div>
+            ))
+          : items.map(c => <MiniCard key={`${c.type}-${c.id}`} card={c} color={color} />)
         }
+      </div>
+    </div>
+  )
+}
 
-        const novelItems: CarouselItem[] = top10Novel
-          .map((n: any) => ({
-            id:        n.id,
-            title:     n.title,
-            cover_url: coverMap[n.id] ?? null,
-            score:     voteMap[n.title]?.votes ?? null,
-            href:      `/content/${n.id}`,
-          }))
-          .filter(n => n.cover_url != null)
+// ── Filter Popover ────────────────────────────────────────────────────────────
+function FilterPopover({ type, status, setStatus, format, setFormat, genre, setGenre,
+  genreOptions, activeCount, onClear, color }: any) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
 
-        setCarouselData({ anime: animeItems, manga: mangaItems, novel: novelItems })
-      } catch (error) {
-        console.error('Failed to load dashboard:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-    loadDashboard()
+  useEffect(() => {
+    const fn = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', fn)
+    return () => document.removeEventListener('mousedown', fn)
   }, [])
 
-  // Auto-rotate
-  const goToSection = useCallback((section: CarouselSection) => {
-    if (section === activeSection) return
-    setTransitioning(true)
-    setTimeout(() => {
-      setActiveSection(section)
-      setTransitioning(false)
-    }, 250)
-  }, [activeSection])
+  const Pill = ({ val, active, onChange }: { val: string; active: boolean; onChange: () => void }) => (
+    <button onClick={onChange}
+      className="px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap"
+      style={active
+        ? { background: color, color: '#fff', boxShadow: `0 2px 8px ${color}44` }
+        : { background: 'var(--background-secondary)', color: 'var(--foreground-secondary)', border: '1px solid var(--card-border)' }}>
+      {val === 'all' ? 'Tất cả' : val}
+    </button>
+  )
+
+  return (
+    <div ref={ref} className="relative">
+      <button onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold transition-all"
+        style={activeCount > 0
+          ? { background: `${color}18`, color, border: `1px solid ${color}50` }
+          : { background: 'var(--glass-bg)', color: 'var(--foreground-secondary)', border: '1px solid var(--card-border)' }}>
+        <SlidersHorizontal className="w-3.5 h-3.5" />
+        Bộ lọc
+        {activeCount > 0 && (
+          <span className="w-5 h-5 rounded-full text-[10px] font-black flex items-center justify-center text-white" style={{ background: color }}>
+            {activeCount}
+          </span>
+        )}
+        <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute top-[calc(100%+8px)] left-0 z-50 rounded-2xl p-5 shadow-2xl"
+          style={{ background: 'var(--glass-bg)', border: '1px solid var(--card-border)', backdropFilter: 'blur(20px)', minWidth: 300, maxWidth: '92vw' }}>
+          <div className="flex items-center justify-between mb-4 pb-3" style={{ borderBottom: '1px solid var(--card-border)' }}>
+            <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--foreground)' }}>Bộ lọc nâng cao</span>
+            {activeCount > 0 && (
+              <button onClick={() => { onClear(); setOpen(false) }} className="text-xs font-semibold text-red-400 hover:text-red-300 transition-colors">
+                ✕ Xóa tất cả
+              </button>
+            )}
+          </div>
+          <div className="space-y-4">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--foreground-muted)' }}>Trạng thái</p>
+              <div className="flex flex-wrap gap-1.5">
+                {(type === 'manga' ? STATUS_OPTS_MANGA : STATUS_OPTS_ANIME).map(o => (
+                  <Pill key={o} val={o} active={status === o} onChange={() => setStatus(o)} />
+                ))}
+              </div>
+            </div>
+            {type === 'anime' && (
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--foreground-muted)' }}>Format</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {FORMAT_OPTS.map(o => <Pill key={o} val={o} active={format === o} onChange={() => setFormat(o)} />)}
+                </div>
+              </div>
+            )}
+            {type === 'manga' && genreOptions.length > 0 && (
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--foreground-muted)' }}>Thể loại</p>
+                <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
+                  <Pill val="all" active={genre === 'all'} onChange={() => setGenre('all')} />
+                  {genreOptions.map((g: string) => <Pill key={g} val={g} active={genre === g} onChange={() => setGenre(g)} />)}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+export default function BrowsePage() {
+  const [type,        setType]        = useState<ContentType>('anime')
+  const [browseMode,  setBrowseMode]  = useState(false)
+  const [searchInput, setSearchInput] = useState('')
+  const [sort,        setSort]        = useState('score_desc')
+  const [status,      setStatus]      = useState('all')
+  const [format,      setFormat]      = useState('all')
+  const [genre,       setGenre]       = useState('all')
+  const [pageSize,    setPageSize]    = useState(24)
+  const [page,        setPage]        = useState(0)
+
+  const [cards,       setCards]       = useState<SeriesCard[]>([])
+  const [hasMore,     setHasMore]     = useState(false)
+  const [loading,     setLoading]     = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [popular,     setPopular]     = useState<SeriesCard[]>([])
+  const [recent,      setRecent]      = useState<SeriesCard[]>([])
+  const [discLoading, setDiscLoading] = useState(true)
+  const [genreOpts,   setGenreOpts]   = useState<string[]>([])
+
+  const search    = useDebounce(searchInput, 300)
+  const color     = TYPE_CONFIG[type].color
+  const TypeIcon  = TYPE_CONFIG[type].icon
+
+  // Reset on type change
+  useEffect(() => {
+    setSort(SORT_OPTS[type][0].id)
+    setStatus('all'); setFormat('all'); setGenre('all')
+    setPage(0); setCards([]); setBrowseMode(false); setSearchInput('')
+  }, [type])
+
+  // Discovery carousels
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      setDiscLoading(true)
+      try {
+        if (type === 'anime') {
+          const [{ data: pop }, { data: rec }] = await Promise.all([
+            supabase.from('series').select('id, title, cover_url, status, studio, anime_meta(mean_score, popularity, season_year)')
+              .eq('item_type', 'anime').not('cover_url', 'is', null)
+              .order('anime_meta(popularity)', { ascending: false }).limit(14),
+            supabase.from('series').select('id, title, cover_url, status, studio, anime_meta(mean_score, season_year)')
+              .eq('item_type', 'anime').not('cover_url', 'is', null)
+              .order('anime_meta(season_year)', { ascending: false }).limit(14),
+          ])
+          if (!cancelled) { setPopular(toAnimeCards(pop || [])); setRecent(toAnimeCards(rec || [])) }
+
+        } else if (type === 'manga') {
+          const [{ data: pop }, { data: rec }] = await Promise.all([
+            supabase.from('manga').select('id, title_en, title_ja_ro, cover_url, rating, follows, status, genres, author, year')
+              .not('cover_url', 'is', null).order('follows', { ascending: false }).limit(14),
+            supabase.from('manga').select('id, title_en, title_ja_ro, cover_url, rating, follows, status, genres, author, year')
+              .not('cover_url', 'is', null).order('year', { ascending: false }).limit(14),
+          ])
+          if (!cancelled) {
+            setPopular(toMangaCards(pop || []))
+            setRecent(toMangaCards(rec || []))
+            const gs = new Set<string>()
+            ;[...(pop || []), ...(rec || [])].forEach((m: any) => { if (Array.isArray(m.genres)) m.genres.forEach((g: string) => gs.add(g)) })
+            setGenreOpts(Array.from(gs).sort())
+          }
+
+        } else {
+          // Novel: popular = top by votes (dashboard_top_novels), recent = latest volume release
+          const [{ data: d1, error: e1 }, { data: recentVols }] = await Promise.all([
+            supabase.from('dashboard_top_novels').select('series_id, title, latest_votes, cover_url').order('rank').limit(14),
+            supabase.from('volumes')
+              .select('series_id, release_date, cover_url, is_special')
+              .not('cover_url', 'is', null)
+              .order('release_date', { ascending: false })
+              .limit(100),
+          ])
+
+          // Popular: from pre-computed table
+          let popCards: SeriesCard[] = []
+          if (!e1 && d1 && d1.length > 0) {
+            popCards = toNovelCards(d1)
+          } else {
+            const { data: nd } = await supabase.from('novel_dashboard')
+              .select('id, series_id, title, latest_votes, latest_volume_cover')
+              .order('latest_votes', { ascending: false }).limit(14)
+            popCards = toNovelCards((nd || []).map((n: any) => ({ ...n, cover_url: n.latest_volume_cover, series_id: n.series_id ?? n.id })))
+          }
+
+          // Recent: deduplicate volumes by series_id, pick newest non-special
+          const seenSeries = new Set<number>()
+          const recentIds: number[] = []
+          const recentCoverMap: Record<number, string> = {}
+          for (const v of recentVols || []) {
+            const isSpecial = typeof v.is_special === 'boolean' ? v.is_special : v.is_special?.toUpperCase?.() === 'TRUE'
+            if (isSpecial || seenSeries.has(v.series_id)) continue
+            seenSeries.add(v.series_id)
+            recentIds.push(v.series_id)
+            if (v.cover_url) recentCoverMap[v.series_id] = v.cover_url
+            if (recentIds.length >= 14) break
+          }
+          const { data: recentSeries } = await supabase
+            .from('series').select('id, title, publisher')
+            .in('id', recentIds)
+          const recentCards = toNovelCards((recentSeries || []).map((s: any) => ({
+            id: s.id, series_id: s.id,
+            title: s.title,
+            cover_url: recentCoverMap[s.id] ?? null,
+            latest_votes: null,
+            publisher: s.publisher,
+          })))
+
+          if (!cancelled) { setPopular(popCards); setRecent(recentCards) }
+        }
+      } catch (e) { console.error('Discovery error:', e) }
+      finally { if (!cancelled) setDiscLoading(false) }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [type])
+
+  // Browse fetch
+  const fetchCards = useCallback(async (reset = true) => {
+    reset ? setLoading(true) : setLoadingMore(true)
+    const offset = reset ? 0 : page * pageSize
+    try {
+      let results: SeriesCard[] = []
+      let more = false
+
+      if (type === 'anime') {
+        let q = supabase.from('series')
+          .select('id, title, cover_url, status, studio, anime_meta(mean_score, popularity, format, season_year)')
+          .eq('item_type', 'anime')
+        if (search)           q = q.ilike('title', `%${search}%`)
+        if (status !== 'all') q = q.ilike('status', status)
+        if (sort === 'score_desc')        q = q.order('anime_meta(mean_score)',    { ascending: false })
+        else if (sort === 'popular_desc') q = q.order('anime_meta(popularity)',    { ascending: false })
+        else if (sort === 'year_desc')    q = q.order('anime_meta(season_year)',   { ascending: false })
+        else                              q = q.order('title',                     { ascending: true  })
+        const { data } = await q.range(offset, offset + pageSize - 1)
+        results = toAnimeCards(data || [])
+        more = results.length === pageSize
+
+      } else if (type === 'manga') {
+        let q = supabase.from('manga')
+          .select('id, title_en, title_ja_ro, cover_url, rating, follows, status, genres, author, year')
+        if (search)           q = q.or(`title_en.ilike.%${search}%,title_ja_ro.ilike.%${search}%`)
+        if (status !== 'all') q = q.ilike('status', status)
+        if (genre  !== 'all') q = q.contains('genres', [genre])
+        if (sort === 'rating_desc')       q = q.order('rating',   { ascending: false })
+        else if (sort === 'follows_desc') q = q.order('follows',  { ascending: false })
+        else if (sort === 'year_desc')    q = q.order('year',     { ascending: false })
+        else                              q = q.order('title_en', { ascending: true, nullsFirst: false })
+        const { data } = await q.range(offset, offset + pageSize - 1)
+        results = toMangaCards(data || [])
+        more = results.length === pageSize
+
+      } else {
+        // Novel — from series table, join latest non-special volume cover
+        let q = supabase.from('series')
+          .select('id, title, publisher, status, cover_url')
+          .eq('item_type', 'novel')
+        if (search) q = q.ilike('title', `%${search}%`)
+        q = q.order('title', { ascending: sort !== 'votes_desc' })
+        const { data: sData } = await q.range(offset, offset + pageSize - 1)
+
+        if (!sData || sData.length === 0) {
+          results = []; more = false
+        } else {
+          // For each series, try to get a cover from novel_dashboard (fast lookup)
+          const ids = sData.map((s: any) => s.id)
+          const { data: ndData } = await supabase
+            .from('novel_dashboard')
+            .select('series_id, latest_votes, latest_volume_cover')
+            .in('series_id', ids)
+          const ndMap: Record<number, any> = {}
+          for (const nd of ndData || []) ndMap[nd.series_id] = nd
+
+          results = sData.map((s: any) => {
+            const nd = ndMap[s.id]
+            return {
+              id:         s.id,
+              title:      s.title,
+              cover_url:  nd?.latest_volume_cover ?? s.cover_url ?? null,
+              scoreLabel: nd?.latest_votes ? `★ ${fmtNum(nd.latest_votes)}` : '',
+              status:     null,
+              type:       'novel' as ContentType,
+              meta:       s.publisher ?? null,
+              year:       null,
+              genres:     [],
+              href:       `/content/${s.id}`,
+              external:   false,
+            }
+          })
+          more = results.length === pageSize
+        }
+      }
+
+      if (reset) { setCards(results); setPage(1) }
+      else       { setCards(prev => [...prev, ...results]); setPage(p => p + 1) }
+      setHasMore(more)
+    } finally {
+      reset ? setLoading(false) : setLoadingMore(false)
+    }
+  }, [type, search, status, format, genre, sort, page, pageSize])
 
   useEffect(() => {
-    if (!autoRotate) return
-    const t = setInterval(() => {
-      const next = sections[(sections.indexOf(activeSection) + 1) % sections.length]
-      goToSection(next)
-    }, ROTATE_INTERVAL)
-    return () => clearInterval(t)
-  }, [autoRotate, activeSection, goToSection])
+    if (!browseMode && !search) return
+    fetchCards(true)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [type, search, status, format, genre, sort, browseMode, pageSize])
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen" style={{ background: 'var(--background)' }}>
-        <Loader2 className="w-12 h-12 text-primary-500 animate-spin" />
-      </div>
-    )
-  }
-
-  const items = carouselData[activeSection]
-  const color = SECTION_COLORS[activeSection]
+  const activeFilters = [status !== 'all', format !== 'all', genre !== 'all'].filter(Boolean).length
+  const isBrowsing    = browseMode || !!search
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--background)' }}>
-      <div className="max-w-7xl mx-auto px-4 py-8">
 
-        {/* ── Header ── */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold mb-1" style={{ color: 'var(--foreground)' }}>Dashboard</h1>
-            <p className="text-sm" style={{ color: 'var(--foreground-secondary)' }}>
-              Tổng quan nội dung và hoạt động cộng đồng
-            </p>
-          </div>
-          <div className="mt-4 md:mt-0 flex items-center gap-3">
-            <span className="text-sm" style={{ color: 'var(--foreground-secondary)' }}>
-              {new Date().toLocaleTimeString()}
+      {/* ── Hero header ── */}
+      <div className="relative overflow-hidden" style={{ borderBottom: '1px solid var(--card-border)' }}>
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full blur-3xl opacity-[0.12] transition-colors duration-700" style={{ background: color }} />
+          <div className="absolute -bottom-16 right-10 w-72 h-72 rounded-full blur-3xl opacity-[0.08] transition-colors duration-700" style={{ background: color }} />
+        </div>
+
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 sm:pt-12 pb-6 sm:pb-8">
+          {/* Gradient title */}
+          <h1 className="text-3xl sm:text-5xl font-black mb-1.5 leading-none">
+            <span style={{ color: 'var(--foreground)' }}>Khám phá </span>
+            <span style={{
+              display: 'inline-block',
+              background: `linear-gradient(120deg, ${color}, ${color}88)`,
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+              color: 'transparent',
+            }}>
+              {TYPE_CONFIG[type].label}
             </span>
-            <button onClick={() => window.location.reload()} className="p-2 glass rounded-lg transition-colors" title="Refresh">
-              <RefreshCw className="w-4 h-4" style={{ color: 'var(--foreground-secondary)' }} />
-            </button>
-          </div>
-        </div>
+          </h1>
+          <p className="text-sm mb-6" style={{ color: 'var(--foreground-secondary)' }}>
+            Tìm kiếm và khám phá trong cơ sở dữ liệu LiDex
+          </p>
 
-        {/* ── Stats ── */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
-          <StatsCard icon={BookOpen} value={stats?.totalSeries?.toLocaleString() || '0'} label="Total Series"   color="primary" trend={null} />
-          <StatsCard icon={Tv}       value={stats?.totalAnime?.toLocaleString()  || '0'} label="Anime"          color="purple"  trend={null} />
-          <StatsCard icon={Book}     value={stats?.totalManga?.toLocaleString()  || '0'} label="Manga"          color="pink"    trend={null} />
-          <StatsCard icon={BookOpen} value={(stats as any)?.totalNovel?.toLocaleString() || '0'} label="Tiểu thuyết" color="green" trend={null} />
-        </div>
-
-        {/* ── Carousel section ── */}
-        <div>
-          {/* Header row */}
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black" style={{ color: 'var(--foreground)' }}>Top</span>
-              <span className="text-3xl font-black" style={{ color }}>10</span>
-              <span
-                className="text-lg font-bold ml-1 transition-colors duration-300"
-                style={{ color }}
-              >
-                {SECTION_LABELS[activeSection]}
-              </span>
-            </div>
-
-            {/* Dot indicators + section pills */}
-            <div className="flex items-center gap-3">
-              {sections.map(s => (
-                <button
-                  key={s}
-                  onClick={() => { setAutoRotate(false); goToSection(s) }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-200"
-                  style={{
-                    background: activeSection === s ? SECTION_COLORS[s] : 'var(--background-secondary)',
-                    color:      activeSection === s ? '#fff' : 'var(--foreground-secondary)',
-                    border:     `1px solid ${activeSection === s ? SECTION_COLORS[s] : 'var(--card-border)'}`,
-                    transform:  activeSection === s ? 'scale(1.05)' : 'scale(1)',
-                  }}
-                >
-                  <span
-                    className="w-2 h-2 rounded-full"
-                    style={{ background: activeSection === s ? '#fff' : SECTION_COLORS[s] }}
-                  />
-                  {SECTION_LABELS[s]}
+          {/* Type pill switcher */}
+          <div className="inline-flex p-1 rounded-2xl mb-5" style={{ background: 'var(--glass-bg)', border: '1px solid var(--card-border)' }}>
+            {(Object.keys(TYPE_CONFIG) as ContentType[]).map(t => {
+              const cfg = TYPE_CONFIG[t]; const Icon = cfg.icon; const active = t === type
+              return (
+                <button key={t} onClick={() => setType(t)}
+                  className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200"
+                  style={active
+                    ? { background: cfg.color, color: '#fff', boxShadow: `0 2px 12px ${cfg.color}55` }
+                    : { color: 'var(--foreground-secondary)' }}>
+                  <Icon className="w-3.5 h-3.5 flex-shrink-0" />
+                  {cfg.label}
                 </button>
-              ))}
-              {/* Auto-rotate indicator */}
-              {autoRotate && (
-                <div className="flex gap-1 ml-1">
-                  {sections.map(s => (
-                    <div
-                      key={s}
-                      className="h-0.5 rounded-full transition-all duration-300"
-                      style={{
-                        width:      activeSection === s ? '20px' : '6px',
-                        background: activeSection === s ? SECTION_COLORS[s] : 'var(--card-border)',
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
+              )
+            })}
           </div>
 
-          {/* Cards grid */}
-          <div
-            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-x-3 gap-y-10 transition-opacity duration-250"
-            style={{ opacity: transitioning ? 0 : 1 }}
-          >
-            {items.length === 0 ? (
-              <div className="col-span-5 flex items-center justify-center h-48">
-                <Loader2 className="w-6 h-6 animate-spin" style={{ color: 'var(--foreground-muted)' }} />
-              </div>
-            ) : items.map((item, i) => (
-              <TopCard
-                key={item.id}
-                item={item}
-                rank={i + 1}
-                accentColor={color}
-                scoreLabel={activeSection === 'novel' ? 'votes' : undefined}
-              />
-            ))}
+          {/* Search */}
+          <div className="relative max-w-lg">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: 'var(--foreground-muted)' }} />
+            <input
+              value={searchInput}
+              onChange={e => { setSearchInput(e.target.value); if (e.target.value) setBrowseMode(true) }}
+              placeholder={`Tìm ${TYPE_CONFIG[type].label.toLowerCase()}…`}
+              className="w-full pl-11 pr-10 py-3 rounded-2xl text-sm outline-none transition-all duration-200"
+              style={{ background: 'var(--glass-bg)', color: 'var(--foreground)', border: '1px solid var(--card-border)' }}
+              onFocus={e => { e.currentTarget.style.borderColor = `${color}88`; e.currentTarget.style.boxShadow = `0 0 0 3px ${color}15` }}
+              onBlur={e  => { e.currentTarget.style.borderColor = 'var(--card-border)'; e.currentTarget.style.boxShadow = 'none' }}
+            />
+            {searchInput && (
+              <button onClick={() => setSearchInput('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center"
+                style={{ background: 'var(--background-secondary)', color: 'var(--foreground-muted)' }}>
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
+      </div>
 
+      {/* ── Body ── */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+
+        {/* Discovery */}
+        {!isBrowsing && (
+          <div>
+            <Carousel title="Phổ biến nhất" icon={TrendingUp} items={popular} loading={discLoading} color={color} />
+            <Carousel title="Mới nhất"       icon={Clock}      items={recent}  loading={discLoading} color={color} />
+            <div className="flex justify-center mt-2">
+              <button onClick={() => setBrowseMode(true)}
+                className="group flex items-center gap-2.5 px-7 py-3.5 rounded-2xl text-sm font-bold text-white transition-all hover:scale-105"
+                style={{ background: `linear-gradient(135deg, ${color}, ${color}99)`, boxShadow: `0 6px 20px ${color}44` }}>
+                <LayoutGrid className="w-4 h-4" />
+                Xem tất cả {TYPE_CONFIG[type].label}
+                <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Browse grid */}
+        {isBrowsing && (
+          <div>
+            {/* Toolbar */}
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <FilterPopover
+                type={type} status={status} setStatus={setStatus}
+                format={format} setFormat={setFormat} genre={genre} setGenre={setGenre}
+                genreOptions={genreOpts} activeCount={activeFilters}
+                onClear={() => { setStatus('all'); setFormat('all'); setGenre('all') }}
+                color={color}
+              />
+
+              {/* Sort */}
+              <div className="relative">
+                <select value={sort} onChange={e => setSort(e.target.value)}
+                  className="appearance-none pl-3 pr-8 py-2 rounded-xl text-sm font-semibold outline-none cursor-pointer"
+                  style={{ background: 'var(--glass-bg)', color: 'var(--foreground)', border: '1px solid var(--card-border)' }}>
+                  {SORT_OPTS[type].map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+                </select>
+                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none" style={{ color: 'var(--foreground-muted)' }} />
+              </div>
+
+              {/* Page size */}
+              <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl"
+                style={{ background: 'var(--glass-bg)', border: '1px solid var(--card-border)' }}>
+                <LayoutGrid className="w-3.5 h-3.5 mr-1" style={{ color: 'var(--foreground-muted)' }} />
+                {PAGE_SIZE_OPTS.map(n => (
+                  <button key={n} onClick={() => { setPageSize(n); setPage(0); fetchCards(true) }}
+                    className="px-2 py-0.5 rounded-lg text-xs font-bold transition-all"
+                    style={pageSize === n ? { background: color, color: '#fff' } : { color: 'var(--foreground-muted)' }}>
+                    {n}
+                  </button>
+                ))}
+              </div>
+
+              <div className="ml-auto flex items-center gap-3">
+                {!loading && <span className="text-xs" style={{ color: 'var(--foreground-muted)' }}>{cards.length}{hasMore ? '+' : ''} kết quả</span>}
+                {!searchInput && (
+                  <button onClick={() => setBrowseMode(false)}
+                    className="flex items-center gap-1 text-xs font-semibold hover:text-red-400 transition-colors"
+                    style={{ color: 'var(--foreground-secondary)' }}>
+                    <X className="w-3 h-3" /> Đóng
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Active filter chips */}
+            {activeFilters > 0 && (
+              <div className="flex flex-wrap gap-2 mb-4">
+                {status !== 'all' && <FilterChip label={`Trạng thái: ${status}`} onRemove={() => setStatus('all')} color={color} />}
+                {format !== 'all' && <FilterChip label={`Format: ${format}`}     onRemove={() => setFormat('all')} color={color} />}
+                {genre  !== 'all' && <FilterChip label={genre}                   onRemove={() => setGenre('all')}  color={color} />}
+              </div>
+            )}
+
+            {/* Grid */}
+            {loading ? (
+              <div className={`grid gap-3 sm:gap-4 ${gridCols(pageSize)}`}>
+                {Array.from({ length: pageSize }).map((_, i) => <SkeletonCard key={i} />)}
+              </div>
+            ) : cards.length === 0 ? (
+              <div className="flex flex-col items-center py-28 gap-4">
+                <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: `${color}15` }}>
+                  <TypeIcon className="w-8 h-8 opacity-30" style={{ color }} />
+                </div>
+                <p className="text-sm font-medium" style={{ color: 'var(--foreground-muted)' }}>Không tìm thấy kết quả</p>
+                {activeFilters > 0 && (
+                  <button onClick={() => { setStatus('all'); setFormat('all'); setGenre('all') }}
+                    className="text-xs font-semibold px-4 py-2 rounded-xl"
+                    style={{ background: `${color}15`, color }}>Xóa bộ lọc</button>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className={`grid gap-3 sm:gap-4 items-start ${gridCols(pageSize)}`}>
+                  {cards.map(c => <CardItem key={`${c.type}-${c.id}`} card={c} color={color} />)}
+                </div>
+                {hasMore && (
+                  <div className="flex justify-center mt-10">
+                    <button onClick={() => fetchCards(false)} disabled={loadingMore}
+                      className="flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-bold transition-all hover:scale-105 disabled:opacity-50"
+                      style={{ background: `${color}15`, color, border: `1px solid ${color}40` }}>
+                      {loadingMore ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronDown className="w-4 h-4" />}
+                      Tải thêm
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
-// ── Top Card ──────────────────────────────────────────────────────────────────
-function TopCard({
-  item, rank, accentColor, scoreLabel,
-}: {
-  item: CarouselItem
-  rank: number
-  accentColor: string
-  scoreLabel?: string
-}) {
-  const [imgErr, setImgErr] = useState(false)
-
-  const fmtScore = (s: number | null) => {
-    if (s == null) return null
-    if (scoreLabel === 'votes') {
-      if (s >= 1000) return `${(s / 1000).toFixed(1)}K`
-      return String(s)
-    }
-    return String(s)
-  }
-
-  const scoreText = fmtScore(item.score)
-
-  const card = (
-    <div className="relative group cursor-pointer">
-      {/* Rank number — hollow, sits behind */}
-      <span
-        className="absolute select-none pointer-events-none font-black z-0"
-        style={{
-          fontSize:         'clamp(64px, 9vw, 100px)',
-          color:            'transparent',
-          WebkitTextStroke: `2px ${accentColor}55`,
-          bottom:           '-4px',
-          left:             '0',
-          transform:        'translateX(-32%)',
-          lineHeight:       1,
-          fontFamily:       '"Arial Black", Impact, sans-serif',
-          letterSpacing:    '-3px',
-        }}
-      >
-        {rank}
-      </span>
-
-      {/* Cover */}
-      <div
-        className="relative z-10 ml-auto rounded-xl overflow-hidden shadow-xl transition-transform duration-200 group-hover:scale-[1.04]"
-        style={{ width: '78%', border: `2px solid ${accentColor}44` }}
-      >
-        {item.cover_url && !imgErr ? (
-          <img
-            src={item.cover_url}
-            alt={item.title}
-            className="w-full aspect-[2/3] object-cover block"
-            onError={() => setImgErr(true)}
-          />
-        ) : (
-          <div
-            className="w-full aspect-[2/3] flex items-center justify-center p-3"
-            style={{ background: 'var(--background-secondary)' }}
-          >
-            <p className="text-xs font-semibold text-center line-clamp-4" style={{ color: 'var(--foreground-secondary)' }}>
-              {item.title}
-            </p>
-          </div>
-        )}
-
-        {/* Score badge */}
-        {scoreText && (
-          <div
-            className="absolute top-2 right-2 px-1.5 py-0.5 rounded-md text-xs font-bold flex items-center gap-0.5"
-            style={{ background: 'rgba(0,0,0,0.78)', color: '#fbbf24', backdropFilter: 'blur(4px)' }}
-          >
-            ★ {scoreText}
-          </div>
-        )}
-
-        {/* Hover title */}
-        <div
-          className="absolute inset-0 flex items-end opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-          style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.88) 45%, transparent)' }}
-        >
-          <p className="text-white text-xs font-semibold px-2 pb-2 line-clamp-2 w-full">
-            {item.title}
-          </p>
-        </div>
-      </div>
-    </div>
-  )
-
-  return item.href !== '#' ? (
-    <Link href={item.href}>{card}</Link>
-  ) : (
-    <div>{card}</div>
+function FilterChip({ label, onRemove, color }: { label: string; onRemove: () => void; color: string }) {
+  return (
+    <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold"
+      style={{ background: `${color}15`, color, border: `1px solid ${color}40` }}>
+      {label}
+      <button onClick={onRemove}><X className="w-3 h-3 hover:opacity-70" /></button>
+    </span>
   )
 }

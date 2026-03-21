@@ -13,16 +13,11 @@ import {
 } from 'chart.js'
 import { Plus, X, Search, Loader2, GitCompare } from 'lucide-react'
 import { useLocale } from '@/contexts/LocaleContext'
-import { createClient } from '@supabase/supabase-js'
+import supabase from '@/lib/supabaseClient'
 import Link from 'next/link'
 
 ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend)
 
-// ── Supabase ──────────────────────────────────────────────────────────────────
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const SERIES_COLORS = [

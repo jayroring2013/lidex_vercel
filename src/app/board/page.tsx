@@ -3,14 +3,10 @@
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useState, useMemo, useCallback } from 'react'
-import { createClient } from '@supabase/supabase-js'
 import { ChevronUp, ChevronDown, ChevronsUpDown, Search, Loader2, SlidersHorizontal, X } from 'lucide-react'
 import Link from 'next/link'
+import supabase from '@/lib/supabaseClient'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ItemType = 'anime' | 'manga' | 'novel'

@@ -284,6 +284,34 @@ export default function ContentDetail() {
                   ))}
                 </div>
               )}
+
+              {/* ── Synopsis in hero — visible immediately on load ── */}
+              {(series.description || series.description_vi) && (
+                <div className="mt-4 max-w-2xl">
+                  <div className="relative">
+                    <div
+                      className={`text-sm sm:text-base leading-relaxed text-gray-300 ${synopsisExpanded ? '' : 'line-clamp-3'}`}
+                    >
+                      {formatSynopsis(series.description || series.description_vi || '')}
+                    </div>
+                    {/* Fade — dark to transparent so it works on the hero bg */}
+                    {!synopsisExpanded && (
+                      <div className="absolute bottom-0 left-0 right-0 h-8 pointer-events-none"
+                        style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.4), transparent)' }} />
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setSynopsisExpanded(!synopsisExpanded)}
+                    className="mt-2 flex items-center gap-1 text-xs font-semibold text-primary-400 hover:text-primary-300 transition-colors"
+                  >
+                    {synopsisExpanded ? (
+                      <><ChevronUp className="w-3.5 h-3.5" /> Thu gọn</>
+                    ) : (
+                      <><ChevronDown className="w-3.5 h-3.5" /> Xem thêm</>
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* ── LiDex Score Box — only for anime ── */}
@@ -377,35 +405,6 @@ export default function ContentDetail() {
 
           {/* Left Column */}
           <div className="lg:col-span-2 space-y-6 sm:space-y-8 min-w-0">
-
-            {/* Synopsis */}
-            <div className="glass rounded-2xl p-5 sm:p-6 md:p-8">
-              <div className="flex items-center space-x-2 mb-4">
-                <BookOpen className="w-5 h-5 sm:w-6 sm:h-6 text-primary-500 flex-shrink-0" />
-                <h2 className="text-lg sm:text-xl font-bold" style={{ color: 'var(--foreground)' }}>Synopsis</h2>
-              </div>
-              <div className="relative">
-                <div
-                  className={`leading-relaxed text-sm sm:text-base md:text-lg ${synopsisExpanded ? '' : 'line-clamp-4 md:line-clamp-5'}`}
-                  style={{ color: 'var(--foreground-secondary)' }}
-                >
-                  {formatSynopsis(series.description || series.description_vi || '')}
-                </div>
-                {!synopsisExpanded && (series.description || series.description_vi) && (
-                  <div className="absolute bottom-0 left-0 right-0 h-10 pointer-events-none"
-                    style={{ background: 'linear-gradient(to top, var(--glass-bg), transparent)' }} />
-                )}
-              </div>
-              {(series.description || series.description_vi) && (
-                <button
-                  onClick={() => setSynopsisExpanded(!synopsisExpanded)}
-                  className="mt-3 flex items-center space-x-1 text-primary-500 hover:text-primary-400 text-sm font-medium transition-colors"
-                >
-                  <span>{synopsisExpanded ? 'Less' : 'More'}</span>
-                  {synopsisExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                </button>
-              )}
-            </div>
 
             {/* Radar Chart */}
             {series.item_type === 'anime' && series.anime_meta && (

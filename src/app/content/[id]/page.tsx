@@ -10,17 +10,12 @@ import {
 } from 'lucide-react'
 import { fetchSeries, fetchVoteCount } from '@/lib/api'
 import RadarChart from '@/components/RadarChart'
-import { createClient } from '@supabase/supabase-js'
+import supabase from '@/lib/supabaseClient'
 import {
   calculateLiDexScore,
   buildPopulationStats,
   type LiDexScoreBreakdown,
 } from '@/lib/lidexScore'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
 
 // ── Score helpers ─────────────────────────────────────────────────────────────
 

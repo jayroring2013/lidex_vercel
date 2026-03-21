@@ -5,14 +5,11 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useState, useCallback } from 'react'
 import { BookOpen, Tv, Book, Loader2, RefreshCw } from 'lucide-react'
 import { getTopRatedSeries } from '../../lib/supabase'
-import { createClient } from '@supabase/supabase-js'
+import supabase from '@/lib/supabaseClient'
 import StatsCard from '../../components/StatsCard'
 import Link from 'next/link'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+
 
 interface SiteStats {
   totalSeries: number
@@ -44,6 +41,20 @@ const SECTION_COLORS: Record<CarouselSection, string> = {
 }
 
 const ROTATE_INTERVAL = 6000 // 6s per section
+
+// Proxy MangaDex images through our API route to bypass CORS/hotlink blocking
+const MANGADEX_DOMAINS = ['uploads.mangadex.org', 'cmdxd98ubx3fv.cloudfront.net', 'mangadex.org']
+function proxyImg(url: string | null): string | null {
+  if (!url) return null
+  try {
+    const hostname = new URL(url).hostname
+    if (MANGADEX_DOMAINS.some(d => hostname.endsWith(d))) {
+      return `/api/image-proxy?url=${encodeURIComponent(url)}`
+    }
+  } catch {}
+  return url
+}
+
 
 export default function Dashboard() {
   const [stats,    setStats]    = useState<SiteStats | null>(null)
@@ -109,7 +120,7 @@ export default function Dashboard() {
         const mangaItems: CarouselItem[] = ((mangaCarouselData.data) || []).map((m: any) => ({
           id:        m.id,
           title:     m.title_en || m.title_ja_ro || m.id,
-          cover_url: m.cover_url,
+          cover_url: proxyImg(m.cover_url),
           score:     m.rating ? Number(m.rating) : null,
           href:      '#',
         }))

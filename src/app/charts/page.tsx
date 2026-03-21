@@ -12,15 +12,10 @@ import {
 } from 'chart.js'
 import { Loader2, RefreshCw, BarChart2, Tv, BookOpen } from 'lucide-react'
 import { useLocale } from '@/contexts/LocaleContext'
-import { createClient } from '@supabase/supabase-js'
+import supabase from '@/lib/supabaseClient'
 
 ChartJS.register(LinearScale, PointElement, Tooltip, Legend)
 
-// ── Supabase ──────────────────────────────────────────────────────────────────
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
 
 // ── Shared constants ──────────────────────────────────────────────────────────
 const SCORE_DIST_KEYS = ['10','20','30','40','50','60','70','80','90','100']

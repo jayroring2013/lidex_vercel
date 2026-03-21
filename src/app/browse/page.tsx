@@ -9,6 +9,7 @@ import {
   BookOpen, Tv, Book, TrendingUp, Clock, ArrowRight, ExternalLink, LayoutGrid
 } from 'lucide-react'
 import supabase from '@/lib/supabaseClient'
+import { useLocale } from '@/contexts/LocaleContext'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ContentType = 'anime' | 'manga' | 'novel'
@@ -42,14 +43,14 @@ const PAGE_SIZE_OPTS    = [12, 24, 48, 96]
 const SORT_OPTS: Record<ContentType, { id: string; label: string }[]> = {
   anime: [
     { id: 'score_desc',   label: 'Điểm cao nhất'    },
-    { id: 'popular_desc', label: 'Phổ biến nhất'    },
-    { id: 'year_desc',    label: 'Mới nhất'          },
+    { id: 'popular_desc', label: '{t('browse_popular')}'    },
+    { id: 'year_desc',    label: '{t('browse_recent')}'          },
     { id: 'title_asc',    label: 'Tên A–Z'           },
   ],
   manga: [
     { id: 'rating_desc',  label: 'Điểm cao nhất'    },
     { id: 'follows_desc', label: 'Nhiều follow nhất' },
-    { id: 'year_desc',    label: 'Mới nhất'          },
+    { id: 'year_desc',    label: '{t('browse_recent')}'          },
     { id: 'title_asc',    label: 'Tên A–Z'           },
   ],
   novel: [
@@ -415,6 +416,7 @@ export default function BrowsePage() {
   const search    = useDebounce(searchInput, 300)
   const color     = TYPE_CONFIG[type].color
   const TypeIcon  = TYPE_CONFIG[type].icon
+  const { t }    = useLocale()
 
   // Reset on type change
   useEffect(() => {
@@ -616,20 +618,11 @@ export default function BrowsePage() {
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 sm:pt-12 pb-6 sm:pb-8">
           {/* Gradient title */}
           <h1 className="text-3xl sm:text-5xl font-black mb-1.5 leading-none">
-            <span style={{ color: 'var(--foreground)' }}>Khám phá </span>
-            <span style={{
-              display: 'inline-block',
-              background: `linear-gradient(120deg, ${color}, ${color}88)`,
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-              color: 'transparent',
-            }}>
-              {TYPE_CONFIG[type].label}
-            </span>
+            <span style={{ color: 'var(--foreground)' }}>{t('browse_discover')} </span>
+            <span className="transition-colors duration-300" style={{ color }}>{TYPE_CONFIG[type].label}</span>
           </h1>
           <p className="text-sm mb-6" style={{ color: 'var(--foreground-secondary)' }}>
-            Tìm kiếm và khám phá trong cơ sở dữ liệu LiDex
+            {t('browse_subtitle')}
           </p>
 
           {/* Type pill switcher */}
@@ -655,7 +648,7 @@ export default function BrowsePage() {
             <input
               value={searchInput}
               onChange={e => { setSearchInput(e.target.value); if (e.target.value) setBrowseMode(true) }}
-              placeholder={`Tìm ${TYPE_CONFIG[type].label.toLowerCase()}…`}
+              placeholder={`${t('browse_search')} ${TYPE_CONFIG[type].label.toLowerCase()}…`}
               className="w-full pl-11 pr-10 py-3 rounded-2xl text-sm outline-none transition-all duration-200"
               style={{ background: 'var(--glass-bg)', color: 'var(--foreground)', border: '1px solid var(--card-border)' }}
               onFocus={e => { e.currentTarget.style.borderColor = `${color}88`; e.currentTarget.style.boxShadow = `0 0 0 3px ${color}15` }}
@@ -678,14 +671,14 @@ export default function BrowsePage() {
         {/* Discovery */}
         {!isBrowsing && (
           <div>
-            <Carousel title="Phổ biến nhất" icon={TrendingUp} items={popular} loading={discLoading} color={color} />
-            <Carousel title="Mới nhất"       icon={Clock}      items={recent}  loading={discLoading} color={color} />
+            <Carousel title="{t('browse_popular')}" icon={TrendingUp} items={popular} loading={discLoading} color={color} />
+            <Carousel title="{t('browse_recent')}"       icon={Clock}      items={recent}  loading={discLoading} color={color} />
             <div className="flex justify-center mt-2">
               <button onClick={() => setBrowseMode(true)}
                 className="group flex items-center gap-2.5 px-7 py-3.5 rounded-2xl text-sm font-bold text-white transition-all hover:scale-105"
                 style={{ background: `linear-gradient(135deg, ${color}, ${color}99)`, boxShadow: `0 6px 20px ${color}44` }}>
                 <LayoutGrid className="w-4 h-4" />
-                Xem tất cả {TYPE_CONFIG[type].label}
+                {t('browse_all')} {TYPE_CONFIG[type].label}
                 <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
               </button>
             </div>

@@ -231,17 +231,21 @@ function CardItem({ card, color }: { card: SeriesCard; color: string }) {
           </div>
         </div>
       </div>
-      <div className="px-3 pt-2 pb-3">
-        <p className="text-xs font-semibold line-clamp-2 leading-snug mb-0.5" style={{ color: 'var(--foreground)' }}>{card.title}</p>
-        {card.meta && <p className="text-[10px] truncate" style={{ color: 'var(--foreground-muted)' }}>{card.meta}</p>}
-        {card.genres.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-1.5">
-            {card.genres.slice(0, 2).map(g => (
-              <span key={g} className="text-[9px] px-1.5 py-0.5 rounded-md font-semibold"
-                style={{ background: `${color}18`, color }}>{g}</span>
-            ))}
-          </div>
-        )}
+      {/* Fixed-height info strip — keeps all cards same total height */}
+      <div className="px-3 pt-2 pb-3 h-[72px] flex flex-col justify-between">
+        <div>
+          <p className="text-xs font-semibold line-clamp-2 leading-snug" style={{ color: 'var(--foreground)' }}>{card.title}</p>
+        </div>
+        <div className="flex items-center justify-between mt-1">
+          {card.meta
+            ? <p className="text-[10px] truncate flex-1" style={{ color: 'var(--foreground-muted)' }}>{card.meta}</p>
+            : <span />
+          }
+          {card.genres.length > 0 && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded-md font-semibold ml-1 flex-shrink-0"
+              style={{ background: `${color}18`, color }}>{card.genres[0]}</span>
+          )}
+        </div>
       </div>
     </GlowCard>
   )
@@ -452,19 +456,51 @@ export default function BrowsePage() {
           }
 
         } else {
-          // Novel: try dashboard_top_novels first (fast), fallback to novel_dashboard view
-          const { data: d1, error: e1 } = await supabase
-            .from('dashboard_top_novels').select('series_id, title, latest_votes, cover_url').order('rank')
+          // Novel: popular = top by votes (dashboard_top_novels), recent = latest volume release
+          const [{ data: d1, error: e1 }, { data: recentVols }] = await Promise.all([
+            supabase.from('dashboard_top_novels').select('series_id, title, latest_votes, cover_url').order('rank').limit(14),
+            supabase.from('volumes')
+              .select('series_id, release_date, cover_url, is_special')
+              .not('cover_url', 'is', null)
+              .order('release_date', { ascending: false })
+              .limit(100),
+          ])
+
+          // Popular: from pre-computed table
+          let popCards: SeriesCard[] = []
           if (!e1 && d1 && d1.length > 0) {
-            const cards = toNovelCards(d1)
-            if (!cancelled) { setPopular(cards); setRecent([...cards].reverse()) }
+            popCards = toNovelCards(d1)
           } else {
-            const { data: d2 } = await supabase
-              .from('novel_dashboard').select('id, series_id, title, latest_votes, latest_volume_cover')
+            const { data: nd } = await supabase.from('novel_dashboard')
+              .select('id, series_id, title, latest_votes, latest_volume_cover')
               .order('latest_votes', { ascending: false }).limit(14)
-            const mapped = (d2 || []).map((n: any) => ({ ...n, cover_url: n.latest_volume_cover, series_id: n.series_id ?? n.id }))
-            if (!cancelled) { setPopular(toNovelCards(mapped)); setRecent([...toNovelCards(mapped)].reverse()) }
+            popCards = toNovelCards((nd || []).map((n: any) => ({ ...n, cover_url: n.latest_volume_cover, series_id: n.series_id ?? n.id })))
           }
+
+          // Recent: deduplicate volumes by series_id, pick newest non-special
+          const seenSeries = new Set<number>()
+          const recentIds: number[] = []
+          const recentCoverMap: Record<number, string> = {}
+          for (const v of recentVols || []) {
+            const isSpecial = typeof v.is_special === 'boolean' ? v.is_special : v.is_special?.toUpperCase?.() === 'TRUE'
+            if (isSpecial || seenSeries.has(v.series_id)) continue
+            seenSeries.add(v.series_id)
+            recentIds.push(v.series_id)
+            if (v.cover_url) recentCoverMap[v.series_id] = v.cover_url
+            if (recentIds.length >= 14) break
+          }
+          const { data: recentSeries } = await supabase
+            .from('series').select('id, title, publisher')
+            .in('id', recentIds)
+          const recentCards = toNovelCards((recentSeries || []).map((s: any) => ({
+            id: s.id, series_id: s.id,
+            title: s.title,
+            cover_url: recentCoverMap[s.id] ?? null,
+            latest_votes: null,
+            publisher: s.publisher,
+          })))
+
+          if (!cancelled) { setPopular(popCards); setRecent(recentCards) }
         }
       } catch (e) { console.error('Discovery error:', e) }
       finally { if (!cancelled) setDiscLoading(false) }
@@ -510,15 +546,44 @@ export default function BrowsePage() {
         more = results.length === pageSize
 
       } else {
-        // Novel from novel_dashboard view
-        let q = supabase.from('novel_dashboard')
-          .select('id, series_id, title, latest_votes, latest_volume_cover, publisher')
+        // Novel — from series table, join latest non-special volume cover
+        let q = supabase.from('series')
+          .select('id, title, publisher, status, cover_url')
+          .eq('item_type', 'novel')
         if (search) q = q.ilike('title', `%${search}%`)
-        if (sort === 'votes_desc') q = q.order('latest_votes', { ascending: false, nullsFirst: false })
-        else                       q = q.order('title',        { ascending: true })
-        const { data } = await q.range(offset, offset + pageSize - 1)
-        results = toNovelCards((data || []).map((n: any) => ({ ...n, series_id: n.series_id ?? n.id, cover_url: n.latest_volume_cover })))
-        more = results.length === pageSize
+        q = q.order('title', { ascending: sort !== 'votes_desc' })
+        const { data: sData } = await q.range(offset, offset + pageSize - 1)
+
+        if (!sData || sData.length === 0) {
+          results = []; more = false
+        } else {
+          // For each series, try to get a cover from novel_dashboard (fast lookup)
+          const ids = sData.map((s: any) => s.id)
+          const { data: ndData } = await supabase
+            .from('novel_dashboard')
+            .select('series_id, latest_votes, latest_volume_cover')
+            .in('series_id', ids)
+          const ndMap: Record<number, any> = {}
+          for (const nd of ndData || []) ndMap[nd.series_id] = nd
+
+          results = sData.map((s: any) => {
+            const nd = ndMap[s.id]
+            return {
+              id:         s.id,
+              title:      s.title,
+              cover_url:  nd?.latest_volume_cover ?? s.cover_url ?? null,
+              scoreLabel: nd?.latest_votes ? `★ ${fmtNum(nd.latest_votes)}` : '',
+              status:     null,
+              type:       'novel' as ContentType,
+              meta:       s.publisher ?? null,
+              year:       null,
+              genres:     [],
+              href:       `/content/${s.id}`,
+              external:   false,
+            }
+          })
+          more = results.length === pageSize
+        }
       }
 
       if (reset) { setCards(results); setPage(1) }
@@ -553,8 +618,12 @@ export default function BrowsePage() {
           <h1 className="text-3xl sm:text-5xl font-black mb-1.5 leading-none">
             <span style={{ color: 'var(--foreground)' }}>Khám phá </span>
             <span style={{
+              display: 'inline-block',
               background: `linear-gradient(120deg, ${color}, ${color}88)`,
-              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+              color: 'transparent',
             }}>
               {TYPE_CONFIG[type].label}
             </span>
@@ -699,7 +768,7 @@ export default function BrowsePage() {
               </div>
             ) : (
               <>
-                <div className={`grid gap-3 sm:gap-4 ${gridCols(pageSize)}`}>
+                <div className={`grid gap-3 sm:gap-4 items-start ${gridCols(pageSize)}`}>
                   {cards.map(c => <CardItem key={`${c.type}-${c.id}`} card={c} color={color} />)}
                 </div>
                 {hasMore && (

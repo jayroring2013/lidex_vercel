@@ -4,16 +4,17 @@ export async function GET(req: NextRequest) {
   const url = req.nextUrl.searchParams.get('url')
   if (!url) return new NextResponse('Missing url', { status: 400 })
 
-  // Only proxy known image domains for security
-  const allowed = [
-    'uploads.mangadex.org',
-    'cmdxd98ubx3fv.cloudfront.net',
-    'mangadex.org',
-  ]
+  // Block only localhost and private IPs for security; allow all external image hosts
+  const blocked = ['localhost', '127.0.0.1', '0.0.0.0', '::1']
   try {
-    const hostname = new URL(url).hostname
-    if (!allowed.some(d => hostname.endsWith(d))) {
+    const parsed   = new URL(url)
+    const hostname = parsed.hostname
+    if (blocked.some(b => hostname === b) || hostname.match(/^10\./) || hostname.match(/^192\.168\./) || hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./)) {
       return new NextResponse('Domain not allowed', { status: 403 })
+    }
+    // Only allow http/https
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return new NextResponse('Invalid protocol', { status: 400 })
     }
   } catch {
     return new NextResponse('Invalid url', { status: 400 })

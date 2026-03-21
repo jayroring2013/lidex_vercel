@@ -43,14 +43,14 @@ const PAGE_SIZE_OPTS    = [12, 24, 48, 96]
 const SORT_OPTS: Record<ContentType, { id: string; label: string }[]> = {
   anime: [
     { id: 'score_desc',   label: 'Điểm cao nhất'    },
-    { id: 'popular_desc', label: '{t('browse_popular')}'    },
-    { id: 'year_desc',    label: '{t('browse_recent')}'          },
+    { id: 'popular_desc', label: 'Phổ biến nhất'    },
+    { id: 'year_desc',    label: 'Mới nhất'          },
     { id: 'title_asc',    label: 'Tên A–Z'           },
   ],
   manga: [
     { id: 'rating_desc',  label: 'Điểm cao nhất'    },
     { id: 'follows_desc', label: 'Nhiều follow nhất' },
-    { id: 'year_desc',    label: '{t('browse_recent')}'          },
+    { id: 'year_desc',    label: 'Mới nhất'          },
     { id: 'title_asc',    label: 'Tên A–Z'           },
   ],
   novel: [
@@ -671,8 +671,8 @@ export default function BrowsePage() {
         {/* Discovery */}
         {!isBrowsing && (
           <div>
-            <Carousel title="{t('browse_popular')}" icon={TrendingUp} items={popular} loading={discLoading} color={color} />
-            <Carousel title="{t('browse_recent')}"       icon={Clock}      items={recent}  loading={discLoading} color={color} />
+            <Carousel title={t('browse_popular')} icon={TrendingUp} items={popular} loading={discLoading} color={color} />
+            <Carousel title={t('browse_recent')}       icon={Clock}      items={recent}  loading={discLoading} color={color} />
             <div className="flex justify-center mt-2">
               <button onClick={() => setBrowseMode(true)}
                 className="group flex items-center gap-2.5 px-7 py-3.5 rounded-2xl text-sm font-bold text-white transition-all hover:scale-105"

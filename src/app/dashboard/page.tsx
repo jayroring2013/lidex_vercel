@@ -59,20 +59,26 @@ export default function Dashboard() {
 
   const sections: CarouselSection[] = ['anime', 'manga', 'novel']
 
-  // Fetch stats
+  // Fetch stats — split into fast (stats+anime+manga) and slow (novel) so page renders immediately
   useEffect(() => {
     async function loadDashboard() {
       try {
+        // ── Fast queries: stats + anime + manga (all parallel) ──
         const [
           topAnimeData,
           { count: animeCount },
           { count: novelCount },
           { count: mangaCount },
+          mangaCarouselData,
         ] = await Promise.all([
           getTopRatedSeries({ limit: 10 }),
           supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'anime'),
           supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'novel'),
           supabase.from('manga').select('id', { count: 'exact', head: true }),
+          supabase.from('manga').select('id, title_en, title_ja_ro, cover_url, rating')
+            .order('rating', { ascending: false })
+            .not('cover_url', 'is', null)
+            .limit(10),
         ])
 
         const anime = animeCount ?? 0
@@ -95,15 +101,8 @@ export default function Dashboard() {
           href:      `/content/${s.id}`,
         }))
 
-        // Manga from manga table
-        const { data: mangaData } = await supabase
-          .from('manga')
-          .select('id, title_en, title_ja_ro, cover_url, rating')
-          .order('rating', { ascending: false })
-          .not('cover_url', 'is', null)
-          .limit(10)
-
-        const mangaItems: CarouselItem[] = (mangaData || []).map((m: any) => ({
+        // Manga — already fetched in parallel above
+        const mangaItems: CarouselItem[] = ((mangaCarouselData.data) || []).map((m: any) => ({
           id:        m.id,
           title:     m.title_en || m.title_ja_ro || m.id,
           cover_url: m.cover_url,
@@ -111,7 +110,16 @@ export default function Dashboard() {
           href:      '#',
         }))
 
-        // Novel: get all novels first
+        // Show anime + manga immediately, novel loads async
+        setCarouselData(prev => ({ ...prev, anime: animeItems, manga: mangaItems }))
+      } catch (error) {
+        console.error('Failed to load dashboard:', error)
+      } finally {
+        setLoading(false)
+      }
+
+      // ── Slow query: novel (runs after page is already visible) ──
+      try {
         const { data: novelData } = await supabase
           .from('series')
           .select('id, title')
@@ -120,25 +128,21 @@ export default function Dashboard() {
 
         const novelTitles = (novelData || []).map((n: any) => n.title)
 
-        // Fetch votes
         const { data: voteData } = await supabase
           .from('voting_result')
           .select('title, votes, period')
           .in('title', novelTitles.slice(0, 200))
 
-        // Parse Thg-format period → sortable int
         const parsePeriod = (p: string | null): number => {
           if (!p) return 0
           const cleaned = p.replace('Thg', '')
           const parts   = cleaned.split('-')
           if (parts.length === 2) return (2000 + parseInt(parts[1])) * 100 + parseInt(parts[0])
-          // fallback MM/YYYY
           const slash = p.split('/')
           if (slash.length === 2) return parseInt(slash[1]) * 100 + parseInt(slash[0])
           return 0
         }
 
-        // Keep only the latest-period vote count per title
         const voteMap: Record<string, { votes: number; period: number }> = {}
         for (const v of voteData || []) {
           const cur = parsePeriod(v.period)
@@ -147,13 +151,11 @@ export default function Dashboard() {
           }
         }
 
-        // Find top 10 by votes
         const top10Novel = (novelData || [])
           .filter((n: any) => voteMap[n.title] != null)
           .sort((a: any, b: any) => (voteMap[b.title]?.votes ?? 0) - (voteMap[a.title]?.votes ?? 0))
           .slice(0, 10)
 
-        // Single batch query: get all volumes for top 10 novels
         const top10Ids = top10Novel.map((n: any) => n.id)
         const { data: volData } = await supabase
           .from('volumes')
@@ -163,7 +165,6 @@ export default function Dashboard() {
           .order('release_date', { ascending: false })
           .limit(500)
 
-        // Build map: series_id → cover_url of newest non-special volume
         const coverMap: Record<number, string> = {}
         for (const v of volData || []) {
           const isSpecial = typeof v.is_special === 'boolean' ? v.is_special : v.is_special?.toUpperCase() === 'TRUE'
@@ -181,11 +182,9 @@ export default function Dashboard() {
           }))
           .filter(n => n.cover_url != null)
 
-        setCarouselData({ anime: animeItems, manga: mangaItems, novel: novelItems })
+        setCarouselData(prev => ({ ...prev, novel: novelItems }))
       } catch (error) {
-        console.error('Failed to load dashboard:', error)
-      } finally {
-        setLoading(false)
+        console.error('Failed to load novel carousel:', error)
       }
     }
     loadDashboard()

@@ -10,6 +10,7 @@ import {
   BarChart2, FlaskConical, Users, Film, Layers
 } from 'lucide-react'
 import { fetchSeries, fetchVoteCount } from '@/lib/api'
+import { useLocale } from '@/contexts/LocaleContext'
 import RadarChart from '@/components/RadarChart'
 import supabase from '@/lib/supabaseClient'
 import {
@@ -62,7 +63,9 @@ export default function ContentDetail() {
   const [scoreLoading,setScoreLoading]= useState(false)
   const [activeTab,   setActiveTab]   = useState<'info' | 'stats' | 'analyze'>('info')
 
-  const seriesId   = params.id ? parseInt(params.id as string) : undefined
+  const { locale }  = useLocale()
+  const isVI        = locale === 'vi'
+  const seriesId    = params.id ? parseInt(params.id as string) : undefined
   const coverImage = !imageError && series?.cover_url ? series.cover_url : null
   const bannerImage = series?.banner_url || series?.cover_url
 
@@ -286,6 +289,30 @@ export default function ContentDetail() {
                   ))}
                 </div>
               )}
+
+              {/* ── Synopsis in hero ── */}
+              {(series.description || series.description_vi) && (
+                <div className="mt-4 max-w-2xl">
+                  <div className="relative">
+                    <div className={`text-sm sm:text-base leading-relaxed text-gray-300 ${synopsisExpanded ? '' : 'line-clamp-3'}`}>
+                      {formatSynopsis(series.description || series.description_vi || '')}
+                    </div>
+                    {!synopsisExpanded && (
+                      <div className="absolute bottom-0 left-0 right-0 h-8 pointer-events-none"
+                        style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.4), transparent)' }} />
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setSynopsisExpanded(!synopsisExpanded)}
+                    className="mt-2 flex items-center gap-1 text-xs font-semibold text-primary-400 hover:text-primary-300 transition-colors"
+                  >
+                    {synopsisExpanded
+                      ? <><ChevronUp   className="w-3.5 h-3.5" /> Thu gọn</>
+                      : <><ChevronDown className="w-3.5 h-3.5" /> Xem thêm</>
+                    }
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* ── LiDex Score Box — only for anime ── */}
@@ -396,7 +423,7 @@ export default function ContentDetail() {
                     : { color: 'var(--foreground-secondary)' }}
                 >
                   <tab.icon className="w-4 h-4 flex-shrink-0" />
-                  <span className="hidden sm:block">{tab.labelVI}</span>
+                  <span className="hidden sm:block">{isVI ? tab.labelVI : tab.labelEN}</span>
                 </button>
               ))}
             </div>
@@ -409,7 +436,7 @@ export default function ContentDetail() {
                 <div className="glass rounded-2xl p-5 sm:p-6">
                   <div className="flex items-center gap-2 mb-4">
                     <BookOpen className="w-5 h-5 text-primary-500 flex-shrink-0" />
-                    <h2 className="text-base font-bold" style={{ color: 'var(--foreground)' }}>Nội dung</h2>
+                    <h2 className="text-base font-bold" style={{ color: 'var(--foreground)' }}>{isVI ? 'Nội dung'     : 'Synopsis'}</h2>
                   </div>
                   <div className="relative">
                     <div className={`leading-relaxed text-sm sm:text-base ${synopsisExpanded ? '' : 'line-clamp-5'}`}
@@ -434,7 +461,7 @@ export default function ContentDetail() {
                 <div className="glass rounded-2xl p-5 sm:p-6">
                   <div className="flex items-center gap-2 mb-5">
                     <Info className="w-5 h-5 text-primary-500 flex-shrink-0" />
-                    <h2 className="text-base font-bold" style={{ color: 'var(--foreground)' }}>Thông tin</h2>
+                    <h2 className="text-base font-bold" style={{ color: 'var(--foreground)' }}>{isVI ? 'Thông tin'    : 'Information'}</h2>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     <InfoItem icon={Film}       label="Thể loại"     value={typeText} />
@@ -488,7 +515,7 @@ export default function ContentDetail() {
                       <div className="glass rounded-2xl p-5 sm:p-6">
                         <div className="flex items-center gap-2 mb-5">
                           <Users className="w-5 h-5 text-primary-500" />
-                          <h2 className="text-base font-bold" style={{ color: 'var(--foreground)' }}>Phân phối người xem</h2>
+                          <h2 className="text-base font-bold" style={{ color: 'var(--foreground)' }}>{isVI ? 'Phân phối người xem' : 'Viewer Distribution'}</h2>
                         </div>
                         <StatusDistribution data={series.anime_meta.status_distribution} />
                       </div>
@@ -499,7 +526,7 @@ export default function ContentDetail() {
                       <div className="glass rounded-2xl p-5 sm:p-6">
                         <div className="flex items-center gap-2 mb-5">
                           <BarChart2 className="w-5 h-5 text-primary-500" />
-                          <h2 className="text-base font-bold" style={{ color: 'var(--foreground)' }}>Phân phối điểm</h2>
+                          <h2 className="text-base font-bold" style={{ color: 'var(--foreground)' }}>{isVI ? 'Phân phối điểm' : 'Score Distribution'}</h2>
                         </div>
                         <ScoreDistribution data={series.anime_meta.score_distribution} />
                       </div>
@@ -610,7 +637,7 @@ export default function ContentDetail() {
             <div className="glass rounded-2xl p-5">
               <div className="flex items-center gap-2 mb-4">
                 <Share2 className="w-4 h-4 text-primary-500 flex-shrink-0" />
-                <h3 className="text-sm font-bold" style={{ color: 'var(--foreground)' }}>Chia sẻ</h3>
+                <h3 className="text-sm font-bold" style={{ color: 'var(--foreground)' }}>{isVI ? 'Chia sẻ'      : 'Share'}</h3>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <button onClick={handleShare} className="p-2.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors text-xs font-medium"
@@ -630,7 +657,7 @@ export default function ContentDetail() {
             <div className="glass rounded-2xl p-5">
               <div className="flex items-center gap-2 mb-4">
                 <ExternalLink className="w-4 h-4 text-primary-500 flex-shrink-0" />
-                <h3 className="text-sm font-bold" style={{ color: 'var(--foreground)' }}>Liên kết ngoài</h3>
+                <h3 className="text-sm font-bold" style={{ color: 'var(--foreground)' }}>{isVI ? 'Liên kết ngoài' : 'External Links'}</h3>
               </div>
               <div className="space-y-2">
                 <a href={`https://anilist.co/search/${series.item_type || 'anime'}?search=${encodeURIComponent(series.title)}`}
@@ -658,7 +685,7 @@ export default function ContentDetail() {
 
             {/* Last updated */}
             <div className="glass rounded-2xl p-5">
-              <h3 className="text-sm font-bold mb-3" style={{ color: 'var(--foreground)' }}>Cập nhật lần cuối</h3>
+              <h3 className="text-sm font-bold mb-3" style={{ color: 'var(--foreground)' }}>{isVI ? 'Cập nhật lần cuối' : 'Last Updated'}</h3>
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-primary-500 flex-shrink-0" />
                 <span className="text-xs" style={{ color: 'var(--foreground-secondary)' }}>

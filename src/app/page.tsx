@@ -258,10 +258,24 @@ export default function Home() {
 
   useEffect(() => {
     supabase.from('series')
-      .select('id, title, cover_url')
-      .eq('item_type', 'anime').not('cover_url', 'is', null)
-      .order('anime_meta(popularity)', { ascending: false }).limit(5)
-      .then(({ data }) => setFeatured((data || []).map((s: any) => ({ id: s.id, title: s.title, cover_url: s.cover_url }))))
+      .select('id, title, cover_url, anime_meta(popularity)')
+      .eq('item_type', 'anime')
+      .not('cover_url', 'is', null)
+      .order('anime_meta(popularity)', { ascending: false })
+      .limit(5)
+      .then(({ data, error }) => {
+        if (error) {
+          // fallback: just get any anime with covers, no ordering by related table
+          supabase.from('series')
+            .select('id, title, cover_url')
+            .eq('item_type', 'anime')
+            .not('cover_url', 'is', null)
+            .limit(5)
+            .then(({ data: d2 }) => setFeatured((d2 || []).map((s: any) => ({ id: s.id, title: s.title, cover_url: s.cover_url }))))
+        } else {
+          setFeatured((data || []).map((s: any) => ({ id: s.id, title: s.title, cover_url: s.cover_url })))
+        }
+      })
   }, [])
 
   const goTo = useCallback((idx: number) => {

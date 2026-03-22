@@ -6,7 +6,8 @@ import Link from 'next/link'
 import {
   Star, Heart, Calendar, BookOpen, Info, Tags,
   ExternalLink, Share2, Copy, Twitter, Loader2,
-  ArrowLeft, Award, TrendingUp, Globe, ChevronDown, ChevronUp
+  ArrowLeft, Award, TrendingUp, Globe, ChevronDown, ChevronUp,
+  BarChart2, FlaskConical, Users, Film, Layers
 } from 'lucide-react'
 import { fetchSeries, fetchVoteCount } from '@/lib/api'
 import RadarChart from '@/components/RadarChart'
@@ -59,6 +60,7 @@ export default function ContentDetail() {
   const [copied,      setCopied]      = useState(false)
   const [lidexScore,  setLidexScore]  = useState<LiDexScoreBreakdown | null>(null)
   const [scoreLoading,setScoreLoading]= useState(false)
+  const [activeTab,   setActiveTab]   = useState<'info' | 'stats' | 'analyze'>('info')
 
   const seriesId   = params.id ? parseInt(params.id as string) : undefined
   const coverImage = !imageError && series?.cover_url ? series.cover_url : null
@@ -284,34 +286,6 @@ export default function ContentDetail() {
                   ))}
                 </div>
               )}
-
-              {/* ── Synopsis in hero — visible immediately on load ── */}
-              {(series.description || series.description_vi) && (
-                <div className="mt-4 max-w-2xl">
-                  <div className="relative">
-                    <div
-                      className={`text-sm sm:text-base leading-relaxed text-gray-300 ${synopsisExpanded ? '' : 'line-clamp-3'}`}
-                    >
-                      {formatSynopsis(series.description || series.description_vi || '')}
-                    </div>
-                    {/* Fade — dark to transparent so it works on the hero bg */}
-                    {!synopsisExpanded && (
-                      <div className="absolute bottom-0 left-0 right-0 h-8 pointer-events-none"
-                        style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.4), transparent)' }} />
-                    )}
-                  </div>
-                  <button
-                    onClick={() => setSynopsisExpanded(!synopsisExpanded)}
-                    className="mt-2 flex items-center gap-1 text-xs font-semibold text-primary-400 hover:text-primary-300 transition-colors"
-                  >
-                    {synopsisExpanded ? (
-                      <><ChevronUp className="w-3.5 h-3.5" /> Thu gọn</>
-                    ) : (
-                      <><ChevronDown className="w-3.5 h-3.5" /> Xem thêm</>
-                    )}
-                  </button>
-                </div>
-              )}
             </div>
 
             {/* ── LiDex Score Box — only for anime ── */}
@@ -403,112 +377,292 @@ export default function ContentDetail() {
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
         <div className="grid lg:grid-cols-3 gap-6 sm:gap-8 items-start">
 
-          {/* Left Column */}
-          <div className="lg:col-span-2 space-y-6 sm:space-y-8 min-w-0">
+          {/* ── Left: Tabs ── */}
+          <div className="lg:col-span-2 min-w-0">
 
-            {/* Radar Chart */}
-            {series.item_type === 'anime' && series.anime_meta && (
-              <RadarChart series={series} />
+            {/* Tab bar */}
+            <div className="flex gap-1 p-1 rounded-2xl mb-6" style={{ background: 'var(--glass-bg)', border: '1px solid var(--card-border)' }}>
+              {([
+                { id: 'info',    labelVI: 'Thông tin chung', labelEN: 'General Info',  icon: Info         },
+                { id: 'stats',   labelVI: 'Thông số',        labelEN: 'Stats',         icon: BarChart2    },
+                { id: 'analyze', labelVI: 'Phân tích',       labelEN: 'Analysis',      icon: FlaskConical },
+              ] as const).map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-sm font-semibold transition-all duration-200"
+                  style={activeTab === tab.id
+                    ? { background: '#6366f1', color: '#fff', boxShadow: '0 2px 12px #6366f155' }
+                    : { color: 'var(--foreground-secondary)' }}
+                >
+                  <tab.icon className="w-4 h-4 flex-shrink-0" />
+                  <span className="hidden sm:block">{tab.labelVI}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* ── Tab: Thông tin chung ── */}
+            {activeTab === 'info' && (
+              <div className="space-y-6 animate-in fade-in duration-200">
+
+                {/* Synopsis */}
+                <div className="glass rounded-2xl p-5 sm:p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <BookOpen className="w-5 h-5 text-primary-500 flex-shrink-0" />
+                    <h2 className="text-base font-bold" style={{ color: 'var(--foreground)' }}>Nội dung</h2>
+                  </div>
+                  <div className="relative">
+                    <div className={`leading-relaxed text-sm sm:text-base ${synopsisExpanded ? '' : 'line-clamp-5'}`}
+                      style={{ color: 'var(--foreground-secondary)' }}>
+                      {formatSynopsis(series.description || series.description_vi || '')}
+                    </div>
+                    {!synopsisExpanded && (series.description || series.description_vi) && (
+                      <div className="absolute bottom-0 left-0 right-0 h-10 pointer-events-none"
+                        style={{ background: 'linear-gradient(to top, var(--glass-bg), transparent)' }} />
+                    )}
+                  </div>
+                  {(series.description || series.description_vi) && (
+                    <button onClick={() => setSynopsisExpanded(!synopsisExpanded)}
+                      className="mt-3 flex items-center gap-1 text-primary-500 hover:text-primary-400 text-sm font-medium transition-colors">
+                      <span>{synopsisExpanded ? 'Thu gọn' : 'Xem thêm'}</span>
+                      {synopsisExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    </button>
+                  )}
+                </div>
+
+                {/* Info grid */}
+                <div className="glass rounded-2xl p-5 sm:p-6">
+                  <div className="flex items-center gap-2 mb-5">
+                    <Info className="w-5 h-5 text-primary-500 flex-shrink-0" />
+                    <h2 className="text-base font-bold" style={{ color: 'var(--foreground)' }}>Thông tin</h2>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <InfoItem icon={Film}       label="Thể loại"     value={typeText} />
+                    <InfoItem icon={Calendar}   label="Trạng thái"   value={(series.status || '--').toUpperCase()} />
+                    <InfoItem icon={Globe}      label="Nguồn gốc"    value={series.source || 'Manual'} />
+                    <InfoItem icon={BookOpen}   label="Tác giả"      value={series.author || '--'} />
+                    <InfoItem icon={Award}      label="Nhà xuất bản" value={series.publisher || '--'} />
+                    <InfoItem icon={Layers}     label="Studio"       value={series.studio || '--'} />
+                    {series.anime_meta?.format      && <InfoItem icon={Film}      label="Format"     value={series.anime_meta.format} />}
+                    {series.anime_meta?.season      && <InfoItem icon={Calendar}  label="Mùa"        value={`${series.anime_meta.season} ${series.anime_meta.season_year || ''}`} />}
+                    {series.anime_meta?.episodes    && <InfoItem icon={Layers}    label="Số tập"     value={String(series.anime_meta.episodes)} />}
+                    {series.anime_meta?.duration_min&& <InfoItem icon={TrendingUp}label="Thời lượng" value={`${series.anime_meta.duration_min} phút`} />}
+                  </div>
+                </div>
+
+                {/* Tags */}
+                {series.tags && series.tags.length > 0 && (
+                  <div className="glass rounded-2xl p-5 sm:p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Tags className="w-5 h-5 text-primary-500 flex-shrink-0" />
+                      <h2 className="text-base font-bold" style={{ color: 'var(--foreground)' }}>Tags</h2>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {series.tags.map((tag: string, i: number) => (
+                        <span key={`tag-${i}`} className="px-2.5 py-1 rounded-lg text-xs transition-colors cursor-pointer"
+                          style={{ background: 'var(--background-secondary)', color: 'var(--foreground-secondary)' }}>
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
-            {/* Information Grid */}
-            <div className="glass rounded-2xl p-5 sm:p-6 md:p-8">
-              <div className="flex items-center space-x-2 mb-5 sm:mb-6">
-                <Info className="w-5 h-5 sm:w-6 sm:h-6 text-primary-500 flex-shrink-0" />
-                <h2 className="text-lg sm:text-xl font-bold" style={{ color: 'var(--foreground)' }}>Information</h2>
+            {/* ── Tab: Thông số ── */}
+            {activeTab === 'stats' && (
+              <div className="space-y-6 animate-in fade-in duration-200">
+                {series.anime_meta ? (
+                  <>
+                    {/* Key stats row */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <StatBig label="Điểm trung bình"  value={series.anime_meta.mean_score ? `${series.anime_meta.mean_score}` : '—'} sub="/100" color="#fbbf24" />
+                      <StatBig label="Độ phổ biến"      value={series.anime_meta.popularity  ? series.anime_meta.popularity.toLocaleString()  : '—'} color="#6366f1" />
+                      <StatBig label="Yêu thích"        value={series.anime_meta.favourites  ? fmtBig(series.anime_meta.favourites)  : '—'} color="#ec4899" />
+                      <StatBig label="Lượt xem"         value={series.anime_meta.average_score ? `${series.anime_meta.average_score}` : voteCount.toLocaleString()} color="#22c55e" />
+                    </div>
+
+                    {/* Viewer status distribution */}
+                    {series.anime_meta.status_distribution && (
+                      <div className="glass rounded-2xl p-5 sm:p-6">
+                        <div className="flex items-center gap-2 mb-5">
+                          <Users className="w-5 h-5 text-primary-500" />
+                          <h2 className="text-base font-bold" style={{ color: 'var(--foreground)' }}>Phân phối người xem</h2>
+                        </div>
+                        <StatusDistribution data={series.anime_meta.status_distribution} />
+                      </div>
+                    )}
+
+                    {/* Score distribution */}
+                    {series.anime_meta.score_distribution && (
+                      <div className="glass rounded-2xl p-5 sm:p-6">
+                        <div className="flex items-center gap-2 mb-5">
+                          <BarChart2 className="w-5 h-5 text-primary-500" />
+                          <h2 className="text-base font-bold" style={{ color: 'var(--foreground)' }}>Phân phối điểm</h2>
+                        </div>
+                        <ScoreDistribution data={series.anime_meta.score_distribution} />
+                      </div>
+                    )}
+
+                    {/* Radar */}
+                    <RadarChart series={series} />
+                  </>
+                ) : (
+                  <div className="glass rounded-2xl p-10 flex flex-col items-center gap-3">
+                    <BarChart2 className="w-10 h-10 opacity-20 text-primary-500" />
+                    <p className="text-sm" style={{ color: 'var(--foreground-muted)' }}>Không có dữ liệu thống kê</p>
+                  </div>
+                )}
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
-                <InfoItem icon={BookOpen}   label="Type"        value={typeText} />
-                <InfoItem icon={Calendar}   label="Status"      value={(series.status || '--').toUpperCase()} />
-                <InfoItem icon={Globe}      label="Source"      value={series.source || 'Manual'} />
-                <InfoItem icon={BookOpen}   label="Author"      value={series.author || '--'} />
-                <InfoItem icon={Award}      label="Publisher"   value={series.publisher || '--'} />
-                <InfoItem icon={TrendingUp} label="External ID" value={series.external_id || '--'} />
+            )}
+
+            {/* ── Tab: Phân tích ── */}
+            {activeTab === 'analyze' && (
+              <div className="space-y-6 animate-in fade-in duration-200">
+                {isAnime && lidexScore ? (
+                  <>
+                    {/* Total score hero */}
+                    <div className="glass rounded-2xl p-6 sm:p-8">
+                      <div className="flex items-center gap-2 mb-6">
+                        <FlaskConical className="w-5 h-5 text-primary-500" />
+                        <h2 className="text-base font-bold" style={{ color: 'var(--foreground)' }}>LiDex Score — Phân tích tổng hợp</h2>
+                      </div>
+
+                      {/* Big score display */}
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 mb-8">
+                        <div className="flex items-end gap-3">
+                          <span className="text-7xl font-black leading-none" style={{ color: scoreColor(lidexScore.total) }}>
+                            {lidexScore.total.toFixed(1)}
+                          </span>
+                          <div className="pb-1">
+                            <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl font-black mb-1"
+                              style={{ background: `${scoreColor(lidexScore.total)}18`, color: scoreColor(lidexScore.total), border: `2px solid ${scoreColor(lidexScore.total)}44` }}>
+                              {scoreGrade(lidexScore.total)}
+                            </div>
+                            <p className="text-xs text-center" style={{ color: 'var(--foreground-muted)' }}>/100</p>
+                          </div>
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm mb-1 font-semibold" style={{ color: 'var(--foreground)' }}>Điểm tổng hợp LiDex</p>
+                          <p className="text-xs leading-relaxed" style={{ color: 'var(--foreground-secondary)' }}>
+                            Dựa trên 7 chỉ số: điểm cộng đồng, độ phổ biến, yêu thích, phân phối điểm, mức độ tương tác người xem, trạng thái phát sóng và uy tín studio.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Component breakdown */}
+                      <div className="space-y-4">
+                        {COMPONENT_META.map(({ key, label, weight }) => {
+                          const val = lidexScore[key] as number
+                          return (
+                            <div key={key}>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-semibold" style={{ color: 'var(--foreground)' }}>{label}</span>
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold" style={{ background: 'var(--background-secondary)', color: 'var(--foreground-muted)' }}>
+                                    {weight}%
+                                  </span>
+                                </div>
+                                <span className="text-sm font-bold tabular-nums" style={{ color: scoreColor(val) }}>
+                                  {val.toFixed(1)}
+                                </span>
+                              </div>
+                              <div className="h-2.5 rounded-full overflow-hidden" style={{ background: 'var(--background-secondary)' }}>
+                                <div className="h-full rounded-full transition-all duration-700"
+                                  style={{ width: `${val}%`, background: `linear-gradient(90deg, ${scoreColor(val)}, ${scoreColor(val)}bb)` }} />
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Methodology note */}
+                    <div className="rounded-2xl p-4 sm:p-5" style={{ background: 'var(--background-secondary)', border: '1px solid var(--card-border)' }}>
+                      <p className="text-xs leading-relaxed" style={{ color: 'var(--foreground-muted)' }}>
+                        <span className="font-bold" style={{ color: 'var(--foreground-secondary)' }}>Phương pháp:</span>{' '}
+                        Điểm cộng đồng (30%) được chuẩn hóa theo phân vị so với toàn bộ cơ sở dữ liệu. Độ phổ biến (18%) và yêu thích (17%) đều được log-scale để tránh sai lệch. Phân phối điểm (13%) phân tích hệ số Gini và tỷ lệ điểm cao. Tương tác người xem (12%) tính từ tỷ lệ hoàn thành và bỏ xem. Studio (5%) dựa trên trung bình lịch sử.
+                      </p>
+                    </div>
+                  </>
+                ) : scoreLoading ? (
+                  <div className="glass rounded-2xl p-10 flex flex-col items-center gap-3">
+                    <Loader2 className="w-8 h-8 text-primary-500 animate-spin" />
+                    <p className="text-sm" style={{ color: 'var(--foreground-muted)' }}>Đang tính toán điểm…</p>
+                  </div>
+                ) : (
+                  <div className="glass rounded-2xl p-10 flex flex-col items-center gap-3">
+                    <FlaskConical className="w-10 h-10 opacity-20 text-primary-500" />
+                    <p className="text-sm" style={{ color: 'var(--foreground-muted)' }}>
+                      {isAnime ? 'Không có dữ liệu phân tích' : 'Phân tích chỉ khả dụng cho Anime'}
+                    </p>
+                  </div>
+                )}
               </div>
-            </div>
+            )}
           </div>
 
-          {/* Right Sidebar */}
-          <div className="space-y-4 sm:space-y-6 min-w-0">
-
-            {/* Tags */}
-            {series.tags && series.tags.length > 0 && (
-              <div className="glass rounded-2xl p-5 sm:p-6">
-                <div className="flex items-center space-x-2 mb-4">
-                  <Tags className="w-4 h-4 sm:w-5 sm:h-5 text-primary-500 flex-shrink-0" />
-                  <h3 className="text-base sm:text-lg font-bold" style={{ color: 'var(--foreground)' }}>Tags</h3>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {series.tags.map((tag: string, i: number) => (
-                    <span key={`tag-${i}`} className="px-2.5 py-1 rounded-lg text-xs sm:text-sm transition-colors cursor-pointer"
-                      style={{ background: 'var(--background-secondary)', color: 'var(--foreground-secondary)' }}>
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
+          {/* ── Right Sidebar (always visible) ── */}
+          <div className="space-y-4 sm:space-y-5 min-w-0">
 
             {/* Share */}
-            <div className="glass rounded-2xl p-5 sm:p-6">
-              <div className="flex items-center space-x-2 mb-4">
-                <Share2 className="w-4 h-4 sm:w-5 sm:h-5 text-primary-500 flex-shrink-0" />
-                <h3 className="text-base sm:text-lg font-bold" style={{ color: 'var(--foreground)' }}>Share</h3>
+            <div className="glass rounded-2xl p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <Share2 className="w-4 h-4 text-primary-500 flex-shrink-0" />
+                <h3 className="text-sm font-bold" style={{ color: 'var(--foreground)' }}>Chia sẻ</h3>
               </div>
-              <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
-                <button onClick={handleShare} className="p-2.5 sm:p-3 rounded-lg flex items-center justify-center gap-1.5 sm:gap-2 transition-colors"
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={handleShare} className="p-2.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors text-xs font-medium"
                   style={{ background: 'var(--background-secondary)', color: 'var(--foreground-secondary)', border: '1px solid var(--card-border)' }}>
-                  <Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                  <span className="text-xs sm:text-sm font-medium truncate">{copied ? 'Copied!' : 'Copy Link'}</span>
+                  <Copy className="w-3.5 h-3.5 flex-shrink-0" />
+                  {copied ? 'Đã chép!' : 'Sao chép'}
                 </button>
-                <button onClick={handleShareTwitter} className="p-2.5 sm:p-3 rounded-lg flex items-center justify-center gap-1.5 sm:gap-2 transition-colors hover:text-[#1d9bf0]"
+                <button onClick={handleShareTwitter} className="p-2.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors text-xs font-medium hover:text-[#1d9bf0]"
                   style={{ background: 'var(--background-secondary)', color: 'var(--foreground-secondary)', border: '1px solid var(--card-border)' }}>
-                  <Twitter className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                  <span className="text-xs sm:text-sm font-medium">Twitter</span>
+                  <Twitter className="w-3.5 h-3.5 flex-shrink-0" />
+                  Twitter
                 </button>
               </div>
             </div>
 
-            {/* External Links */}
-            <div className="glass rounded-2xl p-5 sm:p-6">
-              <div className="flex items-center space-x-2 mb-4">
-                <ExternalLink className="w-4 h-4 sm:w-5 sm:h-5 text-primary-500 flex-shrink-0" />
-                <h3 className="text-base sm:text-lg font-bold" style={{ color: 'var(--foreground)' }}>External Links</h3>
+            {/* External links */}
+            <div className="glass rounded-2xl p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <ExternalLink className="w-4 h-4 text-primary-500 flex-shrink-0" />
+                <h3 className="text-sm font-bold" style={{ color: 'var(--foreground)' }}>Liên kết ngoài</h3>
               </div>
-              <div className="space-y-2.5 sm:space-y-3">
+              <div className="space-y-2">
                 <a href={`https://anilist.co/search/${series.item_type || 'anime'}?search=${encodeURIComponent(series.title)}`}
                   target="_blank" rel="noopener noreferrer"
-                  className="flex items-center justify-between p-2.5 sm:p-3 rounded-lg transition-colors group"
+                  className="flex items-center justify-between p-2.5 rounded-lg group transition-colors"
                   style={{ background: 'var(--background-secondary)', border: '1px solid var(--card-border)' }}>
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="w-2 h-2 rounded-full bg-[#02a9ff] flex-shrink-0" />
-                    <span className="text-xs sm:text-sm font-medium truncate group-hover:text-primary-500 transition-colors" style={{ color: 'var(--foreground-secondary)' }}>AniList</span>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-[#02a9ff]" />
+                    <span className="text-xs font-medium group-hover:text-primary-500 transition-colors" style={{ color: 'var(--foreground-secondary)' }}>AniList</span>
                   </div>
-                  <ExternalLink className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ml-2 group-hover:text-primary-500 transition-colors" style={{ color: 'var(--foreground-muted)' }} />
+                  <ExternalLink className="w-3.5 h-3.5 group-hover:text-primary-500" style={{ color: 'var(--foreground-muted)' }} />
                 </a>
                 <a href={`https://myanimelist.net/search.php?q=${encodeURIComponent(series.title)}`}
                   target="_blank" rel="noopener noreferrer"
-                  className="flex items-center justify-between p-2.5 sm:p-3 rounded-lg transition-colors group"
+                  className="flex items-center justify-between p-2.5 rounded-lg group transition-colors"
                   style={{ background: 'var(--background-secondary)', border: '1px solid var(--card-border)' }}>
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="w-2 h-2 rounded-full bg-[#2e51a2] flex-shrink-0" />
-                    <span className="text-xs sm:text-sm font-medium truncate group-hover:text-primary-500 transition-colors" style={{ color: 'var(--foreground-secondary)' }}>MyAnimeList</span>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-[#2e51a2]" />
+                    <span className="text-xs font-medium group-hover:text-primary-500 transition-colors" style={{ color: 'var(--foreground-secondary)' }}>MyAnimeList</span>
                   </div>
-                  <ExternalLink className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ml-2 group-hover:text-primary-500 transition-colors" style={{ color: 'var(--foreground-muted)' }} />
+                  <ExternalLink className="w-3.5 h-3.5 group-hover:text-primary-500" style={{ color: 'var(--foreground-muted)' }} />
                 </a>
               </div>
             </div>
 
-            {/* Last Updated */}
-            <div className="glass rounded-2xl p-5 sm:p-6">
-              <h3 className="text-base sm:text-lg font-bold mb-3 sm:mb-4" style={{ color: 'var(--foreground)' }}>Updated</h3>
-              <div className="flex items-center gap-2.5">
-                <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-primary-500 flex-shrink-0" />
-                <span className="text-xs sm:text-sm" style={{ color: 'var(--foreground-secondary)' }}>
-                  {new Date(series.updated_at).toLocaleDateString('en-US', {
-                    year: 'numeric', month: 'long', day: 'numeric',
-                    hour: '2-digit', minute: '2-digit'
-                  })}
+            {/* Last updated */}
+            <div className="glass rounded-2xl p-5">
+              <h3 className="text-sm font-bold mb-3" style={{ color: 'var(--foreground)' }}>Cập nhật lần cuối</h3>
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-primary-500 flex-shrink-0" />
+                <span className="text-xs" style={{ color: 'var(--foreground-secondary)' }}>
+                  {new Date(series.updated_at).toLocaleDateString('vi-VN', { year: 'numeric', month: 'long', day: 'numeric' })}
                 </span>
               </div>
             </div>
@@ -527,6 +681,102 @@ function InfoItem({ icon: Icon, label, value }: { icon: any; label: string; valu
         <span className="text-[0.65rem] sm:text-xs truncate">{label}</span>
       </div>
       <p className="text-xs sm:text-sm font-semibold truncate" style={{ color: 'var(--foreground)' }}>{value}</p>
+    </div>
+  )
+}
+
+function fmtBig(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
+  if (n >= 1_000)     return (n / 1_000).toFixed(1) + 'K'
+  return n.toLocaleString()
+}
+
+function StatBig({ label, value, sub, color }: { label: string; value: string; sub?: string; color: string }) {
+  return (
+    <div className="glass rounded-2xl p-4 text-center" style={{ border: `1px solid ${color}30` }}>
+      <p className="text-2xl sm:text-3xl font-black leading-none mb-0.5" style={{ color }}>
+        {value}
+        {sub && <span className="text-sm font-semibold ml-0.5" style={{ color: 'var(--foreground-muted)' }}>{sub}</span>}
+      </p>
+      <p className="text-[10px] sm:text-xs mt-1" style={{ color: 'var(--foreground-muted)' }}>{label}</p>
+    </div>
+  )
+}
+
+function StatusDistribution({ data }: { data: Record<string, number> | string }) {
+  const parsed: Record<string, number> = typeof data === 'string' ? JSON.parse(data) : data
+  const ORDER   = ['CURRENT', 'COMPLETED', 'PLANNING', 'PAUSED', 'DROPPED']
+  const COLORS: Record<string, string> = {
+    CURRENT:   '#6366f1',
+    COMPLETED: '#22c55e',
+    PLANNING:  '#fbbf24',
+    PAUSED:    '#fb923c',
+    DROPPED:   '#f87171',
+  }
+  const LABELS: Record<string, string> = {
+    CURRENT: 'Đang xem', COMPLETED: 'Hoàn thành',
+    PLANNING: 'Dự định',  PAUSED: 'Tạm dừng', DROPPED: 'Bỏ xem',
+  }
+  const total  = Object.values(parsed).reduce((s, v) => s + v, 0)
+  if (!total) return null
+  return (
+    <div className="space-y-3">
+      {/* Stacked bar */}
+      <div className="flex h-3 rounded-full overflow-hidden gap-px">
+        {ORDER.filter(k => parsed[k]).map(k => (
+          <div key={k} className="transition-all duration-700 rounded-full"
+            style={{ width: `${(parsed[k] / total) * 100}%`, background: COLORS[k] }} />
+        ))}
+      </div>
+      {/* Legend */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        {ORDER.filter(k => parsed[k]).map(k => (
+          <div key={k} className="flex items-center gap-2 p-2.5 rounded-xl" style={{ background: 'var(--background-secondary)' }}>
+            <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: COLORS[k] }} />
+            <div className="min-w-0">
+              <p className="text-[10px]" style={{ color: 'var(--foreground-muted)' }}>{LABELS[k]}</p>
+              <p className="text-xs font-bold" style={{ color: 'var(--foreground)' }}>{fmtBig(parsed[k])}</p>
+              <p className="text-[10px]" style={{ color: 'var(--foreground-muted)' }}>{((parsed[k] / total) * 100).toFixed(1)}%</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ScoreDistribution({ data }: { data: Record<string, number> | string }) {
+  const parsed: Record<string, number> = typeof data === 'string' ? JSON.parse(data) : data
+  const buckets  = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+  const counts   = buckets.map(b => parsed[String(b)] ?? 0)
+  const maxCount = Math.max(...counts, 1)
+
+  function barColor(score: number): string {
+    if (score >= 80) return '#4ade80'
+    if (score >= 60) return '#6366f1'
+    if (score >= 40) return '#fbbf24'
+    return '#f87171'
+  }
+
+  return (
+    <div className="flex items-end gap-1 h-28">
+      {buckets.map((b, i) => {
+        const pct = (counts[i] / maxCount) * 100
+        return (
+          <div key={b} className="flex-1 flex flex-col items-center gap-1 group">
+            <div className="relative w-full">
+              {/* tooltip */}
+              <div className="absolute -top-7 left-1/2 -translate-x-1/2 hidden group-hover:flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap z-10"
+                style={{ background: 'var(--glass-bg)', color: 'var(--foreground)', border: '1px solid var(--card-border)' }}>
+                {fmtBig(counts[i])}
+              </div>
+            </div>
+            <div className="w-full rounded-t-md transition-all duration-500"
+              style={{ height: `${Math.max(pct, 3)}%`, background: barColor(b), opacity: pct > 0 ? 1 : 0.15 }} />
+            <span className="text-[9px]" style={{ color: 'var(--foreground-muted)' }}>{b}</span>
+          </div>
+        )
+      })}
     </div>
   )
 }

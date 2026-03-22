@@ -115,17 +115,27 @@ function SlideVisual({ visual, accent, featured }: { visual: string; accent: str
   }
 
   if (visual === 'browse') {
+    // Use real fetched covers, fallback to accent placeholder
+    const show = featured.slice(0, 4)
     return (
       <div className="grid grid-cols-2 gap-3 w-72">
-        {['Chainsaw Man', 'Frieren', 'Jujutsu Kaisen', 'Spy × Family'].map((title, i) => (
-          <div key={title} className="rounded-xl p-3 flex flex-col gap-2"
-            style={{ background: 'var(--glass-bg)', border: '1px solid var(--card-border)' }}>
-            <div className="aspect-[3/2] rounded-lg" style={{ background: `${accent}${['22','18','14','1a'][i]}` }} />
-            <p className="text-xs font-semibold truncate" style={{ color: 'var(--foreground)' }}>{title}</p>
-            <div className="flex items-center gap-1">
-              <span className="text-[10px] font-bold" style={{ color: '#fbbf24' }}>★ {[8.7,9.0,8.5,8.8][i]}</span>
+        {show.length > 0 ? show.map((a, i) => (
+          <Link key={a.id} href={`/content/${a.id}`}
+            className="rounded-xl overflow-hidden flex flex-col gap-0 group transition-transform hover:scale-[1.03]"
+            style={{ border: '1px solid var(--card-border)', background: 'var(--glass-bg)' }}>
+            <div className="aspect-video overflow-hidden">
+              {a.cover_url
+                ? <SafeImg src={a.cover_url} alt={a.title} className="w-full h-full object-cover object-top transition-transform group-hover:scale-105 block" />
+                : <div className="w-full h-full" style={{ background: `${accent}22` }} />
+              }
             </div>
-          </div>
+            <div className="px-2 py-1.5">
+              <p className="text-[10px] font-semibold truncate" style={{ color: 'var(--foreground)' }}>{a.title}</p>
+            </div>
+          </Link>
+        )) : Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="rounded-xl animate-pulse"
+            style={{ aspectRatio: '4/3', background: 'var(--background-secondary)', border: '1px solid var(--card-border)' }} />
         ))}
       </div>
     )

@@ -3,78 +3,157 @@
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useState, useCallback } from 'react'
-import { BookOpen, Tv, Book, Loader2, RefreshCw } from 'lucide-react'
+import { BookOpen, Tv, Book, RefreshCw, ArrowRight, Loader2 } from 'lucide-react'
 import { getTopRatedSeries } from '../../lib/supabase'
 import supabase from '@/lib/supabaseClient'
-import StatsCard from '../../components/StatsCard'
 import Link from 'next/link'
+import { useLocale } from '@/contexts/LocaleContext'
 
-
-
-interface SiteStats {
-  totalSeries: number
-  totalAnime:  number
-  totalManga:  number
-  totalNovel:  number
-}
-
-interface CarouselItem {
-  id:        string | number
-  title:     string
-  cover_url: string | null
-  score:     number | null
-  href:      string
-}
-
+// ── Types ─────────────────────────────────────────────────────────────────────
+interface SiteStats { totalSeries: number; totalAnime: number; totalManga: number; totalNovel: number }
+interface CarouselItem { id: string | number; title: string; cover_url: string | null; score: number | null; href: string }
 type CarouselSection = 'anime' | 'manga' | 'novel'
 
-const SECTION_LABELS: Record<CarouselSection, string> = {
-  anime: 'Anime',
-  manga: 'Manga',
-  novel: 'Tiểu thuyết',
+// ── Config ────────────────────────────────────────────────────────────────────
+const SECTION_CONFIG: Record<CarouselSection, { label: string; labelVI: string; color: string; href: string }> = {
+  anime: { label: 'Anime',       labelVI: 'Anime',       color: '#6366f1', href: '/browse' },
+  manga: { label: 'Manga',       labelVI: 'Manga',       color: '#ec4899', href: '/browse' },
+  novel: { label: 'Novel',       labelVI: 'Tiểu thuyết', color: '#22c55e', href: '/browse' },
 }
+const ROTATE_INTERVAL = 6000
 
-const SECTION_COLORS: Record<CarouselSection, string> = {
-  anime: '#6366f1',
-  manga: '#ec4899',
-  novel: '#22c55e',
-}
-
-const ROTATE_INTERVAL = 6000 // 6s per section
-
-// Proxy MangaDex images through our API route to bypass CORS/hotlink blocking
 const MANGADEX_DOMAINS = ['uploads.mangadex.org', 'cmdxd98ubx3fv.cloudfront.net', 'mangadex.org']
 function proxyImg(url: string | null): string | null {
   if (!url) return null
   try {
-    const hostname = new URL(url).hostname
-    if (MANGADEX_DOMAINS.some(d => hostname.endsWith(d))) {
-      return `/api/image-proxy?url=${encodeURIComponent(url)}`
-    }
+    const h = new URL(url).hostname
+    if (MANGADEX_DOMAINS.some(d => h.endsWith(d))) return `/api/image-proxy?url=${encodeURIComponent(url)}`
   } catch {}
   return url
 }
 
+// ── Skeleton components ───────────────────────────────────────────────────────
+function StatSkeleton() {
+  return (
+    <div className="rounded-2xl p-5 animate-pulse" style={{ background: 'var(--glass-bg)', border: '1px solid var(--card-border)' }}>
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-10 h-10 rounded-xl" style={{ background: 'var(--background-secondary)' }} />
+        <div className="h-3 rounded-full w-20" style={{ background: 'var(--background-secondary)' }} />
+      </div>
+      <div className="h-8 rounded-full w-24" style={{ background: 'var(--background-secondary)' }} />
+    </div>
+  )
+}
 
+function CardSkeleton() {
+  return (
+    <div className="relative">
+      <div className="ml-auto rounded-xl overflow-hidden animate-pulse" style={{ width: '78%' }}>
+        <div className="aspect-[2/3]" style={{ background: 'var(--background-secondary)' }} />
+      </div>
+    </div>
+  )
+}
+
+// ── Stat Card ─────────────────────────────────────────────────────────────────
+function StatCard({ icon: Icon, value, label, color }: { icon: any; value: string; label: string; color: string }) {
+  return (
+    <div className="rounded-2xl p-4 sm:p-5 group transition-all duration-200 hover:scale-[1.02]"
+      style={{ background: 'var(--glass-bg)', border: `1px solid ${color}25` }}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center"
+          style={{ background: `${color}18` }}>
+          <Icon className="w-4 h-4 sm:w-5 sm:h-5" style={{ color }} />
+        </div>
+        <div className="w-1.5 h-1.5 rounded-full" style={{ background: color }} />
+      </div>
+      <p className="text-2xl sm:text-3xl font-black leading-none mb-1" style={{ color }}>{value}</p>
+      <p className="text-xs" style={{ color: 'var(--foreground-muted)' }}>{label}</p>
+    </div>
+  )
+}
+
+// ── Top Card ──────────────────────────────────────────────────────────────────
+function TopCard({ item, rank, accentColor, scoreLabel }: {
+  item: CarouselItem; rank: number; accentColor: string; scoreLabel?: string
+}) {
+  const [imgErr, setImgErr] = useState(false)
+
+  const fmtScore = (s: number | null) => {
+    if (s == null) return null
+    if (scoreLabel === 'votes') return s >= 1000 ? `${(s / 1000).toFixed(1)}K` : String(s)
+    return String(s)
+  }
+  const scoreText = fmtScore(item.score)
+
+  const card = (
+    <div className="relative group cursor-pointer">
+      {/* Rank number */}
+      <span className="absolute select-none pointer-events-none font-black z-0"
+        style={{
+          fontSize: 'clamp(48px, 8vw, 100px)', color: 'transparent',
+          WebkitTextStroke: `2px ${accentColor}44`, bottom: '-4px', left: '0',
+          transform: 'translateX(-30%)', lineHeight: 1,
+          fontFamily: '"Arial Black", Impact, sans-serif', letterSpacing: '-2px',
+        }}>
+        {rank}
+      </span>
+
+      {/* Cover */}
+      <div className="relative z-10 ml-auto rounded-xl overflow-hidden shadow-xl transition-all duration-200 group-hover:scale-[1.04] group-hover:shadow-2xl"
+        style={{ width: '78%', border: `2px solid ${accentColor}33` }}>
+        {item.cover_url && !imgErr ? (
+          <img src={item.cover_url} alt={item.title}
+            className="w-full aspect-[2/3] object-cover block"
+            onError={() => setImgErr(true)} />
+        ) : (
+          <div className="w-full aspect-[2/3] flex items-center justify-center p-3"
+            style={{ background: 'var(--background-secondary)' }}>
+            <p className="text-xs font-semibold text-center line-clamp-4" style={{ color: 'var(--foreground-secondary)' }}>{item.title}</p>
+          </div>
+        )}
+
+        {scoreText && (
+          <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded-md text-xs font-bold"
+            style={{ background: 'rgba(0,0,0,0.78)', color: '#fbbf24', backdropFilter: 'blur(4px)' }}>
+            ★ {scoreText}
+          </div>
+        )}
+
+        {/* Hover overlay */}
+        <div className="absolute inset-0 flex items-end opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+          style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.88) 45%, transparent)' }}>
+          <p className="text-white text-xs font-semibold px-2 pb-2 line-clamp-2 w-full">{item.title}</p>
+        </div>
+
+        {/* Accent glow on hover */}
+        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none"
+          style={{ boxShadow: `inset 0 0 0 2px ${accentColor}88` }} />
+      </div>
+    </div>
+  )
+
+  return item.href !== '#' ? <Link href={item.href}>{card}</Link> : <div>{card}</div>
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
 export default function Dashboard() {
-  const [stats,    setStats]    = useState<SiteStats | null>(null)
-  const [loading,  setLoading]  = useState(true)
+  const { locale } = useLocale()
+  const vi = locale === 'vi'
 
-  // Carousel
-  const [carouselData, setCarouselData] = useState<Record<CarouselSection, CarouselItem[]>>({
-    anime: [], manga: [], novel: [],
-  })
+  const [stats,         setStats]         = useState<SiteStats | null>(null)
+  const [statsLoading,  setStatsLoading]  = useState(true)
+  const [carouselData,  setCarouselData]  = useState<Record<CarouselSection, CarouselItem[]>>({ anime: [], manga: [], novel: [] })
+  const [carouselReady, setCarouselReady] = useState(false)
   const [activeSection, setActiveSection] = useState<CarouselSection>('anime')
   const [transitioning, setTransitioning] = useState(false)
-  const [autoRotate, setAutoRotate] = useState(true)
+  const [autoRotate,    setAutoRotate]    = useState(true)
 
   const sections: CarouselSection[] = ['anime', 'manga', 'novel']
 
-  // Fetch stats — split into fast (stats+anime+manga) and slow (novel) so page renders immediately
   useEffect(() => {
-    async function loadDashboard() {
+    async function load() {
       try {
-        // ── Fast queries: stats + anime + manga (all parallel) ──
         const [
           topAnimeData,
           { count: animeCount },
@@ -88,69 +167,34 @@ export default function Dashboard() {
           supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'novel'),
           supabase.from('manga').select('id', { count: 'exact', head: true }),
           supabase.from('manga').select('id, title_en, title_ja_ro, cover_url, rating')
-            .order('rating', { ascending: false })
-            .not('cover_url', 'is', null)
-            .limit(10),
-          supabase.from('dashboard_top_novels')
-            .select('series_id, title, latest_votes, cover_url')
-            .order('rank'),
+            .order('rating', { ascending: false }).not('cover_url', 'is', null).limit(10),
+          supabase.from('dashboard_top_novels').select('series_id, title, latest_votes, cover_url').order('rank'),
         ])
 
         const anime = animeCount ?? 0
         const novel = novelCount ?? 0
         const manga = mangaCount ?? 0
+        setStats({ totalAnime: anime, totalNovel: novel, totalManga: manga, totalSeries: anime + novel + manga })
+        setStatsLoading(false)
 
-        setStats({
-          totalAnime:  anime,
-          totalNovel:  novel,
-          totalManga:  manga,
-          totalSeries: anime + novel + manga,
+        setCarouselData({
+          anime: (topAnimeData.data || []).map((s: any) => ({ id: s.id, title: s.title, cover_url: s.cover_url, score: s.score, href: `/content/${s.id}` })),
+          manga: ((mangaCarouselData.data) || []).map((m: any) => ({ id: m.id, title: m.title_en || m.title_ja_ro || m.id, cover_url: proxyImg(m.cover_url), score: m.rating ? Number(m.rating) : null, href: '#' })),
+          novel: ((novelTableData as any)?.data || novelTableData || []).map((n: any) => ({ id: n.series_id, title: n.title, cover_url: n.cover_url, score: n.latest_votes ?? null, href: `/content/${n.series_id}` })),
         })
-
-        // Anime from existing function
-        const animeItems: CarouselItem[] = (topAnimeData.data || []).map((s: any) => ({
-          id:        s.id,
-          title:     s.title,
-          cover_url: s.cover_url,
-          score:     s.score,
-          href:      `/content/${s.id}`,
-        }))
-
-        // Manga — already fetched in parallel above
-        const mangaItems: CarouselItem[] = ((mangaCarouselData.data) || []).map((m: any) => ({
-          id:        m.id,
-          title:     m.title_en || m.title_ja_ro || m.id,
-          cover_url: proxyImg(m.cover_url),
-          score:     m.rating ? Number(m.rating) : null,
-          href:      '#',
-        }))
-
-        const novelItems: CarouselItem[] = ((novelTableData as any)?.data || novelTableData || []).map((n: any) => ({
-          id:        n.series_id,
-          title:     n.title,
-          cover_url: n.cover_url,
-          score:     n.latest_votes ?? null,
-          href:      `/content/${n.series_id}`,
-        }))
-
-        setCarouselData({ anime: animeItems, manga: mangaItems, novel: novelItems })
-      } catch (error) {
-        console.error('Failed to load dashboard:', error)
-      } finally {
-        setLoading(false)
+        setCarouselReady(true)
+      } catch (e) {
+        console.error(e)
+        setStatsLoading(false)
       }
     }
-    loadDashboard()
+    load()
   }, [])
 
-  // Auto-rotate
   const goToSection = useCallback((section: CarouselSection) => {
     if (section === activeSection) return
     setTransitioning(true)
-    setTimeout(() => {
-      setActiveSection(section)
-      setTransitioning(false)
-    }, 250)
+    setTimeout(() => { setActiveSection(section); setTransitioning(false) }, 220)
   }, [activeSection])
 
   useEffect(() => {
@@ -162,218 +206,124 @@ export default function Dashboard() {
     return () => clearInterval(t)
   }, [autoRotate, activeSection, goToSection])
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen" style={{ background: 'var(--background)' }}>
-        <Loader2 className="w-12 h-12 text-primary-500 animate-spin" />
-      </div>
-    )
-  }
-
   const items = carouselData[activeSection]
-  const color = SECTION_COLORS[activeSection]
+  const color = SECTION_CONFIG[activeSection].color
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--background)' }}>
-      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-5 sm:py-8">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-6 sm:py-10">
 
         {/* ── Header ── */}
-        <div className="flex items-center justify-between mb-5 sm:mb-8">
+        <div className="flex items-center justify-between mb-6 sm:mb-8">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold mb-0.5" style={{ color: 'var(--foreground)' }}>Dashboard</h1>
-            <p className="text-xs sm:text-sm" style={{ color: 'var(--foreground-secondary)' }}>
-              Tổng quan nội dung và hoạt động cộng đồng
+            <h1 className="text-2xl sm:text-3xl font-bold" style={{ color: 'var(--foreground)' }}>
+              Dashboard
+            </h1>
+            <p className="text-xs sm:text-sm mt-0.5" style={{ color: 'var(--foreground-secondary)' }}>
+              {vi ? 'Tổng quan nội dung và hoạt động cộng đồng' : 'Content overview and community activity'}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="hidden sm:block text-sm" style={{ color: 'var(--foreground-secondary)' }}>
-              {new Date().toLocaleTimeString()}
-            </span>
-            <button onClick={() => window.location.reload()} className="p-2 glass rounded-lg transition-colors" title="Refresh">
-              <RefreshCw className="w-4 h-4" style={{ color: 'var(--foreground-secondary)' }} />
-            </button>
-          </div>
+          <button onClick={() => window.location.reload()}
+            className="p-2 rounded-xl transition-all hover:scale-110"
+            style={{ background: 'var(--glass-bg)', border: '1px solid var(--card-border)' }}
+            title="Refresh">
+            <RefreshCw className="w-4 h-4" style={{ color: 'var(--foreground-secondary)' }} />
+          </button>
         </div>
 
         {/* ── Stats ── */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-8 sm:mb-10">
-          <StatsCard icon={BookOpen} value={stats?.totalSeries?.toLocaleString() || '0'} label="Total Series"   color="primary" trend={null} />
-          <StatsCard icon={Tv}       value={stats?.totalAnime?.toLocaleString()  || '0'} label="Anime"          color="purple"  trend={null} />
-          <StatsCard icon={Book}     value={stats?.totalManga?.toLocaleString()  || '0'} label="Manga"          color="pink"    trend={null} />
-          <StatsCard icon={BookOpen} value={(stats as any)?.totalNovel?.toLocaleString() || '0'} label="Tiểu thuyết" color="green" trend={null} />
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-10 sm:mb-12">
+          {statsLoading ? (
+            Array.from({ length: 4 }).map((_, i) => <StatSkeleton key={i} />)
+          ) : (
+            <>
+              <StatCard icon={BookOpen} value={stats?.totalSeries?.toLocaleString() || '0'} label={vi ? 'Tổng số tựa'    : 'Total Series'}   color="#6366f1" />
+              <StatCard icon={Tv}       value={stats?.totalAnime?.toLocaleString()  || '0'} label={vi ? 'Anime'          : 'Anime Titles'}   color="#818cf8" />
+              <StatCard icon={Book}     value={stats?.totalManga?.toLocaleString()  || '0'} label={vi ? 'Manga'          : 'Manga Series'}   color="#ec4899" />
+              <StatCard icon={BookOpen} value={(stats as any)?.totalNovel?.toLocaleString() || '0'} label={vi ? 'Tiểu thuyết' : 'Light Novels'} color="#22c55e" />
+            </>
+          )}
         </div>
 
-        {/* ── Carousel section ── */}
+        {/* ── Top 10 Carousel ── */}
         <div>
-          {/* Header row — stacks on mobile */}
+          {/* Section header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+
+            {/* Left: title */}
             <div className="flex items-baseline gap-2">
               <span className="text-2xl sm:text-3xl font-black" style={{ color: 'var(--foreground)' }}>Top</span>
-              <span className="text-2xl sm:text-3xl font-black" style={{ color }}>10</span>
-              <span
-                className="text-base sm:text-lg font-bold ml-1 transition-colors duration-300"
-                style={{ color }}
-              >
-                {SECTION_LABELS[activeSection]}
+              <span className="text-2xl sm:text-3xl font-black transition-colors duration-300" style={{ color }}>10</span>
+              <span className="text-base sm:text-lg font-bold ml-1 transition-colors duration-300" style={{ color }}>
+                {vi ? SECTION_CONFIG[activeSection].labelVI : SECTION_CONFIG[activeSection].label}
               </span>
             </div>
 
-            {/* Section pills — equal width on mobile so Tiểu thuyết doesn't overflow */}
+            {/* Right: section switcher + browse link */}
             <div className="flex items-center gap-2">
-              {sections.map(s => (
-                <button
-                  key={s}
-                  onClick={() => { setAutoRotate(false); goToSection(s) }}
-                  className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 whitespace-nowrap"
-                  style={{
-                    background: activeSection === s ? SECTION_COLORS[s] : 'var(--background-secondary)',
-                    color:      activeSection === s ? '#fff' : 'var(--foreground-secondary)',
-                    border:     `1px solid ${activeSection === s ? SECTION_COLORS[s] : 'var(--card-border)'}`,
-                    transform:  activeSection === s ? 'scale(1.02)' : 'scale(1)',
-                  }}
-                >
-                  <span
-                    className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                    style={{ background: activeSection === s ? '#fff' : SECTION_COLORS[s] }}
-                  />
-                  {SECTION_LABELS[s]}
-                </button>
-              ))}
-              {/* Auto-rotate progress bars */}
+              {/* Pills */}
+              <div className="flex items-center gap-1.5 p-1 rounded-full" style={{ background: 'var(--glass-bg)', border: '1px solid var(--card-border)' }}>
+                {sections.map(s => (
+                  <button key={s}
+                    onClick={() => { setAutoRotate(false); goToSection(s) }}
+                    className="px-3 py-1 rounded-full text-xs font-bold transition-all duration-200 whitespace-nowrap"
+                    style={activeSection === s
+                      ? { background: SECTION_CONFIG[s].color, color: '#fff', boxShadow: `0 2px 8px ${SECTION_CONFIG[s].color}44` }
+                      : { color: 'var(--foreground-secondary)' }}>
+                    {vi ? SECTION_CONFIG[s].labelVI : SECTION_CONFIG[s].label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Auto-rotate progress dots */}
               {autoRotate && (
-                <div className="hidden sm:flex gap-1 ml-1">
+                <div className="hidden sm:flex gap-1">
                   {sections.map(s => (
-                    <div
-                      key={s}
-                      className="h-0.5 rounded-full transition-all duration-300"
-                      style={{
-                        width:      activeSection === s ? '20px' : '6px',
-                        background: activeSection === s ? SECTION_COLORS[s] : 'var(--card-border)',
-                      }}
-                    />
+                    <div key={s} className="h-0.5 rounded-full transition-all duration-300"
+                      style={{ width: activeSection === s ? 20 : 6, background: activeSection === s ? SECTION_CONFIG[s].color : 'var(--card-border)' }} />
                   ))}
                 </div>
               )}
+
+              {/* Browse all link */}
+              <Link href="/browse"
+                className="hidden sm:flex items-center gap-1 text-xs font-semibold transition-all hover:gap-2"
+                style={{ color: 'var(--foreground-muted)' }}>
+                {vi ? 'Xem tất cả' : 'View all'}
+                <ArrowRight className="w-3 h-3" />
+              </Link>
             </div>
           </div>
 
-          {/* Cards grid */}
+          {/* Cards */}
           <div
-            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-x-2 sm:gap-x-3 gap-y-8 sm:gap-y-10 transition-opacity duration-250"
-            style={{ opacity: transitioning ? 0 : 1 }}
+            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-x-2 sm:gap-x-4 gap-y-8 sm:gap-y-10"
+            style={{ opacity: transitioning ? 0 : 1, transition: 'opacity 0.22s ease' }}
           >
-            {items.length === 0 ? (
+            {!carouselReady ? (
+              Array.from({ length: 10 }).map((_, i) => <CardSkeleton key={i} />)
+            ) : items.length === 0 ? (
               <div className="col-span-5 flex items-center justify-center h-48">
                 <Loader2 className="w-6 h-6 animate-spin" style={{ color: 'var(--foreground-muted)' }} />
               </div>
             ) : items.map((item, i) => (
-              <TopCard
-                key={item.id}
-                item={item}
-                rank={i + 1}
+              <TopCard key={item.id} item={item} rank={i + 1}
                 accentColor={color}
-                scoreLabel={activeSection === 'novel' ? 'votes' : undefined}
-              />
+                scoreLabel={activeSection === 'novel' ? 'votes' : undefined} />
             ))}
           </div>
-        </div>
 
-      </div>
-    </div>
-  )
-}
-
-// ── Top Card ──────────────────────────────────────────────────────────────────
-function TopCard({
-  item, rank, accentColor, scoreLabel,
-}: {
-  item: CarouselItem
-  rank: number
-  accentColor: string
-  scoreLabel?: string
-}) {
-  const [imgErr, setImgErr] = useState(false)
-
-  const fmtScore = (s: number | null) => {
-    if (s == null) return null
-    if (scoreLabel === 'votes') {
-      if (s >= 1000) return `${(s / 1000).toFixed(1)}K`
-      return String(s)
-    }
-    return String(s)
-  }
-
-  const scoreText = fmtScore(item.score)
-
-  const card = (
-    <div className="relative group cursor-pointer">
-      {/* Rank number — hollow, sits behind */}
-      <span
-        className="absolute select-none pointer-events-none font-black z-0"
-        style={{
-          fontSize:         'clamp(48px, 8vw, 100px)',
-          color:            'transparent',
-          WebkitTextStroke: `2px ${accentColor}55`,
-          bottom:           '-4px',
-          left:             '0',
-          transform:        'translateX(-30%)',
-          lineHeight:       1,
-          fontFamily:       '"Arial Black", Impact, sans-serif',
-          letterSpacing:    '-2px',
-        }}
-      >
-        {rank}
-      </span>
-
-      {/* Cover */}
-      <div
-        className="relative z-10 ml-auto rounded-xl overflow-hidden shadow-xl transition-transform duration-200 group-hover:scale-[1.04]"
-        style={{ width: '78%', border: `2px solid ${accentColor}44` }}
-      >
-        {item.cover_url && !imgErr ? (
-          <img
-            src={item.cover_url}
-            alt={item.title}
-            className="w-full aspect-[2/3] object-cover block"
-            onError={() => setImgErr(true)}
-          />
-        ) : (
-          <div
-            className="w-full aspect-[2/3] flex items-center justify-center p-3"
-            style={{ background: 'var(--background-secondary)' }}
-          >
-            <p className="text-xs font-semibold text-center line-clamp-4" style={{ color: 'var(--foreground-secondary)' }}>
-              {item.title}
-            </p>
+          {/* Mobile: browse all */}
+          <div className="flex justify-center mt-8 sm:hidden">
+            <Link href="/browse"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all hover:scale-105"
+              style={{ background: `${color}18`, color, border: `1px solid ${color}33` }}>
+              {vi ? 'Xem tất cả' : 'View all'}
+              <ArrowRight className="w-4 h-4" />
+            </Link>
           </div>
-        )}
-
-        {/* Score badge */}
-        {scoreText && (
-          <div
-            className="absolute top-2 right-2 px-1.5 py-0.5 rounded-md text-xs font-bold flex items-center gap-0.5"
-            style={{ background: 'rgba(0,0,0,0.78)', color: '#fbbf24', backdropFilter: 'blur(4px)' }}
-          >
-            ★ {scoreText}
-          </div>
-        )}
-
-        {/* Hover title */}
-        <div
-          className="absolute inset-0 flex items-end opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-          style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.88) 45%, transparent)' }}
-        >
-          <p className="text-white text-xs font-semibold px-2 pb-2 line-clamp-2 w-full">
-            {item.title}
-          </p>
         </div>
       </div>
     </div>
-  )
-
-  return item.href !== '#' ? (
-    <Link href={item.href}>{card}</Link>
-  ) : (
-    <div>{card}</div>
   )
 }

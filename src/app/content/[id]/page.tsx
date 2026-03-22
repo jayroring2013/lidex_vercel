@@ -432,31 +432,6 @@ export default function ContentDetail() {
             {activeTab === 'info' && (
               <div className="space-y-6 animate-in fade-in duration-200">
 
-                {/* Synopsis */}
-                <div className="glass rounded-2xl p-5 sm:p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <BookOpen className="w-5 h-5 text-primary-500 flex-shrink-0" />
-                    <h2 className="text-base font-bold" style={{ color: 'var(--foreground)' }}>{isVI ? 'Nội dung'     : 'Synopsis'}</h2>
-                  </div>
-                  <div className="relative">
-                    <div className={`leading-relaxed text-sm sm:text-base ${synopsisExpanded ? '' : 'line-clamp-5'}`}
-                      style={{ color: 'var(--foreground-secondary)' }}>
-                      {formatSynopsis(series.description || series.description_vi || '')}
-                    </div>
-                    {!synopsisExpanded && (series.description || series.description_vi) && (
-                      <div className="absolute bottom-0 left-0 right-0 h-10 pointer-events-none"
-                        style={{ background: 'linear-gradient(to top, var(--glass-bg), transparent)' }} />
-                    )}
-                  </div>
-                  {(series.description || series.description_vi) && (
-                    <button onClick={() => setSynopsisExpanded(!synopsisExpanded)}
-                      className="mt-3 flex items-center gap-1 text-primary-500 hover:text-primary-400 text-sm font-medium transition-colors">
-                      <span>{synopsisExpanded ? 'Thu gọn' : 'Xem thêm'}</span>
-                      {synopsisExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                    </button>
-                  )}
-                </div>
-
                 {/* Info grid */}
                 <div className="glass rounded-2xl p-5 sm:p-6">
                   <div className="flex items-center gap-2 mb-5">
@@ -773,10 +748,13 @@ function StatusDistribution({ data }: { data: Record<string, number> | string })
 }
 
 function ScoreDistribution({ data }: { data: Record<string, number> | string }) {
-  const parsed: Record<string, number> = typeof data === 'string' ? JSON.parse(data) : data
-  const buckets  = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
-  const counts   = buckets.map(b => parsed[String(b)] ?? 0)
-  const maxCount = Math.max(...counts, 1)
+  const parsed: Record<string, number> = typeof data === 'string'
+    ? (() => { try { return JSON.parse(data) } catch { return {} } })()
+    : (data ?? {})
+  const buckets   = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+  const counts    = buckets.map(b => Number(parsed[String(b)] ?? parsed[b] ?? 0))
+  const maxCount  = Math.max(...counts, 1)
+  const MAX_PX    = 96 // max bar height in pixels
 
   function barColor(score: number): string {
     if (score >= 80) return '#4ade80'
@@ -786,21 +764,40 @@ function ScoreDistribution({ data }: { data: Record<string, number> | string }) 
   }
 
   return (
-    <div className="flex items-end gap-1 h-28">
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: MAX_PX + 24 }}>
       {buckets.map((b, i) => {
-        const pct = (counts[i] / maxCount) * 100
+        const barH = Math.max(Math.round((counts[i] / maxCount) * MAX_PX), counts[i] > 0 ? 3 : 0)
         return (
-          <div key={b} className="flex-1 flex flex-col items-center gap-1 group">
-            <div className="relative w-full">
-              {/* tooltip */}
-              <div className="absolute -top-7 left-1/2 -translate-x-1/2 hidden group-hover:flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap z-10"
-                style={{ background: 'var(--glass-bg)', color: 'var(--foreground)', border: '1px solid var(--card-border)' }}>
-                {fmtBig(counts[i])}
+          <div key={b} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+            {/* Tooltip on hover */}
+            <div className="group" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+              <div style={{ position: 'relative', width: '100%', height: barH + 'px' }} className="group/bar">
+                <div
+                  style={{
+                    width: '100%', height: '100%',
+                    borderRadius: '4px 4px 0 0',
+                    background: barColor(b),
+                    opacity: counts[i] > 0 ? 1 : 0.12,
+                    transition: 'height 0.6s ease',
+                  }}
+                />
+                {counts[i] > 0 && (
+                  <div
+                    className="group/bar-hover"
+                    style={{
+                      position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)',
+                      marginBottom: 4, pointerEvents: 'none', opacity: 0, transition: 'opacity 0.15s',
+                      background: 'var(--glass-bg)', border: '1px solid var(--card-border)',
+                      borderRadius: 6, padding: '2px 6px', fontSize: 10, fontWeight: 700,
+                      color: 'var(--foreground)', whiteSpace: 'nowrap', zIndex: 10,
+                    }}
+                  >
+                    {fmtBig(counts[i])}
+                  </div>
+                )}
               </div>
             </div>
-            <div className="w-full rounded-t-md transition-all duration-500"
-              style={{ height: `${Math.max(pct, 3)}%`, background: barColor(b), opacity: pct > 0 ? 1 : 0.15 }} />
-            <span className="text-[9px]" style={{ color: 'var(--foreground-muted)' }}>{b}</span>
+            <span style={{ fontSize: 9, color: 'var(--foreground-muted)' }}>{b}</span>
           </div>
         )
       })}

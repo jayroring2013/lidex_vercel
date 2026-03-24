@@ -31,7 +31,7 @@ export default function Navbar() {
     setIsDark(!isDark)
   }
 
-  const isChartsActive = pathname === '/charts' || pathname === '/compare'
+  const isChartsActive = pathname === '/charts' || pathname === '/compare' || pathname === '/table'
 
   const flatLinks = [
     { href: '/',          label: t('nav_home')      },
@@ -42,6 +42,7 @@ export default function Navbar() {
   const chartsChildren = [
     { href: '/charts',  label: t('nav_scatter') },
     { href: '/compare', label: t('nav_compare') },
+    { href: '/table',   label: t('nav_table')   },
   ]
 
   return (

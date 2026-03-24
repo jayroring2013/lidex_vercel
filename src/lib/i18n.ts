@@ -13,6 +13,7 @@ export const translations = {
     nav_compare:    'So sánh',
     nav_index:     'Index',
     nav_browse:    'Khám phá',
+    nav_table:     'Bảng tổng hợp',
 
     // ── Browse page ─────────────────────────────────────────────────────────
     browse_discover: 'Khám phá',
@@ -119,6 +120,7 @@ export const translations = {
     nav_compare:    'Compare',
     nav_index:     'Index',
     nav_browse:    'Browse',
+    nav_table:     'Table,
 
     // ── Browse page ─────────────────────────────────────────────────────────
     browse_discover: 'Browse',

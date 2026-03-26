@@ -446,39 +446,89 @@ export default function IndexPage() {
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--background)' }}>
-      <div className="max-w-[1400px] mx-auto px-4 py-8">
+      <div className="max-w-[1400px] mx-auto px-3 sm:px-4 py-4 sm:py-8">
 
         {/* ── Header ── */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
           <div>
-            <h1 className="text-3xl font-bold" style={{ color: 'var(--foreground)' }}>Index</h1>
-            <p className="text-sm mt-0.5" style={{ color: 'var(--foreground-secondary)' }}>
+            <h1 className="text-2xl sm:text-3xl font-bold" style={{ color: 'var(--foreground)' }}>Index</h1>
+            <p className="text-xs sm:text-sm mt-0.5" style={{ color: 'var(--foreground-secondary)' }}>
               {loading ? 'Loading…' : `${filtered.length.toLocaleString()} results`}
             </p>
           </div>
 
           {/* Type tabs */}
-          <div className="flex rounded-xl overflow-hidden" style={{ border: '1px solid var(--card-border)' }}>
+          <div className="flex rounded-xl overflow-hidden self-start sm:self-auto" style={{ border: '1px solid var(--card-border)' }}>
             {(['anime', 'manga', 'novel'] as ItemType[]).map(t => (
               <button
                 key={t}
                 onClick={() => setType(t)}
-                className="px-5 py-2 text-sm font-semibold capitalize transition-all"
+                className="px-3 sm:px-5 py-2 text-xs sm:text-sm font-semibold capitalize transition-all"
                 style={type === t
                   ? { background: '#6366f1', color: '#fff' }
                   : { background: 'var(--background-secondary)', color: 'var(--foreground-secondary)' }}
               >
-                {t === 'anime' ? 'Anime' : t === 'manga' ? 'Manga' : 'Novel'}
+                {t === 'anime' ? 'Anime' : t === 'manga' ? 'Manga' : 'Tiểu thuyết'}
               </button>
             ))}
           </div>
         </div>
 
+        {/* ── Mobile filter bar ── */}
+        <div className="flex sm:hidden items-center gap-2 mb-3">
+          <button
+            onClick={() => setSidebarOpen(o => !o)}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all"
+            style={sidebarOpen
+              ? { background: '#6366f1', color: '#fff' }
+              : { background: 'var(--glass-bg)', color: 'var(--foreground-secondary)', border: '1px solid var(--card-border)' }}>
+            <SlidersHorizontal className="w-3.5 h-3.5" />
+            Filters
+            {[statusF,formatF,seasonF,yearF,publisherF,demographicF,contentRatingF,langF].filter(v=>v!=='All').length > 0 && (
+              <span className="w-4 h-4 rounded-full text-[10px] font-black flex items-center justify-center"
+                style={{ background: 'rgba(255,255,255,0.3)' }}>
+                {[statusF,formatF,seasonF,yearF,publisherF,demographicF,contentRatingF,langF].filter(v=>v!=='All').length}
+              </span>
+            )}
+          </button>
+          {/* Mobile search */}
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: 'var(--foreground-muted)' }} />
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Tìm kiếm…"
+              className="w-full pl-8 pr-3 py-2 text-xs rounded-xl outline-none"
+              style={{ background: 'var(--glass-bg)', color: 'var(--foreground)', border: '1px solid var(--card-border)' }} />
+            {search && <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2"><X className="w-3 h-3" style={{ color: 'var(--foreground-muted)' }} /></button>}
+          </div>
+        </div>
+
+        {/* ── Mobile filter panel (collapsible) ── */}
+        {sidebarOpen && (
+          <div className="sm:hidden rounded-2xl overflow-hidden mb-3 p-4 space-y-4"
+            style={{ background: 'var(--glass-bg)', border: '1px solid var(--card-border)' }}>
+            <FilterSelect label="Status" value={statusF} onChange={setStatusF} options={STATUS_OPTIONS} />
+            {type === 'anime' && <>
+              <FilterSelect label="Format" value={formatF} onChange={setFormatF} options={FORMAT_OPTIONS} />
+              <FilterSelect label="Year"   value={yearF}   onChange={setYearF}   options={availableYears} />
+            </>}
+            {type === 'manga' && <>
+              <FilterSelect label="Demographic" value={demographicF}   onChange={setDemographicF}   options={availableDemographics}  />
+              <FilterSelect label="Content"     value={contentRatingF} onChange={setContentRatingF} options={availableContentRatings} />
+            </>}
+            {type === 'novel' && <FilterSelect label="Publisher" value={publisherF} onChange={setPublisherF} options={availablePublishers.slice(0,40)} />}
+            <button onClick={() => { setSearch(''); setFormatF('All'); setSeasonF('All'); setStatusF('All'); setYearF('All'); setPublisherF('All'); setMinScore(0); setMinPop(0); setMaxPop(999999); setMinEps(0); setMinVols(0); setMinRating(0); setDemographicF('All'); setContentRatingF('All'); setLangF('All') }}
+              className="w-full py-1.5 text-xs font-semibold rounded-lg"
+              style={{ background: 'var(--background-secondary)', color: 'var(--foreground-secondary)', border: '1px solid var(--card-border)' }}>
+              Reset All
+            </button>
+          </div>
+        )}
+
         <div className="flex gap-6 items-start">
 
-          {/* ── Sidebar ── */}
+          {/* ── Sidebar — desktop only ── */}
           <div
-            className={`flex-shrink-0 rounded-2xl overflow-hidden transition-all ${sidebarOpen ? 'w-64' : 'w-12'}`}
+            className={`hidden sm:block flex-shrink-0 rounded-2xl overflow-hidden transition-all ${sidebarOpen ? 'w-64' : 'w-12'}`}
             style={{ background: 'var(--glass-bg)', border: '1px solid var(--card-border)' }}
           >
             {/* Toggle */}
@@ -588,7 +638,23 @@ export default function IndexPage() {
                 </div>
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <>
+              {/* ── Mobile card list ── */}
+              <div className="sm:hidden divide-y" style={{ borderColor: 'var(--card-border)' }}>
+                {filtered.length === 0
+                  ? <p className="text-center py-12 text-sm" style={{ color: 'var(--foreground-muted)' }}>No results</p>
+                  : filtered.slice(0, 100).map(row => (
+                    <MobileCard key={row.id} row={row} cols={cols} pctMaps={pctMaps} type={type} />
+                  ))
+                }
+                {filtered.length > 100 && (
+                  <p className="text-center py-3 text-xs" style={{ color: 'var(--foreground-muted)' }}>
+                    Showing 100 of {filtered.length.toLocaleString()} — use filters to narrow down
+                  </p>
+                )}
+              </div>
+              {/* ── Desktop table ── */}
+              <div className="hidden sm:block overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--card-border)', background: 'var(--background-secondary)' }}>
@@ -674,6 +740,7 @@ export default function IndexPage() {
                   </p>
                 )}
               </div>
+              </>
             )}
           </div>
         </div>
@@ -683,6 +750,64 @@ export default function IndexPage() {
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
+
+// ── Mobile Card ──────────────────────────────────────────────────────────────
+function MobileCard({ row, cols, pctMaps, type }: {
+  row: Row
+  cols: ColDef[]
+  pctMaps: Partial<Record<keyof Row, number[]>>
+  type: ItemType
+}) {
+  const [imgErr, setImgErr] = useState(false)
+  // Show only the 3 most important numeric cols on mobile
+  const keyCols = cols.filter(c => c.numeric).slice(0, 3)
+
+  const inner = (
+    <div className="flex items-center gap-3 px-3 py-3 transition-colors hover:bg-primary-500/5">
+      {/* Cover */}
+      <div className="flex-shrink-0 w-10 h-14 rounded-lg overflow-hidden"
+        style={{ background: 'var(--background-secondary)', border: '1px solid var(--card-border)' }}>
+        {row.cover_url && !imgErr
+          ? <img src={row.cover_url} alt="" className="w-full h-full object-cover block" onError={() => setImgErr(true)} />
+          : <div className="w-full h-full" style={{ background: 'var(--background-secondary)' }} />
+        }
+      </div>
+      {/* Text + stats */}
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold truncate" style={{ color: 'var(--foreground)' }}>{row.title}</p>
+        <p className="text-[11px] truncate mt-0.5" style={{ color: 'var(--foreground-muted)' }}>
+          {row.studio || row.publisher || row.author || row.item_type}
+        </p>
+        {/* Key stats row */}
+        <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+          {keyCols.map(col => {
+            const val = row[col.key]
+            if (val == null) return null
+            const sorted = pctMaps[col.key] ?? []
+            const pct    = getPct(Number(val), sorted)
+            const color  = pctColor(pct, col.invert)
+            return (
+              <div key={col.key} className="flex items-center gap-1">
+                <span className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--foreground-muted)' }}>{col.short}</span>
+                <span className="text-xs font-bold tabular-nums" style={{ color }}>{fmtVal(col, val)}</span>
+              </div>
+            )
+          })}
+          {/* Status pill */}
+          {row.status && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: 'var(--background-secondary)', color: 'var(--foreground-secondary)' }}>
+              {String(row.status).toUpperCase()}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+
+  return row.item_type !== 'manga'
+    ? <Link href={`/content/${row.id}`}>{inner}</Link>
+    : <div>{inner}</div>
+}
 
 function FilterSelect({ label, value, onChange, options }: {
   label: string; value: string; onChange: (v: string) => void; options: string[]

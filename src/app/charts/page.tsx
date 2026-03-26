@@ -12,7 +12,7 @@ import {
 } from 'chart.js'
 import { Loader2, RefreshCw, BarChart2, Tv, BookOpen, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react'
 import { useLocale } from '@/contexts/LocaleContext'
-import { createClient } from '@/lib/supabaseClient'
+import supabase from '@/lib/supabaseClient'
 
 ChartJS.register(LinearScale, PointElement, Tooltip, Legend)
 

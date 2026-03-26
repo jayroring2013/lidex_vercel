@@ -32,6 +32,7 @@ type SortDir  = 'asc' | 'desc' | null
 interface Row {
   id:               number | string
   title:            string
+  cover_url:        string | null
   item_type:        string
   studio:           string | null
   publisher:        string | null
@@ -207,7 +208,7 @@ export default function IndexPage() {
       if (type === 'anime') {
         const { data } = await supabase
           .from('series')
-          .select('id, title, item_type, studio, status, anime_meta(mean_score, popularity, favourites, episodes, duration_min, format, season, season_year)')
+          .select('id, title, cover_url, item_type, studio, status, anime_meta(mean_score, popularity, favourites, episodes, duration_min, format, season, season_year)')
           .eq('item_type', 'anime')
           .limit(3000)
         if (data) setAllRows(data.map((s: any) => ({
@@ -232,6 +233,7 @@ export default function IndexPage() {
         if (data) setAllRows(data.map((m: any) => ({
           id:                m.id,
           title:             m.title_en || m.title_ja_ro || m.id,
+          cover_url:         proxyImg(m.cover_url) ?? null,
           item_type:         'manga',
           studio:            null,
           publisher:         null,
@@ -258,7 +260,7 @@ export default function IndexPage() {
         // Novel — series + volumes (batched) + voting_result
         const { data: sData } = await supabase
           .from('series')
-          .select('id, title, item_type, publisher, status')
+          .select('id, title, cover_url, item_type, publisher, status')
           .eq('item_type', 'novel')
           .limit(2000)
 
@@ -322,7 +324,9 @@ export default function IndexPage() {
           const cnt   = vol?.count    ?? 0
           const price = vol?.priceSum ?? null
           return {
-            ...s, studio: null,
+            ...s,
+            cover_url:  s.cover_url ?? null,
+            studio: null,
             mean_score: null, popularity: null, favourites: null,
             episodes: null, duration_min: null, format: null,
             season: null, season_year: null,
@@ -587,8 +591,8 @@ export default function IndexPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr style={{ borderBottom: '1px solid var(--card-border)' }}>
-                      <th className="text-left px-5 py-3 font-semibold sticky left-0 z-10 whitespace-nowrap" style={{ color: 'var(--foreground-muted)', background: 'var(--glass-bg)', minWidth: 220 }}>
+                    <tr style={{ borderBottom: '1px solid var(--card-border)', background: 'var(--background-secondary)' }}>
+                      <th className="text-left px-5 py-3 font-semibold sticky left-0 z-10 whitespace-nowrap" style={{ color: 'var(--foreground-muted)', background: 'var(--glass-bg)', minWidth: 260 }}>
                         TITLE
                       </th>
                       {cols.map(col => (
@@ -600,7 +604,7 @@ export default function IndexPage() {
                         >
                           <div className="flex items-center justify-end gap-1.5">
                             <SortIcon k={col.key} />
-                            {col.short}
+                            {col.label}
                           </div>
                         </th>
                       ))}
@@ -616,20 +620,34 @@ export default function IndexPage() {
                     ) : filtered.slice(0, 200).map((row, i) => (
                       <tr
                         key={row.id}
+                        className="group transition-colors duration-100 hover:bg-primary-500/5"
                         style={{ borderBottom: '1px solid var(--card-border)', background: i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}
                       >
-                        {/* Title cell */}
-                        <td className="px-5 py-3 sticky left-0 z-10" style={{ background: i % 2 === 0 ? 'var(--glass-bg)' : 'var(--background-secondary)' }}>
-                          {row.item_type === 'manga' ? (
-                            <p className="font-semibold truncate max-w-[200px]" style={{ color: 'var(--foreground)' }}>{row.title}</p>
-                          ) : (
-                            <Link href={`/content/${row.id}`} className="hover:text-primary-400 transition-colors">
-                              <p className="font-semibold truncate max-w-[200px]" style={{ color: 'var(--foreground)' }}>{row.title}</p>
-                            </Link>
-                          )}
-                          <p className="text-xs truncate max-w-[200px]" style={{ color: 'var(--foreground-muted)' }}>
-                            {row.studio || row.publisher || row.item_type}
-                          </p>
+                        {/* Title cell — cover thumbnail + title + meta */}
+                        <td className="px-3 py-2 sticky left-0 z-10" style={{ background: i % 2 === 0 ? 'var(--glass-bg)' : 'var(--background-secondary)' }}>
+                          <div className="flex items-center gap-3">
+                            {/* Cover thumbnail */}
+                            <div className="flex-shrink-0 w-8 h-12 rounded-md overflow-hidden"
+                              style={{ background: 'var(--background-secondary)', border: '1px solid var(--card-border)' }}>
+                              {row.cover_url
+                                ? <img src={row.cover_url} alt="" className="w-full h-full object-cover block" />
+                                : <div className="w-full h-full" style={{ background: 'var(--background-secondary)' }} />
+                              }
+                            </div>
+                            {/* Text */}
+                            <div className="min-w-0">
+                              {row.item_type === 'manga' ? (
+                                <p className="font-semibold text-sm truncate max-w-[180px]" style={{ color: 'var(--foreground)' }}>{row.title}</p>
+                              ) : (
+                                <Link href={`/content/${row.id}`} className="hover:text-primary-400 transition-colors">
+                                  <p className="font-semibold text-sm truncate max-w-[180px]" style={{ color: 'var(--foreground)' }}>{row.title}</p>
+                                </Link>
+                              )}
+                              <p className="text-[11px] truncate max-w-[180px] mt-0.5" style={{ color: 'var(--foreground-muted)' }}>
+                                {row.studio || row.publisher || row.item_type}
+                              </p>
+                            </div>
+                          </div>
                         </td>
 
                         {/* Data cells */}

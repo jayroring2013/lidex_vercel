@@ -613,6 +613,20 @@ export default function ChartsPage() {
     applyZoom(factor)
   }, [applyZoom])
 
+  // ── Non-passive wheel listener to block page scroll ─────────────────────
+  useEffect(() => {
+    const el = chartWrapRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15
+      applyZoom(factor)
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [applyZoom])
+
   const chartOptions: ChartOptions<'scatter'> = {
     responsive: true,
     maintainAspectRatio: false,
@@ -893,7 +907,6 @@ export default function ChartsPage() {
             onMouseMove={zoomLevel !== 1 ? handleMouseMove : undefined}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
-            onWheel={handleWheel}
           >
 
             {/* Zoom controls — top-right corner of chart */}

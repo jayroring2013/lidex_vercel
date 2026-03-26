@@ -169,12 +169,16 @@ export default function ChartsPage() {
 
   const [mode, setMode] = useState<'anime' | 'novel'>('anime')
 
-  // ── Zoom state ────────────────────────────────────────────────────────────
-  const chartRef = useRef<any>(null)
-  const [zoomLevel, setZoomLevel] = useState(1)   // 1 = default, >1 = zoomed in
+  // ── Zoom + Pan state ─────────────────────────────────────────────────────
+  const chartRef    = useRef<any>(null)
+  const chartWrapRef = useRef<HTMLDivElement>(null)
+  const isDragging  = useRef(false)
+  const dragStart   = useRef<{ x: number; y: number; xMin: number; xMax: number; yMin: number; yMax: number } | null>(null)
+  const [zoomLevel, setZoomLevel] = useState(1)
   const [zoomBounds, setZoomBounds] = useState<{
     xMin?: number; xMax?: number; yMin?: number; yMax?: number
   } | null>(null)
+  const [isPanning, setIsPanning] = useState(false)
 
   // Anime state
   const [allAnime,  setAllAnime]  = useState<AnimeSeries[]>([])
@@ -552,10 +556,67 @@ export default function ChartsPage() {
     setZoomLevel(1)
   }, [])
 
+  // ── Pan helpers ──────────────────────────────────────────────────────────
+  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const chart = chartRef.current
+    if (!chart) return
+    const xScale = chart.scales.x
+    const yScale = chart.scales.y
+    if (!xScale || !yScale) return
+    isDragging.current = true
+    setIsPanning(true)
+    dragStart.current = {
+      x: e.clientX, y: e.clientY,
+      xMin: xScale.min, xMax: xScale.max,
+      yMin: yScale.min, yMax: yScale.max,
+    }
+    e.preventDefault()
+  }, [])
+
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDragging.current || !dragStart.current) return
+    const chart = chartRef.current
+    if (!chart) return
+    const xScale = chart.scales.x
+    const yScale = chart.scales.y
+    if (!xScale || !yScale) return
+
+    const dx = e.clientX - dragStart.current.x
+    const dy = e.clientY - dragStart.current.y
+
+    // Convert pixel delta to data units
+    const xRange    = dragStart.current.xMax - dragStart.current.xMin
+    const yRange    = dragStart.current.yMax - dragStart.current.yMin
+    const chartW    = xScale.right - xScale.left
+    const chartH    = yScale.bottom - yScale.top
+    const xDataDelta = (dx / chartW) * xRange
+    const yDataDelta = (dy / chartH) * yRange
+
+    setZoomBounds({
+      xMin: dragStart.current.xMin - xDataDelta,
+      xMax: dragStart.current.xMax - xDataDelta,
+      yMin: dragStart.current.yMin + yDataDelta,
+      yMax: dragStart.current.yMax + yDataDelta,
+    })
+  }, [])
+
+  const handleMouseUp = useCallback(() => {
+    isDragging.current = false
+    setIsPanning(false)
+    dragStart.current = null
+  }, [])
+
+  const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    // Scroll wheel zoom — pinch-to-zoom feel
+    e.preventDefault()
+    const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15
+    applyZoom(factor)
+  }, [applyZoom])
+
   const chartOptions: ChartOptions<'scatter'> = {
     responsive: true,
     maintainAspectRatio: false,
-    animation: { duration: 250 },
+    animation: { duration: isDragging.current ? 0 : 200 },
     scales: {
       x: {
         grid:  { color: gridColor },
@@ -824,7 +885,16 @@ export default function ChartsPage() {
           </div>
 
           {/* ── Chart area ── */}
-          <div className="relative px-4 pb-6 pt-4" style={{ height: '520px' }}>
+          <div
+            ref={chartWrapRef}
+            className="relative px-4 pb-6 pt-4 select-none"
+            style={{ height: '520px', cursor: zoomLevel !== 1 ? (isPanning ? 'grabbing' : 'grab') : 'default' }}
+            onMouseDown={zoomLevel !== 1 ? handleMouseDown : undefined}
+            onMouseMove={zoomLevel !== 1 ? handleMouseMove : undefined}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            onWheel={handleWheel}
+          >
 
             {/* Zoom controls — top-right corner of chart */}
             <div className="absolute top-5 right-5 z-20 flex items-center gap-1">
@@ -858,12 +928,18 @@ export default function ChartsPage() {
                   </>
                 )}
               </div>
-              {/* Zoom level badge */}
+              {/* Zoom level badge + pan hint */}
               {zoomLevel !== 1 && (
-                <span className="px-2 py-1 rounded-lg text-xs font-bold"
-                  style={{ background: 'var(--glass-bg)', border: '1px solid var(--card-border)', color: '#6366f1' }}>
-                  {zoomLevel.toFixed(1)}×
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="px-2 py-1 rounded-lg text-xs font-bold"
+                    style={{ background: 'var(--glass-bg)', border: '1px solid var(--card-border)', color: '#6366f1' }}>
+                    {zoomLevel.toFixed(1)}×
+                  </span>
+                  <span className="px-2 py-1 rounded-lg text-[10px] font-medium hidden sm:block"
+                    style={{ background: 'var(--glass-bg)', border: '1px solid var(--card-border)', color: 'var(--foreground-muted)' }}>
+                    {isPanning ? '✋ Panning' : '✋ Drag to pan'}
+                  </span>
+                </div>
               )}
             </div>
             {loading ? (

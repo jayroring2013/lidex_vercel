@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo, useRef } from 'react'
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { Scatter } from 'react-chartjs-2'
 import {
   Chart as ChartJS,
@@ -10,12 +10,11 @@ import {
   Legend,
   ChartOptions,
 } from 'chart.js'
-import { Loader2, RefreshCw, BarChart2, Tv, BookOpen } from 'lucide-react'
+import { Loader2, RefreshCw, BarChart2, Tv, BookOpen, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react'
 import { useLocale } from '@/contexts/LocaleContext'
-import supabase from '@/lib/supabaseClient'
+import { createClient } from '@supabase/supabase-js'
 
 ChartJS.register(LinearScale, PointElement, Tooltip, Legend)
-
 
 // ── Shared constants ──────────────────────────────────────────────────────────
 const SCORE_DIST_KEYS = ['10','20','30','40','50','60','70','80','90','100']
@@ -169,6 +168,13 @@ export default function ChartsPage() {
   const AVG_PRICE_BUCKETS  = buildAvgPriceBuckets(t)
 
   const [mode, setMode] = useState<'anime' | 'novel'>('anime')
+
+  // ── Zoom state ────────────────────────────────────────────────────────────
+  const chartRef = useRef<any>(null)
+  const [zoomLevel, setZoomLevel] = useState(1)   // 1 = default, >1 = zoomed in
+  const [zoomBounds, setZoomBounds] = useState<{
+    xMin?: number; xMax?: number; yMin?: number; yMax?: number
+  } | null>(null)
 
   // Anime state
   const [allAnime,  setAllAnime]  = useState<AnimeSeries[]>([])
@@ -516,6 +522,36 @@ export default function ChartsPage() {
     ],
   }
 
+  // ── Zoom helpers ─────────────────────────────────────────────────────────
+  const applyZoom = useCallback((factor: number) => {
+    const chart = chartRef.current
+    if (!chart) return
+    const xScale = chart.scales.x
+    const yScale = chart.scales.y
+    if (!xScale || !yScale) return
+
+    const xRange  = xScale.max - xScale.min
+    const yRange  = yScale.max - yScale.min
+    const xCenter = (xScale.max + xScale.min) / 2
+    const yCenter = (yScale.max + yScale.min) / 2
+    const newXRange = xRange / factor
+    const newYRange = yRange / factor
+
+    const bounds = {
+      xMin: xCenter - newXRange / 2,
+      xMax: xCenter + newXRange / 2,
+      yMin: yCenter - newYRange / 2,
+      yMax: yCenter + newYRange / 2,
+    }
+    setZoomBounds(bounds)
+    setZoomLevel(prev => Math.round(prev * factor * 10) / 10)
+  }, [])
+
+  const resetZoom = useCallback(() => {
+    setZoomBounds(null)
+    setZoomLevel(1)
+  }, [])
+
   const chartOptions: ChartOptions<'scatter'> = {
     responsive: true,
     maintainAspectRatio: false,
@@ -525,11 +561,13 @@ export default function ChartsPage() {
         grid:  { color: gridColor },
         ticks: { color: labelColor, maxTicksLimit: 10 },
         title: { display: true, text: axisLabel(curX), color: labelColor, font: { size: 13, weight: 600 } },
+        ...(zoomBounds?.xMin != null ? { min: zoomBounds.xMin, max: zoomBounds.xMax } : {}),
       },
       y: {
         grid:  { color: gridColor },
         ticks: { color: labelColor, maxTicksLimit: 10 },
         title: { display: true, text: axisLabel(curY), color: labelColor, font: { size: 13, weight: 600 } },
+        ...(zoomBounds?.yMin != null ? { min: zoomBounds.yMin, max: zoomBounds.yMax } : {}),
       },
     },
     plugins: {
@@ -787,6 +825,47 @@ export default function ChartsPage() {
 
           {/* ── Chart area ── */}
           <div className="relative px-4 pb-6 pt-4" style={{ height: '520px' }}>
+
+            {/* Zoom controls — top-right corner of chart */}
+            <div className="absolute top-5 right-5 z-20 flex items-center gap-1">
+              <div className="flex items-center rounded-xl overflow-hidden"
+                style={{ background: 'var(--glass-bg)', border: '1px solid var(--card-border)', backdropFilter: 'blur(8px)' }}>
+                <button
+                  onClick={() => applyZoom(1.4)}
+                  title="Zoom in"
+                  className="px-2.5 py-2 transition-colors hover:bg-primary-500/20"
+                  style={{ color: 'var(--foreground-secondary)' }}>
+                  <ZoomIn className="w-4 h-4" />
+                </button>
+                <div className="w-px h-5" style={{ background: 'var(--card-border)' }} />
+                <button
+                  onClick={() => applyZoom(1 / 1.4)}
+                  title="Zoom out"
+                  className="px-2.5 py-2 transition-colors hover:bg-primary-500/20"
+                  style={{ color: 'var(--foreground-secondary)' }}>
+                  <ZoomOut className="w-4 h-4" />
+                </button>
+                {zoomLevel !== 1 && (
+                  <>
+                    <div className="w-px h-5" style={{ background: 'var(--card-border)' }} />
+                    <button
+                      onClick={resetZoom}
+                      title="Reset zoom"
+                      className="px-2.5 py-2 transition-colors hover:bg-red-500/20"
+                      style={{ color: 'var(--foreground-secondary)' }}>
+                      <Maximize2 className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                )}
+              </div>
+              {/* Zoom level badge */}
+              {zoomLevel !== 1 && (
+                <span className="px-2 py-1 rounded-lg text-xs font-bold"
+                  style={{ background: 'var(--glass-bg)', border: '1px solid var(--card-border)', color: '#6366f1' }}>
+                  {zoomLevel.toFixed(1)}×
+                </span>
+              )}
+            </div>
             {loading ? (
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="flex flex-col items-center gap-3">
@@ -799,7 +878,7 @@ export default function ChartsPage() {
                 <p className="text-sm" style={{ color: 'var(--foreground-muted)' }}>{t('no_data')}</p>
               </div>
             ) : (
-              <Scatter key={mode} data={chartData} options={chartOptions} plugins={[labelPlugin as any]} />
+              <Scatter key={mode} ref={chartRef} data={chartData} options={chartOptions} plugins={[labelPlugin as any]} />
             )}
           </div>
 

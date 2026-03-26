@@ -120,7 +120,7 @@ export const translations = {
     nav_compare:    'Compare',
     nav_index:     'Index',
     nav_browse:    'Browse',
-    nav_table:     'Table,
+    nav_table:     'Table',
 
     // ── Browse page ─────────────────────────────────────────────────────────
     browse_discover: 'Browse',

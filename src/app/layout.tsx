@@ -1,13 +1,17 @@
 import './globals.css'
 
 export const dynamic = 'force-dynamic'
-import { Inter, JetBrains_Mono } from 'next/font/google'
+import { Be_Vietnam_Pro, JetBrains_Mono } from 'next/font/google'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
 import { LocaleProvider } from '@/contexts/LocaleContext'
 import { Suspense } from 'react'
 
-const inter = Inter({ subsets: ['latin', 'vietnamese'], variable: '--font-inter' })
+const inter = Be_Vietnam_Pro({
+  subsets:  ['latin', 'vietnamese'],
+  weight:   ['400', '500', '600', '700', '800', '900'],
+  variable: '--font-inter',
+})
 const jetbrains = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' })
 
 export const metadata = {

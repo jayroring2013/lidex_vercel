@@ -705,43 +705,92 @@ function StatBig({ label, value, sub, color }: { label: string; value: string; s
   )
 }
 
+// ── Waffle Chart (10×10 grid) ────────────────────────────────────────────────
 function StatusDistribution({ data }: { data: Record<string, number> | string }) {
-  const parsed: Record<string, number> = typeof data === 'string' ? JSON.parse(data) : data
-  const ORDER   = ['CURRENT', 'COMPLETED', 'PLANNING', 'PAUSED', 'DROPPED']
+  const parsed: Record<string, number> = typeof data === 'string'
+    ? (() => { try { return JSON.parse(data) } catch { return {} } })()
+    : (data ?? {})
+
+  const ORDER  = ['COMPLETED', 'CURRENT', 'PLANNING', 'PAUSED', 'DROPPED'] as const
   const COLORS: Record<string, string> = {
-    CURRENT:   '#6366f1',
-    COMPLETED: '#22c55e',
-    PLANNING:  '#fbbf24',
-    PAUSED:    '#fb923c',
-    DROPPED:   '#f87171',
+    COMPLETED: '#22c55e', CURRENT: '#6366f1',
+    PLANNING:  '#fbbf24', PAUSED:  '#fb923c', DROPPED: '#f87171',
   }
   const LABELS: Record<string, string> = {
-    CURRENT: 'Đang xem', COMPLETED: 'Hoàn thành',
-    PLANNING: 'Dự định',  PAUSED: 'Tạm dừng', DROPPED: 'Bỏ xem',
+    COMPLETED: 'Hoàn thành', CURRENT: 'Đang xem',
+    PLANNING:  'Dự định',    PAUSED:  'Tạm dừng', DROPPED: 'Bỏ xem',
   }
-  const total  = Object.values(parsed).reduce((s, v) => s + v, 0)
+
+  const total = Object.values(parsed).reduce((s, v) => s + v, 0)
   if (!total) return null
+
+  // Build 100-cell waffle: each cell = 1%
+  const cells: string[] = []
+  for (const key of ORDER) {
+    const pct = Math.round(((parsed[key] ?? 0) / total) * 100)
+    for (let i = 0; i < pct; i++) cells.push(key)
+  }
+  while (cells.length < 100) cells.push('EMPTY')
+
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null)
+
   return (
-    <div className="space-y-3">
-      {/* Stacked bar */}
-      <div className="flex h-3 rounded-full overflow-hidden gap-px">
-        {ORDER.filter(k => parsed[k]).map(k => (
-          <div key={k} className="transition-all duration-700 rounded-full"
-            style={{ width: `${(parsed[k] / total) * 100}%`, background: COLORS[k] }} />
+    <div className="flex flex-col sm:flex-row gap-5 items-start">
+      {/* Waffle grid */}
+      <div
+        className="flex-shrink-0"
+        style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: 3, width: 200 }}
+      >
+        {cells.map((key, i) => (
+          <div
+            key={i}
+            onMouseEnter={() => setHoveredKey(key === 'EMPTY' ? null : key)}
+            onMouseLeave={() => setHoveredKey(null)}
+            style={{
+              width: 16, height: 16,
+              borderRadius: 3,
+              background: key === 'EMPTY' ? 'var(--background-secondary)' : COLORS[key],
+              opacity: hoveredKey && hoveredKey !== key ? 0.25 : 1,
+              transition: 'opacity 0.15s, transform 0.1s',
+              transform: hoveredKey === key ? 'scale(1.2)' : 'scale(1)',
+              cursor: key === 'EMPTY' ? 'default' : 'pointer',
+            }}
+          />
         ))}
       </div>
+
       {/* Legend */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-        {ORDER.filter(k => parsed[k]).map(k => (
-          <div key={k} className="flex items-center gap-2 p-2.5 rounded-xl" style={{ background: 'var(--background-secondary)' }}>
-            <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: COLORS[k] }} />
-            <div className="min-w-0">
-              <p className="text-[10px]" style={{ color: 'var(--foreground-muted)' }}>{LABELS[k]}</p>
-              <p className="text-xs font-bold" style={{ color: 'var(--foreground)' }}>{fmtBig(parsed[k])}</p>
-              <p className="text-[10px]" style={{ color: 'var(--foreground-muted)' }}>{((parsed[k] / total) * 100).toFixed(1)}%</p>
+      <div className="flex-1 space-y-2 min-w-0">
+        {ORDER.filter(k => (parsed[k] ?? 0) > 0).map(k => {
+          const pct = ((parsed[k] / total) * 100).toFixed(1)
+          const isHovered = hoveredKey === k
+          return (
+            <div
+              key={k}
+              onMouseEnter={() => setHoveredKey(k)}
+              onMouseLeave={() => setHoveredKey(null)}
+              className="flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-all duration-150"
+              style={{
+                background: isHovered ? `${COLORS[k]}18` : 'var(--background-secondary)',
+                border: `1px solid ${isHovered ? COLORS[k] + '44' : 'transparent'}`,
+              }}
+            >
+              <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: COLORS[k] }} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold" style={{ color: 'var(--foreground)' }}>{LABELS[k]}</span>
+                  <span className="text-xs font-bold ml-2" style={{ color: COLORS[k] }}>{pct}%</span>
+                </div>
+                {/* Mini progress bar */}
+                <div className="h-1 rounded-full mt-1 overflow-hidden" style={{ background: 'var(--card-border)' }}>
+                  <div className="h-full rounded-full transition-all duration-500"
+                    style={{ width: `${pct}%`, background: COLORS[k] }} />
+                </div>
+                <span className="text-[10px]" style={{ color: 'var(--foreground-muted)' }}>{fmtBig(parsed[k])} người</span>
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
@@ -751,10 +800,12 @@ function ScoreDistribution({ data }: { data: Record<string, number> | string }) 
   const parsed: Record<string, number> = typeof data === 'string'
     ? (() => { try { return JSON.parse(data) } catch { return {} } })()
     : (data ?? {})
-  const buckets   = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
-  const counts    = buckets.map(b => Number(parsed[String(b)] ?? parsed[b] ?? 0))
-  const maxCount  = Math.max(...counts, 1)
-  const MAX_PX    = 96 // max bar height in pixels
+
+  const buckets  = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+  const counts   = buckets.map(b => Number(parsed[String(b)] ?? parsed[b] ?? 0))
+  const maxCount = Math.max(...counts, 1)
+  const MAX_PX   = 120
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
 
   function barColor(score: number): string {
     if (score >= 80) return '#4ade80'
@@ -763,44 +814,91 @@ function ScoreDistribution({ data }: { data: Record<string, number> | string }) 
     return '#f87171'
   }
 
+  const totalVotes = counts.reduce((s, v) => s + v, 0)
+
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: MAX_PX + 24 }}>
-      {buckets.map((b, i) => {
-        const barH = Math.max(Math.round((counts[i] / maxCount) * MAX_PX), counts[i] > 0 ? 3 : 0)
-        return (
-          <div key={b} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-            {/* Tooltip on hover */}
-            <div className="group" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
-              <div style={{ position: 'relative', width: '100%', height: barH + 'px' }} className="group/bar">
-                <div
-                  style={{
-                    width: '100%', height: '100%',
-                    borderRadius: '4px 4px 0 0',
-                    background: barColor(b),
-                    opacity: counts[i] > 0 ? 1 : 0.12,
-                    transition: 'height 0.6s ease',
-                  }}
-                />
-                {counts[i] > 0 && (
-                  <div
-                    className="group/bar-hover"
-                    style={{
-                      position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)',
-                      marginBottom: 4, pointerEvents: 'none', opacity: 0, transition: 'opacity 0.15s',
-                      background: 'var(--glass-bg)', border: '1px solid var(--card-border)',
-                      borderRadius: 6, padding: '2px 6px', fontSize: 10, fontWeight: 700,
-                      color: 'var(--foreground)', whiteSpace: 'nowrap', zIndex: 10,
-                    }}
-                  >
-                    {fmtBig(counts[i])}
+    <div>
+      {/* Chart */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: MAX_PX + 40 }}>
+        {buckets.map((b, i) => {
+          const barH   = Math.max(Math.round((counts[i] / maxCount) * MAX_PX), counts[i] > 0 ? 4 : 0)
+          const isHov  = hoveredIdx === i
+          const color  = barColor(b)
+          const pct    = totalVotes > 0 ? ((counts[i] / totalVotes) * 100).toFixed(1) : '0'
+
+          return (
+            <div key={b}
+              style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, cursor: counts[i] > 0 ? 'pointer' : 'default' }}
+              onMouseEnter={() => counts[i] > 0 && setHoveredIdx(i)}
+              onMouseLeave={() => setHoveredIdx(null)}
+            >
+              {/* Value label above bar — visible when hovered OR always shown for top bar */}
+              <div style={{
+                fontSize: 10, fontWeight: 700, color,
+                opacity: isHov || counts[i] === maxCount ? 1 : 0,
+                transition: 'opacity 0.15s',
+                whiteSpace: 'nowrap',
+                minHeight: 14,
+              }}>
+                {counts[i] > 0 ? fmtBig(counts[i]) : ''}
+              </div>
+
+              {/* Bar */}
+              <div style={{
+                width: '100%', height: barH + 'px',
+                borderRadius: '4px 4px 0 0',
+                background: color,
+                opacity: hoveredIdx !== null && !isHov ? 0.35 : 1,
+                transform: isHov ? 'scaleY(1.04)' : 'scaleY(1)',
+                transformOrigin: 'bottom',
+                transition: 'opacity 0.15s, transform 0.1s',
+                position: 'relative',
+              }}>
+                {/* Tooltip popup on hover */}
+                {isHov && (
+                  <div style={{
+                    position: 'absolute', bottom: 'calc(100% + 6px)', left: '50%',
+                    transform: 'translateX(-50%)',
+                    background: 'var(--glass-bg)', border: `1px solid ${color}66`,
+                    borderRadius: 8, padding: '5px 8px',
+                    fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
+                    color: 'var(--foreground)', zIndex: 20,
+                    boxShadow: `0 4px 12px ${color}33`,
+                  }}>
+                    <span style={{ color }}>★ {b}/100</span>
+                    <span style={{ color: 'var(--foreground-muted)', fontWeight: 400 }}> · </span>
+                    <span>{fmtBig(counts[i])} votes</span>
+                    <span style={{ color: 'var(--foreground-muted)', fontWeight: 400 }}> ({pct}%)</span>
                   </div>
                 )}
               </div>
+
+              {/* X label */}
+              <span style={{
+                fontSize: 9,
+                color: isHov ? color : 'var(--foreground-muted)',
+                fontWeight: isHov ? 700 : 400,
+                transition: 'color 0.15s',
+              }}>{b}</span>
             </div>
-            <span style={{ fontSize: 9, color: 'var(--foreground-muted)' }}>{b}</span>
-          </div>
-        )
-      })}
+          )
+        })}
+      </div>
+
+      {/* Summary row */}
+      {totalVotes > 0 && (
+        <div className="flex items-center justify-between mt-3 pt-3" style={{ borderTop: '1px solid var(--card-border)' }}>
+          <span className="text-xs" style={{ color: 'var(--foreground-muted)' }}>
+            {fmtBig(totalVotes)} lượt đánh giá
+          </span>
+          <span className="text-xs font-semibold" style={{ color: 'var(--foreground-secondary)' }}>
+            {hoveredIdx !== null
+              ? `★ ${buckets[hoveredIdx]}/100 — ${fmtBig(counts[hoveredIdx])} votes (${((counts[hoveredIdx]/totalVotes)*100).toFixed(1)}%)`
+              : 'Hover to see details'
+            }
+          </span>
+        </div>
+      )}
     </div>
   )
 }

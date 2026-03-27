@@ -19,7 +19,7 @@ export const metadata = {
   description: 'A personal project tracking and analyzing data for Light Novels, Anime, and Manga.',
 }
 
-export default function RootLayout({ children }) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="vi" className="dark">
       <body className={`${inter.variable} ${jetbrains.variable} font-sans bg-light-900 dark:bg-dark-900 text-gray-900 dark:text-gray-100 min-h-screen`}>

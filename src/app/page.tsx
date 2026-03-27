@@ -342,10 +342,11 @@ export default function Home() {
                   {slide.eyebrow}
                 </p>
 
-                <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black leading-[1.0] mb-6">
-                  <span style={{ color: 'var(--foreground)' }}>{slide.title[0]}</span>
+                <h1 className="text-5xl sm:text-6xl lg:text-7xl leading-[1.05] mb-6"
+                  style={{ fontWeight: 900, fontFamily: 'var(--font-inter), "Be Vietnam Pro", sans-serif' }}>
+                  <span style={{ color: 'var(--foreground)', fontWeight: 900, fontFamily: 'inherit' }}>{slide.title[0]}</span>
                   <br />
-                  <span style={{ color: slide.accent, transition: 'color 0.3s' }}>{slide.title[1]}</span>
+                  <span style={{ color: slide.accent, fontWeight: 900, fontFamily: 'inherit', transition: 'color 0.3s' }}>{slide.title[1]}</span>
                 </h1>
 
                 <p className="text-base sm:text-lg leading-relaxed mb-10 max-w-lg mx-auto lg:mx-0"

@@ -99,31 +99,23 @@ export default function Home() {
           <div className="absolute inset-x-0 top-0 h-32 z-10" style={{ background: 'linear-gradient(to bottom, var(--background), transparent)' }} />
           <div className="absolute inset-x-0 bottom-0 h-40 z-10" style={{ background: 'linear-gradient(to top, var(--background), transparent)' }} />
 
-          {/* LEFT columns */}
-          <div className="absolute top-0 bottom-0 left-0 flex gap-2.5 items-start" style={{ width: '50%' }}>
+          {/* Single full-width column wall — 8 columns edge-to-edge */}
+          <div className="absolute inset-0 flex gap-2.5 items-start overflow-hidden">
             {hasCols
-              ? [0,1,2].map(i => (
-                  <CoverColumn key={i} covers={leftCols[i].length ? leftCols[i] : covers.slice(0, 6)} speed={L_SPEEDS[i]} offset={L_OFFSETS[i]} delay={L_DELAYS[i]} />
+              ? [
+                  { covers: leftCols[0].length ? leftCols[0] : covers.slice(0,6),  speed: L_SPEEDS[0], offset: L_OFFSETS[0], delay: L_DELAYS[0] },
+                  { covers: leftCols[1].length ? leftCols[1] : covers.slice(0,6),  speed: L_SPEEDS[1], offset: L_OFFSETS[1], delay: L_DELAYS[1] },
+                  { covers: leftCols[2].length ? leftCols[2] : covers.slice(0,6),  speed: L_SPEEDS[2], offset: L_OFFSETS[2], delay: L_DELAYS[2] },
+                  { covers: rightCols[0].length ? rightCols[0] : covers.slice(0,6), speed: R_SPEEDS[0], offset: R_OFFSETS[0], delay: R_DELAYS[0] },
+                  { covers: rightCols[1].length ? rightCols[1] : covers.slice(0,6), speed: R_SPEEDS[1], offset: R_OFFSETS[1], delay: R_DELAYS[1] },
+                  { covers: rightCols[2].length ? rightCols[2] : covers.slice(0,6), speed: R_SPEEDS[2], offset: R_OFFSETS[2], delay: R_DELAYS[2] },
+                  { covers: rightCols[3].length ? rightCols[3] : covers.slice(0,6), speed: R_SPEEDS[3], offset: R_OFFSETS[3], delay: R_DELAYS[3] },
+                  { covers: rightCols[4].length ? rightCols[4] : covers.slice(0,6), speed: R_SPEEDS[4], offset: R_OFFSETS[4], delay: R_DELAYS[4] },
+                ].map((col, i) => (
+                  <CoverColumn key={i} covers={col.covers} speed={col.speed} offset={col.offset} delay={col.delay} />
                 ))
-              : Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="flex flex-col gap-2 flex-shrink-0" style={{ width: 110, marginTop: L_OFFSETS[i] }}>
-                    {Array.from({ length: 8 }).map((_, j) => (
-                      <div key={j} className="rounded-lg flex-shrink-0 animate-pulse"
-                        style={{ aspectRatio: '2/3', background: 'rgba(99,102,241,0.07)' }} />
-                    ))}
-                  </div>
-                ))
-            }
-          </div>
-
-          {/* RIGHT columns */}
-          <div className="absolute top-0 bottom-0 right-0 flex gap-2.5 items-start" style={{ width: '50%' }}>
-            {hasCols
-              ? [0,1,2,3,4].map(i => (
-                  <CoverColumn key={i} covers={rightCols[i].length ? rightCols[i] : covers.slice(0, 6)} speed={R_SPEEDS[i]} offset={R_OFFSETS[i]} delay={R_DELAYS[i]} />
-                ))
-              : Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="flex flex-col gap-2 flex-shrink-0" style={{ width: 110, marginTop: R_OFFSETS[i] }}>
+              : Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="flex flex-col gap-2 flex-shrink-0" style={{ width: 110 }}>
                     {Array.from({ length: 8 }).map((_, j) => (
                       <div key={j} className="rounded-lg flex-shrink-0 animate-pulse"
                         style={{ aspectRatio: '2/3', background: 'rgba(99,102,241,0.07)' }} />

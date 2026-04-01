@@ -23,7 +23,7 @@ function CoverColumn({ covers, speed, offset, delay }: {
 }) {
   const doubled = [...covers, ...covers]
   return (
-    <div className="flex flex-col gap-2 flex-shrink-0" style={{ width: 110, marginTop: offset }}>
+    <div className="flex flex-col gap-2 w-full" style={{ marginTop: offset }}>
       <div style={{ animation: `scrollUp ${speed}s linear infinite`, animationDelay: `${delay}s` }}
         className="flex flex-col gap-2">
         {doubled.map((c, i) => (
@@ -100,7 +100,7 @@ export default function Home() {
           <div className="absolute inset-x-0 bottom-0 h-40 z-10" style={{ background: 'linear-gradient(to top, var(--background), transparent)' }} />
 
           {/* Single full-width column wall — 8 columns edge-to-edge */}
-          <div className="absolute inset-0 flex gap-2.5 items-start overflow-hidden">
+          <div className="absolute inset-0 items-start overflow-hidden" style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: '10px', padding: '0 4px' }}>
             {hasCols
               ? [
                   { covers: leftCols[0].length ? leftCols[0] : covers.slice(0,6),  speed: L_SPEEDS[0], offset: L_OFFSETS[0], delay: L_DELAYS[0] },
@@ -115,7 +115,7 @@ export default function Home() {
                   <CoverColumn key={i} covers={col.covers} speed={col.speed} offset={col.offset} delay={col.delay} />
                 ))
               : Array.from({ length: 8 }).map((_, i) => (
-                  <div key={i} className="flex flex-col gap-2 flex-shrink-0" style={{ width: 110 }}>
+                  <div key={i} className="flex flex-col gap-2 w-full">
                     {Array.from({ length: 8 }).map((_, j) => (
                       <div key={j} className="rounded-lg flex-shrink-0 animate-pulse"
                         style={{ aspectRatio: '2/3', background: 'rgba(99,102,241,0.07)' }} />

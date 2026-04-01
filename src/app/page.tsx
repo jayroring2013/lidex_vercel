@@ -2,666 +2,272 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
-import {
-  BarChart2, BookOpen, ArrowRight, TrendingUp, GitCompare,
-  Star, Flame, ChevronDown, Sparkles,
-} from 'lucide-react'
+import { ArrowRight, Sparkles, BarChart2, Flame } from 'lucide-react'
 import supabase from '@/lib/supabaseClient'
 import { useLocale } from '@/contexts/LocaleContext'
 
-interface FeaturedAnime {
-  id: number
-  title: string
-  cover_url: string | null
-}
+interface Cover { id: number; title: string; cover_url: string | null }
 
 // ── Safe image ────────────────────────────────────────────────────────────────
-function SafeImg({ src, alt, className }: { src: string; alt: string; className?: string }) {
+function SafeImg({ src, alt }: { src: string; alt: string }) {
   const [err, setErr] = useState(false)
-  if (err || !src) return <div className={`${className} bg-slate-800`} />
-  return <img src={src} alt={alt} className={className} onError={() => setErr(true)} />
+  if (err) return <div className="w-full h-full" style={{ background: 'rgba(99,102,241,0.12)' }} />
+  return <img src={src} alt={alt} className="w-full h-full object-cover block" onError={() => setErr(true)} />
 }
 
-// ── Animated counter ─────────────────────────────────────────────────────────
-function Counter({ target, suffix = '', duration = 1600 }: { target: number; suffix?: string; duration?: number }) {
-  const [count, setCount] = useState(0)
-  const ref = useRef<HTMLSpanElement>(null)
-  const started = useRef(false)
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const ob = new IntersectionObserver(([e]) => {
-      if (e.isIntersecting && !started.current) {
-        started.current = true
-        const t0 = performance.now()
-        const tick = (now: number) => {
-          const p = Math.min((now - t0) / duration, 1)
-          setCount(Math.floor((1 - Math.pow(1 - p, 3)) * target))
-          if (p < 1) requestAnimationFrame(tick)
-        }
-        requestAnimationFrame(tick)
-      }
-    }, { threshold: 0.5 })
-    ob.observe(el)
-    return () => ob.disconnect()
-  }, [target, duration])
-  return <span ref={ref}>{count.toLocaleString()}{suffix}</span>
-}
-
-// ── Cover wall — marquee-style scrolling banner rows ─────────────────────────
-function CoverWall({ covers }: { covers: FeaturedAnime[] }) {
-  // Duplicate for seamless loop
-  const row = covers.length >= 3 ? covers : [...covers, ...covers, ...covers]
+// ── Scrolling cover column ────────────────────────────────────────────────────
+function CoverColumn({ covers, speed, offset, delay }: {
+  covers: Cover[]; speed: number; offset: number; delay: number
+}) {
+  const doubled = [...covers, ...covers]
   return (
-    <div className="absolute inset-0 overflow-hidden">
-      {/* Dark overlay — stronger at left where text sits */}
-      <div className="absolute inset-0 z-10"
-        style={{ background: 'linear-gradient(105deg, var(--background) 25%, rgba(15,23,42,0.80) 55%, rgba(15,23,42,0.25) 100%)' }} />
-      {/* Top fade */}
-      <div className="absolute top-0 left-0 right-0 h-24 z-10"
-        style={{ background: 'linear-gradient(to bottom, var(--background), transparent)' }} />
-      {/* Bottom fade */}
-      <div className="absolute bottom-0 left-0 right-0 h-32 z-10"
-        style={{ background: 'linear-gradient(to top, var(--background), transparent)' }} />
-
-      {/* Staggered cover columns */}
-      <div className="absolute inset-0 flex gap-2 items-start justify-end pr-2 pt-0">
-        {[0, 1, 2, 3, 4].map((col) => {
-          const colCovers = row.filter((_, i) => i % 5 === col)
-          const delay = [0, -4, -8, -2, -6][col]
-          return (
-            <div
-              key={col}
-              className="flex flex-col gap-2 flex-shrink-0"
-              style={{
-                width: 130,
-                animation: `scrollUp 22s linear infinite`,
-                animationDelay: `${delay}s`,
-                marginTop: [0, 50, -20, 70, 10][col],
-              }}
-            >
-              {[...colCovers, ...colCovers].map((a, i) => (
-                <div
-                  key={i}
-                  className="rounded-xl overflow-hidden flex-shrink-0"
-                  style={{
-                    aspectRatio: '2/3',
-                    border: '1px solid rgba(255,255,255,0.06)',
-                    boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
-                  }}
-                >
-                  {a.cover_url
-                    ? <SafeImg src={a.cover_url} alt={a.title} className="w-full h-full object-cover block" />
-                    : <div className="w-full h-full" style={{ background: 'rgba(99,102,241,0.15)' }} />
-                  }
-                </div>
-              ))}
-            </div>
-          )
-        })}
+    <div className="flex flex-col gap-2 flex-shrink-0" style={{ width: 110, marginTop: offset }}>
+      <div style={{ animation: `scrollUp ${speed}s linear infinite`, animationDelay: `${delay}s` }}
+        className="flex flex-col gap-2">
+        {doubled.map((c, i) => (
+          <div key={i} className="rounded-lg overflow-hidden flex-shrink-0"
+            style={{ aspectRatio: '2/3', border: '1px solid rgba(255,255,255,0.05)' }}>
+            {c.cover_url ? <SafeImg src={c.cover_url} alt={c.title} /> : <div className="w-full h-full" style={{ background: 'rgba(99,102,241,0.1)' }} />}
+          </div>
+        ))}
       </div>
     </div>
   )
 }
 
-// ── Content type tag ────────────────────────────────────────────────────────
-function TypeTag({ label, color }: { label: string; color: string }) {
-  return (
-    <span
-      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold"
-      style={{ background: `${color}22`, color: color, border: `1px solid ${color}44` }}
-    >
-      {label}
-    </span>
-  )
-}
-
-// ── Feature pill card ──────────────────────────────────────────────────────
-function FeaturePill({
-  icon: Icon, label, href, accent,
-}: { icon: any; label: string; href: string; accent: string }) {
-  return (
-    <Link
-      href={href}
-      className="group inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-semibold transition-all duration-200 hover:scale-105 hover:-translate-y-0.5"
-      style={{
-        background: `${accent}15`,
-        border: `1px solid ${accent}33`,
-        color: accent,
-      }}
-    >
-      <Icon className="w-3.5 h-3.5" />
-      {label}
-      <ArrowRight className="w-3 h-3 opacity-0 -translate-x-1 transition-all duration-200 group-hover:opacity-100 group-hover:translate-x-0" />
-    </Link>
-  )
-}
-
-// ── Main page ─────────────────────────────────────────────────────────────────
+// ── Main ──────────────────────────────────────────────────────────────────────
 export default function Home() {
   const { locale } = useLocale()
   const vi = locale === 'vi'
 
-  const [covers, setCovers] = useState<FeaturedAnime[]>([])
-  const [heroCovers, setHeroCovers] = useState<FeaturedAnime[]>([])
+  const [covers,     setCovers]     = useState<Cover[]>([])
+  const [popular,    setPopular]    = useState<Cover[]>([])
+  const [statsCount, setStatsCount] = useState<number | null>(null)
 
   useEffect(() => {
-    // Fetch more covers for the wall
+    // Fetch covers for wall + popular row in one query
     supabase.from('series')
       .select('id, title, cover_url, anime_meta(popularity)')
       .eq('item_type', 'anime')
       .not('cover_url', 'is', null)
       .order('anime_meta(popularity)', { ascending: false })
-      .limit(20)
+      .limit(30)
       .then(({ data, error }) => {
-        if (error) {
-          supabase.from('series')
-            .select('id, title, cover_url')
-            .eq('item_type', 'anime')
-            .not('cover_url', 'is', null)
-            .limit(20)
-            .then(({ data: d2 }) => {
-              const mapped = (d2 || []).map((s: any) => ({ id: s.id, title: s.title, cover_url: s.cover_url }))
-              setCovers(mapped)
-              setHeroCovers(mapped.slice(0, 5))
-            })
-        } else {
-          const mapped = (data || []).map((s: any) => ({ id: s.id, title: s.title, cover_url: s.cover_url }))
+        const source = error ? null : data
+        // fallback
+        const load = (d: any[]) => {
+          const mapped: Cover[] = d.map((s: any) => ({ id: s.id, title: s.title, cover_url: s.cover_url }))
           setCovers(mapped)
-          setHeroCovers(mapped.slice(0, 5))
+          setPopular(mapped.slice(0, 6))
         }
+        if (source && source.length > 0) { load(source); return }
+        supabase.from('series').select('id, title, cover_url').eq('item_type', 'anime').not('cover_url', 'is', null).limit(30)
+          .then(({ data: d2 }) => load(d2 || []))
       })
+
+    supabase.from('series').select('*', { count: 'exact', head: true })
+      .then(({ count }) => setStatsCount(count))
   }, [])
 
-  const features = [
-    { icon: BookOpen,  label: vi ? 'Khám phá'   : 'Browse',   href: '/browse',   accent: '#22c55e' },
-    { icon: BarChart2, label: vi ? 'Biểu đồ'    : 'Charts',   href: '/charts',   accent: '#6366f1' },
-    { icon: GitCompare,label: vi ? 'So sánh'    : 'Compare',  href: '/compare',  accent: '#ec4899' },
-    { icon: TrendingUp,label: vi ? 'LiDex Score': 'Score',    href: '/browse',   accent: '#fbbf24' },
-    { icon: BarChart2, label: vi ? 'Bảng xếp hạng' : 'Table', href: '/table',   accent: '#06b6d4' },
-  ]
-
-  const featureCards = [
-    {
-      icon: BookOpen,
-      accent: '#22c55e',
-      title: vi ? 'Thư viện đầy đủ' : 'Full Library',
-      desc: vi
-        ? 'Duyệt hàng nghìn Anime, Manga và Light Novel. Lọc theo thể loại, điểm số, trạng thái — tất cả trong một giao diện gọn gàng.'
-        : 'Browse thousands of Anime, Manga & Light Novels. Filter by genre, score, status — all in one clean interface.',
-      href: '/browse',
-      mockup: 'grid',
-    },
-    {
-      icon: BarChart2,
-      accent: '#6366f1',
-      title: vi ? 'Biểu đồ tương tác' : 'Interactive Charts',
-      desc: vi
-        ? 'Vẽ biểu đồ phân tán với trục X/Y bất kỳ. So sánh hàng nghìn tựa theo điểm cộng đồng, độ phổ biến, số tập.'
-        : 'Plot scatter charts on any X/Y axis. Compare thousands of titles by community score, popularity, episode count.',
-      href: '/charts',
-      mockup: 'scatter',
-    },
-    {
-      icon: GitCompare,
-      accent: '#ec4899',
-      title: vi ? 'So sánh trực tiếp' : 'Head-to-Head Compare',
-      desc: vi
-        ? 'Chọn tối đa 4 anime và đặt cạnh nhau trên biểu đồ radar. Xem ngay điểm mạnh và điểm yếu của từng tựa.'
-        : 'Pick up to 4 anime and put them on a radar chart. Instantly see where each one shines and where it falls.',
-      href: '/compare',
-      mockup: 'radar',
-    },
-  ]
+  // Split covers into 5 columns
+  const cols = [0, 1, 2, 3, 4].map(i => covers.filter((_, idx) => idx % 5 === i))
+  const hasCols = covers.length >= 5
+  const SPEEDS   = [28, 22, 32, 24, 26]
+  const OFFSETS  = [0, -60, 30, -30, 50]
+  const DELAYS   = [0, -8, -4, -14, -6]
 
   return (
-    <div className="flex flex-col" style={{ background: 'var(--background)' }}>
+    <div style={{ background: 'var(--background)' }}>
 
-      {/* ══════════════ HERO — AniList-style cover wall ══════════════ */}
-      <section className="relative min-h-screen flex flex-col overflow-hidden">
-        {/* Scrolling cover wall background */}
-        <CoverWall covers={covers.length > 0 ? covers : Array.from({ length: 10 }, (_, i) => ({ id: i, title: '', cover_url: null }))} />
+      {/* ══ HERO ══════════════════════════════════════════════════════════════ */}
+      <section className="relative flex flex-col overflow-hidden" style={{ minHeight: '100svh' }}>
 
-        {/* Accent colour orb */}
-        <div className="absolute inset-0 pointer-events-none z-10">
-          <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] rounded-full blur-[200px] opacity-[0.07]"
-            style={{ background: 'conic-gradient(from 0deg, #6366f1, #8b5cf6, #ec4899)' }} />
+        {/* Cover wall — fills right ~60% */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          {/* Left solid fade */}
+          <div className="absolute inset-0 z-10"
+            style={{ background: 'linear-gradient(to right, var(--background) 35%, rgba(10,15,30,0.92) 55%, rgba(10,15,30,0.55) 75%, rgba(10,15,30,0.2) 100%)' }} />
+          {/* Top + bottom vignette */}
+          <div className="absolute inset-x-0 top-0 h-32 z-10" style={{ background: 'linear-gradient(to bottom, var(--background), transparent)' }} />
+          <div className="absolute inset-x-0 bottom-0 h-40 z-10" style={{ background: 'linear-gradient(to top, var(--background), transparent)' }} />
+
+          {/* Columns — offset so they start mid-screen */}
+          <div className="absolute top-0 bottom-0 right-0 flex gap-2.5 items-start" style={{ left: '30%' }}>
+            {hasCols
+              ? [0,1,2,3,4].map(i => (
+                  <CoverColumn key={i} covers={cols[i].length ? cols[i] : covers.slice(0, 6)} speed={SPEEDS[i]} offset={OFFSETS[i]} delay={DELAYS[i]} />
+                ))
+              : Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex flex-col gap-2 flex-shrink-0" style={{ width: 110, marginTop: OFFSETS[i] }}>
+                    {Array.from({ length: 8 }).map((_, j) => (
+                      <div key={j} className="rounded-lg flex-shrink-0 animate-pulse"
+                        style={{ aspectRatio: '2/3', background: 'rgba(99,102,241,0.07)' }} />
+                    ))}
+                  </div>
+                ))
+            }
+          </div>
         </div>
 
-        {/* Hero content */}
+        {/* Content */}
         <div className="relative z-20 flex-1 flex flex-col justify-center">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
-            <div className="flex flex-col lg:flex-row items-center gap-10 lg:gap-16">
-            {/* ── Left column ── */}
-            <div className="flex-1 min-w-0">
+          <div className="max-w-7xl mx-auto w-full px-6 sm:px-10 lg:px-16 py-24">
 
-            {/* Type tags */}
-            <div className="flex flex-wrap gap-2 mb-5">
-              {[
-                { label: 'Anime', color: '#6366f1' },
-                { label: 'Manga', color: '#ec4899' },
-                { label: 'Light Novel', color: '#fbbf24' },
-              ].map(t => <TypeTag key={t.label} {...t} />)}
-            </div>
+            {/* Eyebrow */}
+            <p className="text-xs sm:text-sm font-semibold tracking-widest uppercase mb-5"
+              style={{ color: '#818cf8', letterSpacing: '0.18em' }}>
+              {vi ? 'Phân tích · Dữ liệu · Cộng đồng' : 'Analytics · Data · Community'}
+            </p>
 
-            {/* Headline */}
-            <h1
-              className="text-4xl sm:text-5xl lg:text-6xl font-black leading-[1.05] tracking-tight mb-4 max-w-lg"
-              style={{ fontFamily: 'var(--font-inter), "Be Vietnam Pro", sans-serif' }}
-            >
-              <span style={{ color: 'var(--foreground)' }}>
-                {vi ? 'Khám phá tựa' : 'Discover your'}
-              </span>
-              <br />
-              <span style={{
-                background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 45%, #ec4899 100%)',
-                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+            {/* Headline — large, clean, no gradient on colored text */}
+            <h1 className="font-black leading-none tracking-tight mb-6"
+              style={{
+                fontSize: 'clamp(2.8rem, 7vw, 5.5rem)',
+                fontFamily: 'var(--font-inter), "Be Vietnam Pro", sans-serif',
+                color: 'var(--foreground)',
+                maxWidth: '10ch',
               }}>
-                {vi ? 'tiếp theo của bạn ✦' : 'next obsession ✦'}
-              </span>
+              {vi ? (
+                <>Khám phá<br /><span style={{ color: '#818cf8' }}>tựa tiếp</span><br />theo</>
+              ) : (
+                <>Discover<br /><span style={{ color: '#818cf8' }}>your next</span><br />obsession</>
+              )}
             </h1>
 
-            {/* Description */}
-            <p className="text-sm sm:text-base leading-relaxed max-w-xs sm:max-w-sm mb-6"
-              style={{ color: 'var(--foreground-secondary)' }}>
+            {/* One-liner */}
+            <p className="text-base sm:text-lg mb-10 max-w-sm leading-relaxed"
+              style={{ color: 'rgba(255,255,255,0.55)', fontWeight: 400 }}>
               {vi
-                ? 'Điểm số, xu hướng và thống kê sâu cho cộng đồng yêu thích Anime, Manga và Light Novel.'
-                : 'Scores, trends and deep stats for fans of Anime, Manga & Light Novels.'}
+                ? 'Điểm số, xu hướng và thống kê sâu cho Anime, Manga & Light Novel.'
+                : 'Scores, trends and deep stats for Anime, Manga & Light Novels.'}
             </p>
 
-            {/* ── Stat strip — frosted glass pill ── */}
-            <div className="inline-flex items-stretch rounded-2xl overflow-hidden mb-7"
-              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.10)', backdropFilter: 'blur(16px)' }}>
-              {[
-                { val: '3K+',   label: vi ? 'Tựa'       : 'Titles',   color: '#818cf8' },
-                { val: '7',     label: vi ? 'Tín hiệu'  : 'Signals',  color: '#fbbf24' },
-                { val: '3',     label: vi ? 'Loại'      : 'Types',    color: '#34d399' },
-                { val: '100%',  label: vi ? 'Miễn phí'  : 'Free',     color: '#f472b6' },
-              ].map((s, i, arr) => (
-                <div key={s.label} className="flex flex-col items-center justify-center px-4 py-2.5"
-                  style={{ borderRight: i < arr.length - 1 ? '1px solid rgba(255,255,255,0.08)' : 'none', minWidth: 64 }}>
-                  <span className="text-base font-black leading-none" style={{ color: s.color }}>{s.val}</span>
-                  <span className="text-[10px] mt-0.5 whitespace-nowrap" style={{ color: 'rgba(255,255,255,0.38)' }}>{s.label}</span>
-                </div>
-              ))}
-            </div>
-
-            {/* CTAs */}
-            <div className="flex flex-wrap gap-3 mb-6">
+            {/* Two CTAs — primary + ghost */}
+            <div className="flex items-center gap-3 flex-wrap">
               <Link href="/browse"
-                className="group inline-flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-bold text-white transition-all duration-200 hover:scale-105 hover:-translate-y-0.5"
-                style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 6px 20px rgba(99,102,241,0.4)' }}>
-                <Sparkles className="w-3.5 h-3.5" />
-                {vi ? 'Bắt đầu khám phá' : 'Start Exploring'}
-                <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
+                className="group flex items-center gap-2 px-6 py-3.5 rounded-xl text-sm font-bold text-white transition-all duration-200 hover:brightness-110 hover:-translate-y-0.5"
+                style={{ background: '#6366f1', boxShadow: '0 4px 20px rgba(99,102,241,0.35)' }}>
+                <Sparkles className="w-4 h-4" />
+                {vi ? 'Bắt đầu ngay' : 'Start Exploring'}
+                <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
               </Link>
-              <Link href="/dashboard"
-                className="inline-flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-bold transition-all duration-200 hover:scale-105"
-                style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--foreground)', backdropFilter: 'blur(8px)' }}>
-                <BarChart2 className="w-3.5 h-3.5" />
-                Dashboard
+              <Link href="/charts"
+                className="flex items-center gap-2 px-6 py-3.5 rounded-xl text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5"
+                style={{ color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(8px)' }}>
+                <BarChart2 className="w-4 h-4" />
+                {vi ? 'Biểu đồ' : 'Charts'}
               </Link>
             </div>
 
-            {/* Live indicator */}
-            <p className="text-xs flex items-center gap-1.5 mb-6" style={{ color: 'var(--foreground-muted)' }}>
-              <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#4ade80' }} />
-              {vi ? 'Dữ liệu cộng đồng · cập nhật liên tục' : 'Community data · continuously updated'}
-            </p>
-
-            {/* Feature pills */}
-            <div className="flex flex-wrap gap-2">
-              {features.map(f => <FeaturePill key={f.href + f.label} {...f} />)}
-            </div>
-            </div>{/* end left column */}
-
-            {/* ── Right column — visible cover stack ── */}
-            <div className="hidden lg:flex flex-shrink-0 items-center justify-center relative" style={{ width: 340 }}>
-              {/* Frosted info card floating on top */}
-              <div className="absolute top-0 right-0 z-20 rounded-2xl p-3 w-44"
-                style={{ background: 'rgba(15,23,42,0.75)', border: '1px solid rgba(255,255,255,0.12)', backdropFilter: 'blur(16px)' }}>
-                <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: '#818cf8' }}>
-                  {vi ? 'LiDex Score' : 'LiDex Score'}
-                </p>
-                {[
-                  { label: 'Community', val: 94, color: '#6366f1' },
-                  { label: 'Popularity', val: 88, color: '#22c55e' },
-                  { label: 'Completion', val: 91, color: '#fbbf24' },
-                ].map(row => (
-                  <div key={row.label} className="mb-1.5">
-                    <div className="flex justify-between mb-0.5">
-                      <span className="text-[9px]" style={{ color: 'rgba(255,255,255,0.4)' }}>{row.label}</span>
-                      <span className="text-[9px] font-bold" style={{ color: row.color }}>{row.val}</span>
-                    </div>
-                    <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
-                      <div className="h-full rounded-full" style={{ width: `${row.val}%`, background: row.color, opacity: 0.8 }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Staggered cover cards */}
-              <div className="relative w-full h-80 mt-8">
-                {heroCovers.slice(0, 4).map((anime, i) => {
-                  const transforms = [
-                    { left: '0%',   top: '10%',  rotate: '-6deg',  w: 110, z: 1 },
-                    { left: '22%',  top: '0%',   rotate: '-2deg',  w: 120, z: 2 },
-                    { left: '45%',  top: '5%',   rotate: '3deg',   w: 115, z: 3 },
-                    { left: '65%',  top: '15%',  rotate: '7deg',   w: 105, z: 1 },
-                  ]
-                  const t = transforms[i] || transforms[0]
-                  return (
-                    <Link key={anime.id} href={`/content/${anime.id}`}
-                      className="absolute rounded-xl overflow-hidden transition-transform duration-300 hover:scale-110 hover:z-30"
-                      style={{
-                        left: t.left, top: t.top, width: t.w,
-                        aspectRatio: '2/3',
-                        transform: `rotate(${t.rotate})`,
-                        zIndex: t.z,
-                        border: '2px solid rgba(255,255,255,0.10)',
-                        boxShadow: '0 16px 40px rgba(0,0,0,0.6)',
-                      }}>
-                      {anime.cover_url
-                        ? <SafeImg src={anime.cover_url} alt={anime.title} className="w-full h-full object-cover block" />
-                        : <div className="w-full h-full" style={{ background: 'rgba(99,102,241,0.2)' }} />
-                      }
-                    </Link>
-                  )
-                })}
-                {heroCovers.length === 0 && Array.from({ length: 4 }).map((_, i) => {
-                  const transforms = [
-                    { left: '0%',  top: '10%', rotate: '-6deg', w: 110 },
-                    { left: '22%', top: '0%',  rotate: '-2deg', w: 120 },
-                    { left: '45%', top: '5%',  rotate: '3deg',  w: 115 },
-                    { left: '65%', top: '15%', rotate: '7deg',  w: 105 },
-                  ]
-                  const t = transforms[i]
-                  return (
-                    <div key={i} className="absolute rounded-xl animate-pulse"
-                      style={{ left: t.left, top: t.top, width: t.w, aspectRatio: '2/3', transform: `rotate(${t.rotate})`, background: 'rgba(99,102,241,0.12)', border: '2px solid rgba(255,255,255,0.06)' }} />
-                  )
-                })}
-              </div>
-            </div>
-            </div>{/* end flex row */}
+            {/* Subtle stat line */}
+            {statsCount && (
+              <p className="mt-8 text-xs" style={{ color: 'rgba(255,255,255,0.25)' }}>
+                {statsCount.toLocaleString()} {vi ? 'tựa trong cơ sở dữ liệu' : 'titles in the database'}
+              </p>
+            )}
           </div>
         </div>
 
         {/* Scroll hint */}
         <div className="relative z-20 flex justify-center pb-8">
-          <button
-            onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
-            className="flex flex-col items-center gap-1 opacity-40 hover:opacity-80 transition-opacity"
-          >
-            <span className="text-[10px] uppercase tracking-[0.2em]" style={{ color: 'var(--foreground-muted)' }}>
-              {vi ? 'Xem thêm' : 'More'}
-            </span>
-            <ChevronDown className="w-4 h-4 animate-bounce" style={{ color: 'var(--foreground-muted)' }} />
-          </button>
+          <div className="flex flex-col items-center gap-1 opacity-30">
+            <div className="w-px h-8" style={{ background: 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.4))' }} />
+            <div className="w-1 h-1 rounded-full bg-white" />
+          </div>
         </div>
       </section>
 
-      {/* ══════════════ POPULAR COVERS ROW — like MAL's banner ══════════════ */}
-      {heroCovers.length > 0 && (
-        <section className="py-6 relative overflow-hidden">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center gap-3 mb-5">
-              <Flame className="w-4 h-4" style={{ color: '#f97316' }} />
-              <span className="text-sm font-bold uppercase tracking-widest" style={{ color: 'var(--foreground-muted)' }}>
-                {vi ? 'Phổ biến nhất' : 'Most Popular'}
-              </span>
+      {/* ══ POPULAR ROW ═══════════════════════════════════════════════════════ */}
+      {popular.length > 0 && (
+        <section className="py-12">
+          <div className="max-w-7xl mx-auto px-6 sm:px-10 lg:px-16">
+
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-2">
+                <Flame className="w-4 h-4" style={{ color: '#f97316' }} />
+                <span className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--foreground-muted)' }}>
+                  {vi ? 'Phổ biến nhất' : 'Most Popular'}
+                </span>
+              </div>
+              <Link href="/browse"
+                className="group flex items-center gap-1 text-xs font-semibold transition-colors hover:text-primary-400"
+                style={{ color: 'var(--foreground-muted)' }}>
+                {vi ? 'Xem tất cả' : 'See all'}
+                <ArrowRight className="w-3 h-3 transition-transform group-hover:translate-x-0.5" />
+              </Link>
             </div>
-            <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: 'none' }}>
-              {heroCovers.map((anime) => (
-                <Link
-                  key={anime.id}
-                  href={`/content/${anime.id}`}
-                  className="group flex-shrink-0 relative rounded-xl overflow-hidden transition-transform duration-200 hover:scale-[1.04] hover:-translate-y-1"
-                  style={{ width: 120, aspectRatio: '2/3', boxShadow: '0 6px 24px rgba(0,0,0,0.4)' }}
-                >
+
+            <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+              {popular.map(anime => (
+                <Link key={anime.id} href={`/content/${anime.id}`}
+                  className="group flex-shrink-0 rounded-xl overflow-hidden transition-all duration-200 hover:scale-[1.04] hover:-translate-y-1"
+                  style={{ width: 130, aspectRatio: '2/3', boxShadow: '0 4px 16px rgba(0,0,0,0.35)' }}>
                   {anime.cover_url
-                    ? <SafeImg src={anime.cover_url} alt={anime.title} className="w-full h-full object-cover block" />
-                    : <div className="w-full h-full bg-slate-800" />
+                    ? <SafeImg src={anime.cover_url} alt={anime.title} />
+                    : <div className="w-full h-full" style={{ background: 'var(--background-secondary)' }} />
                   }
-                  {/* Hover overlay */}
-                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-end p-2"
-                    style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 50%)' }}>
-                    <p className="text-[10px] font-semibold text-white leading-tight line-clamp-2">{anime.title}</p>
-                  </div>
                 </Link>
               ))}
-              {/* See all card */}
-              <Link
-                href="/browse"
-                className="flex-shrink-0 rounded-xl flex flex-col items-center justify-center gap-2 transition-all duration-200 hover:scale-[1.04]"
-                style={{
-                  width: 120,
-                  aspectRatio: '2/3',
-                  background: 'var(--background-secondary)',
-                  border: '1px dashed var(--card-border)',
-                  color: 'var(--foreground-muted)',
-                }}
-              >
-                <ArrowRight className="w-5 h-5" />
-                <span className="text-xs font-semibold text-center px-2">{vi ? 'Xem tất cả' : 'See all'}</span>
-              </Link>
             </div>
           </div>
         </section>
       )}
 
-      {/* ══════════════ FEATURE SECTIONS — scroll-based like fantasiabunko ══════════════ */}
-      <section id="features" className="py-16 relative">
+      {/* ══ FEATURES ══════════════════════════════════════════════════════════ */}
+      <section className="py-16 sm:py-20">
+        <div className="max-w-7xl mx-auto px-6 sm:px-10 lg:px-16">
 
-        {/* Section label */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-10">
-          <div className="flex items-center gap-3">
-            <span className="h-px flex-1" style={{ background: 'var(--card-border)' }} />
-            <span className="text-xs font-bold uppercase tracking-widest px-3" style={{ color: 'var(--foreground-muted)' }}>
-              {vi ? 'Công cụ' : 'Tools'}
-            </span>
-            <span className="h-px flex-1" style={{ background: 'var(--card-border)' }} />
-          </div>
-        </div>
-
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col gap-8">
-          {featureCards.map((card, idx) => (
-            <Link
-              key={card.href}
-              href={card.href}
-              className="group relative rounded-3xl overflow-hidden transition-all duration-300 hover:-translate-y-1"
-              style={{
-                background: 'var(--glass-bg)',
-                border: `1px solid ${card.accent}22`,
-                backdropFilter: 'blur(12px)',
-              }}
-            >
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-6 sm:p-8">
-
-                {/* Icon badge */}
-                <div
-                  className="flex-shrink-0 w-14 h-14 rounded-2xl flex items-center justify-center transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3"
-                  style={{ background: `${card.accent}18`, border: `1px solid ${card.accent}33` }}
-                >
-                  <card.icon className="w-6 h-6" style={{ color: card.accent }} />
-                </div>
-
-                {/* Text */}
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-xl font-black mb-1.5" style={{ color: 'var(--foreground)' }}>
-                    {card.title}
-                  </h3>
-                  <p className="text-sm leading-relaxed" style={{ color: 'var(--foreground-secondary)' }}>
-                    {card.desc}
-                  </p>
-                </div>
-
-                {/* Inline mockup — compact */}
-                <div className="hidden lg:block flex-shrink-0">
-                  {card.mockup === 'grid' && (
-                    <div className="grid grid-cols-3 gap-1.5 w-36">
-                      {Array.from({ length: 6 }).map((_, i) => (
-                        <div key={i} className="rounded-lg overflow-hidden" style={{ aspectRatio: '2/3', background: `${card.accent}18` }}>
-                          {heroCovers[i] && <SafeImg src={heroCovers[i].cover_url!} alt="" className="w-full h-full object-cover block" />}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {card.mockup === 'scatter' && (
-                    <div className="w-36 h-24 relative" style={{ borderLeft: `1px solid ${card.accent}33`, borderBottom: `1px solid ${card.accent}33` }}>
-                      {[
-                        { x: 15, y: 65, s: 5 }, { x: 35, y: 50, s: 7 }, { x: 55, y: 75, s: 9 },
-                        { x: 70, y: 35, s: 6 }, { x: 80, y: 80, s: 10 }, { x: 25, y: 25, s: 4 },
-                        { x: 60, y: 55, s: 7 }, { x: 45, y: 40, s: 5 },
-                      ].map((p, i) => (
-                        <div key={i} className="absolute rounded-full" style={{
-                          left: `${p.x}%`, bottom: `${p.y}%`,
-                          width: p.s, height: p.s,
-                          background: card.accent,
-                          opacity: 0.6 + i * 0.04,
-                          transform: 'translate(-50%, 50%)',
-                        }} />
-                      ))}
-                    </div>
-                  )}
-                  {card.mockup === 'radar' && (
-                    <div className="w-36 space-y-1.5">
-                      {['Score', 'Popularity', 'Favs', 'Completion'].map((ax, i) => (
-                        <div key={ax}>
-                          <div className="flex justify-between mb-0.5">
-                            <span className="text-[9px]" style={{ color: 'var(--foreground-muted)' }}>{ax}</span>
-                          </div>
-                          <div className="relative h-1 rounded-full overflow-hidden" style={{ background: 'var(--background-secondary)' }}>
-                            <div className="absolute left-0 top-0 h-full rounded-full opacity-60 transition-all"
-                              style={{ width: `${[82, 74, 68, 90][i]}%`, background: card.accent }} />
-                            <div className="absolute left-0 top-0 h-full rounded-full opacity-35"
-                              style={{ width: `${[75, 88, 55, 78][i]}%`, background: '#6366f1' }} />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Arrow */}
-                <ArrowRight
-                  className="hidden sm:block w-5 h-5 flex-shrink-0 transition-transform duration-200 group-hover:translate-x-1"
-                  style={{ color: card.accent }}
-                />
-              </div>
-
-              {/* Accent left border */}
-              <div className="absolute left-0 top-6 bottom-6 w-0.5 rounded-full transition-all duration-300 group-hover:top-2 group-hover:bottom-2"
-                style={{ background: card.accent }} />
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      {/* ══════════════ STATS — tsugirano-style bold numbers ══════════════ */}
-      <section className="py-20 relative overflow-hidden">
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute inset-0 opacity-[0.03]"
-            style={{ background: 'linear-gradient(135deg, #6366f1, #ec4899)' }} />
-          <div className="absolute top-0 left-0 right-0 h-px"
-            style={{ background: 'linear-gradient(90deg, transparent, rgba(99,102,241,0.25), transparent)' }} />
-          <div className="absolute bottom-0 left-0 right-0 h-px"
-            style={{ background: 'linear-gradient(90deg, transparent, rgba(99,102,241,0.25), transparent)' }} />
-        </div>
-
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: '#6366f1' }}>
-            {vi ? 'Dữ liệu' : 'By the numbers'}
-          </p>
-          <h2 className="text-2xl sm:text-3xl font-black mb-12" style={{ color: 'var(--foreground)' }}>
-            {vi ? 'Toàn bộ vũ trụ trong một nơi' : 'The whole universe, one place'}
-          </h2>
-
-          <div className="grid grid-cols-3 gap-6">
+          <div className="grid sm:grid-cols-3 gap-px rounded-2xl overflow-hidden"
+            style={{ background: 'var(--card-border)' }}>
             {[
-              { val: 2000, suf: '+', label: vi ? 'Tựa' : 'Titles',     sub: vi ? 'Anime, Manga, LN' : 'Anime, Manga, LN', color: '#6366f1' },
-              { val: 7,    suf: '',  label: vi ? 'Tín hiệu' : 'Signals', sub: vi ? 'LiDex Score'      : 'LiDex Score',      color: '#fbbf24' },
-              { val: 3,    suf: '',  label: vi ? 'Loại ND' : 'Types',   sub: vi ? 'Anime · Manga · LN': 'Anime · Manga · LN', color: '#22c55e' },
-            ].map(s => (
-              <div key={s.label} className="flex flex-col items-center">
-                <div className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tighter mb-1"
-                  style={{ color: s.color, fontFamily: 'var(--font-inter), sans-serif' }}>
-                  <Counter target={s.val} suffix={s.suf} />
+              {
+                color:  '#6366f1',
+                eyebrow: vi ? 'Tính năng' : 'Feature',
+                title:  vi ? 'Khám phá & Lọc' : 'Browse & Filter',
+                desc:   vi ? 'Tìm Anime, Manga, LN theo điểm, thể loại, studio và trạng thái.' : 'Find Anime, Manga, LN by score, genre, studio and status.',
+                href:   '/browse',
+                cta:    vi ? 'Khám phá' : 'Browse',
+              },
+              {
+                color:  '#22c55e',
+                eyebrow: vi ? 'Tính năng' : 'Feature',
+                title:  vi ? 'Biểu đồ phân tán' : 'Scatter Charts',
+                desc:   vi ? 'So sánh hàng nghìn tựa trên biểu đồ tương tác. Zoom, kéo, lọc.' : 'Compare thousands of titles on an interactive chart. Zoom, pan, filter.',
+                href:   '/charts',
+                cta:    vi ? 'Xem biểu đồ' : 'View Charts',
+              },
+              {
+                color:  '#ec4899',
+                eyebrow: vi ? 'Tính năng' : 'Feature',
+                title:  vi ? 'So sánh trực tiếp' : 'Head-to-Head',
+                desc:   vi ? 'Đặt 4 anime cạnh nhau trên biểu đồ radar. Thấy ngay điểm mạnh yếu.' : 'Put 4 anime side by side on a radar chart. Instantly see strengths.',
+                href:   '/compare',
+                cta:    vi ? 'So sánh' : 'Compare',
+              },
+            ].map(f => (
+              <Link key={f.title} href={f.href}
+                className="group flex flex-col gap-4 p-6 sm:p-8 transition-colors duration-200"
+                style={{ background: 'var(--glass-bg)' }}
+                onMouseEnter={e => (e.currentTarget.style.background = `${f.color}08`)}
+                onMouseLeave={e => (e.currentTarget.style.background = 'var(--glass-bg)')}>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center"
+                  style={{ background: `${f.color}18` }}>
+                  <div className="w-3 h-3 rounded-sm" style={{ background: f.color }} />
                 </div>
-                <p className="text-sm font-bold mb-0.5" style={{ color: 'var(--foreground)' }}>{s.label}</p>
-                <p className="text-xs" style={{ color: 'var(--foreground-muted)' }}>{s.sub}</p>
-              </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: f.color }}>{f.eyebrow}</p>
+                  <h3 className="text-base font-bold mb-2" style={{ color: 'var(--foreground)' }}>{f.title}</h3>
+                  <p className="text-sm leading-relaxed" style={{ color: 'var(--foreground-secondary)' }}>{f.desc}</p>
+                </div>
+                <div className="flex items-center gap-1 text-xs font-semibold mt-auto transition-gap duration-200"
+                  style={{ color: f.color }}>
+                  {f.cta}
+                  <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
+                </div>
+              </Link>
             ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ══════════════ CTA — sneakerbunko-style bold closing ══════════════ */}
-      <section className="py-24 relative overflow-hidden">
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-[600px] h-[400px] rounded-full blur-[160px] opacity-[0.08]"
-            style={{ background: 'linear-gradient(135deg, #6366f1, #ec4899)' }} />
-          <div className="absolute top-0 left-0 right-0 h-px"
-            style={{ background: 'linear-gradient(90deg, transparent, rgba(99,102,241,0.3), transparent)' }} />
-        </div>
-
-        <div className="relative max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          {/* Icon cluster */}
-          <div className="flex justify-center gap-3 mb-6">
-            {[
-              { icon: Star,      color: '#fbbf24' },
-              { icon: Flame,     color: '#f97316' },
-              { icon: Sparkles,  color: '#6366f1' },
-            ].map(({ icon: Icon, color }, i) => (
-              <div key={i} className="w-10 h-10 rounded-2xl flex items-center justify-center"
-                style={{ background: `${color}15`, border: `1px solid ${color}33` }}>
-                <Icon className="w-4 h-4" style={{ color }} />
-              </div>
-            ))}
-          </div>
-
-          <h2 className="text-4xl sm:text-5xl font-black tracking-tight mb-4"
-            style={{ color: 'var(--foreground)', fontFamily: 'var(--font-inter), sans-serif' }}>
-            {vi ? (
-              <>Tìm tựa <span style={{ background: 'linear-gradient(135deg,#6366f1,#ec4899)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text' }}>yêu thích</span> tiếp theo</>
-            ) : (
-              <>Find your <span style={{ background: 'linear-gradient(135deg,#6366f1,#ec4899)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text' }}>next favorite</span></>
-            )}
-          </h2>
-
-          <p className="text-base mb-8" style={{ color: 'var(--foreground-secondary)' }}>
-            {vi
-              ? 'Duyệt kho dữ liệu, so sánh tựa và khám phá điều cộng đồng đang yêu thích nhất.'
-              : 'Browse the data, compare titles, and discover what the community loves most.'}
-          </p>
-
-          <div className="flex flex-wrap gap-3 justify-center">
-            <Link
-              href="/browse"
-              className="group inline-flex items-center gap-2.5 px-7 py-3.5 rounded-2xl text-sm font-bold text-white transition-all duration-200 hover:scale-105"
-              style={{
-                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                boxShadow: '0 6px 24px rgba(99,102,241,0.4)',
-              }}
-            >
-              <BookOpen className="w-4 h-4" />
-              {vi ? 'Khám phá ngay' : 'Browse Now'}
-              <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-            </Link>
-            <Link
-              href="/charts"
-              className="inline-flex items-center gap-2 px-7 py-3.5 rounded-2xl text-sm font-bold transition-all duration-200 hover:scale-105"
-              style={{
-                background: 'var(--glass-bg)',
-                border: '1px solid var(--card-border)',
-                color: 'var(--foreground)',
-              }}
-            >
-              <BarChart2 className="w-4 h-4" style={{ color: '#6366f1' }} />
-              {vi ? 'Xem biểu đồ' : 'View Charts'}
-            </Link>
           </div>
         </div>
       </section>
@@ -671,7 +277,6 @@ export default function Home() {
           0%   { transform: translateY(0); }
           100% { transform: translateY(-50%); }
         }
-        @keyframes grow { from { width: 0% } to { width: 100% } }
       `}</style>
     </div>
   )

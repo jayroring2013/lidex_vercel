@@ -58,7 +58,7 @@ function CoverWall({ covers }: { covers: FeaturedAnime[] }) {
     <div className="absolute inset-0 overflow-hidden">
       {/* Dark overlay — stronger at left where text sits */}
       <div className="absolute inset-0 z-10"
-        style={{ background: 'linear-gradient(105deg, var(--background) 30%, rgba(15,23,42,0.85) 60%, rgba(15,23,42,0.4) 100%)' }} />
+        style={{ background: 'linear-gradient(105deg, var(--background) 25%, rgba(15,23,42,0.80) 55%, rgba(15,23,42,0.25) 100%)' }} />
       {/* Top fade */}
       <div className="absolute top-0 left-0 right-0 h-24 z-10"
         style={{ background: 'linear-gradient(to bottom, var(--background), transparent)' }} />
@@ -67,7 +67,7 @@ function CoverWall({ covers }: { covers: FeaturedAnime[] }) {
         style={{ background: 'linear-gradient(to top, var(--background), transparent)' }} />
 
       {/* Staggered cover columns */}
-      <div className="absolute inset-0 flex gap-2 items-start justify-end pr-4 pt-0">
+      <div className="absolute inset-0 flex gap-2 items-start justify-end pr-2 pt-0">
         {[0, 1, 2, 3, 4].map((col) => {
           const colCovers = row.filter((_, i) => i % 5 === col)
           const delay = [0, -4, -8, -2, -6][col]
@@ -76,10 +76,10 @@ function CoverWall({ covers }: { covers: FeaturedAnime[] }) {
               key={col}
               className="flex flex-col gap-2 flex-shrink-0"
               style={{
-                width: 120,
-                animation: `scrollUp 20s linear infinite`,
+                width: 130,
+                animation: `scrollUp 22s linear infinite`,
                 animationDelay: `${delay}s`,
-                marginTop: [0, 40, -20, 60, 20][col],
+                marginTop: [0, 50, -20, 70, 10][col],
               }}
             >
               {[...colCovers, ...colCovers].map((a, i) => (
@@ -232,7 +232,7 @@ export default function Home() {
 
         {/* Hero content */}
         <div className="relative z-20 flex-1 flex flex-col justify-center">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-28">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
 
             {/* Genre tags — feels like AniList */}
             <div className="flex flex-wrap gap-2 mb-7">
@@ -245,7 +245,7 @@ export default function Home() {
 
             {/* Main headline — casual, discovery-oriented */}
             <h1
-              className="text-5xl sm:text-6xl lg:text-7xl xl:text-[5.5rem] font-black leading-[1.03] tracking-tight mb-6 max-w-2xl"
+              className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-black leading-[1.05] tracking-tight mb-5 max-w-xl"
               style={{ fontFamily: 'var(--font-inter), "Be Vietnam Pro", sans-serif' }}
             >
               <span style={{ color: 'var(--foreground)' }}>
@@ -262,7 +262,7 @@ export default function Home() {
               </span>
             </h1>
 
-            <p className="text-lg sm:text-xl leading-relaxed max-w-md mb-10"
+            <p className="text-base sm:text-lg leading-relaxed max-w-md mb-7"
               style={{ color: 'var(--foreground-secondary)' }}>
               {vi
                 ? 'Điểm số, xu hướng và thống kê cho cộng đồng yêu thích Anime, Manga và Light Novel.'
@@ -270,13 +270,13 @@ export default function Home() {
             </p>
 
             {/* Primary CTA */}
-            <div className="flex flex-wrap gap-3 mb-10">
+            <div className="flex flex-wrap gap-3">
               <Link
                 href="/browse"
-                className="group inline-flex items-center gap-2.5 px-7 py-4 rounded-2xl text-base font-bold text-white transition-all duration-200 hover:scale-105 hover:-translate-y-0.5"
+                className="group inline-flex items-center gap-2.5 px-6 py-3.5 rounded-2xl text-sm font-bold text-white transition-all duration-200 hover:scale-105 hover:-translate-y-0.5"
                 style={{
                   background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                  boxShadow: '0 8px 30px rgba(99,102,241,0.45)',
+                  boxShadow: '0 6px 24px rgba(99,102,241,0.4)',
                 }}
               >
                 <Sparkles className="w-4 h-4" />
@@ -285,7 +285,7 @@ export default function Home() {
               </Link>
               <Link
                 href="/dashboard"
-                className="inline-flex items-center gap-2 px-7 py-4 rounded-2xl text-base font-bold transition-all duration-200 hover:scale-105 hover:-translate-y-0.5"
+                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-2xl text-sm font-bold transition-all duration-200 hover:scale-105 hover:-translate-y-0.5"
                 style={{
                   background: 'rgba(255,255,255,0.07)',
                   border: '1px solid rgba(255,255,255,0.12)',
@@ -298,7 +298,7 @@ export default function Home() {
             </div>
 
             {/* Quick-access feature pills */}
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 mt-7">
               {features.map(f => <FeaturePill key={f.href + f.label} {...f} />)}
             </div>
           </div>
@@ -320,7 +320,7 @@ export default function Home() {
 
       {/* ══════════════ POPULAR COVERS ROW — like MAL's banner ══════════════ */}
       {heroCovers.length > 0 && (
-        <section className="py-10 relative overflow-hidden">
+        <section className="py-6 relative overflow-hidden">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center gap-3 mb-5">
               <Flame className="w-4 h-4" style={{ color: '#f97316' }} />
@@ -334,7 +334,7 @@ export default function Home() {
                   key={anime.id}
                   href={`/content/${anime.id}`}
                   className="group flex-shrink-0 relative rounded-xl overflow-hidden transition-transform duration-200 hover:scale-[1.04] hover:-translate-y-1"
-                  style={{ width: 140, aspectRatio: '2/3', boxShadow: '0 6px 24px rgba(0,0,0,0.4)' }}
+                  style={{ width: 120, aspectRatio: '2/3', boxShadow: '0 6px 24px rgba(0,0,0,0.4)' }}
                 >
                   {anime.cover_url
                     ? <SafeImg src={anime.cover_url} alt={anime.title} className="w-full h-full object-cover block" />
@@ -352,7 +352,7 @@ export default function Home() {
                 href="/browse"
                 className="flex-shrink-0 rounded-xl flex flex-col items-center justify-center gap-2 transition-all duration-200 hover:scale-[1.04]"
                 style={{
-                  width: 140,
+                  width: 120,
                   aspectRatio: '2/3',
                   background: 'var(--background-secondary)',
                   border: '1px dashed var(--card-border)',

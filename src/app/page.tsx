@@ -47,23 +47,23 @@ export default function Home() {
   const [statsCount, setStatsCount] = useState<number | null>(null)
 
   useEffect(() => {
-    // Fetch covers for wall + popular row in one query
+    // Fetch covers from all types (anime, manga, novel) for the wall
     supabase.from('series')
-      .select('id, title, cover_url, anime_meta(popularity)')
-      .eq('item_type', 'anime')
+      .select('id, title, cover_url, item_type')
+      .in('item_type', ['anime', 'manga', 'novel'])
       .not('cover_url', 'is', null)
-      .order('anime_meta(popularity)', { ascending: false })
-      .limit(30)
+      .limit(60)
       .then(({ data, error }) => {
         const source = error ? null : data
-        // fallback
         const load = (d: any[]) => {
-          const mapped: Cover[] = d.map((s: any) => ({ id: s.id, title: s.title, cover_url: s.cover_url }))
+          // Shuffle so types are mixed across columns
+          const shuffled = [...d].sort(() => Math.random() - 0.5)
+          const mapped: Cover[] = shuffled.map((s: any) => ({ id: s.id, title: s.title, cover_url: s.cover_url }))
           setCovers(mapped)
           setPopular(mapped.slice(0, 6))
         }
         if (source && source.length > 0) { load(source); return }
-        supabase.from('series').select('id, title, cover_url').eq('item_type', 'anime').not('cover_url', 'is', null).limit(30)
+        supabase.from('series').select('id, title, cover_url').not('cover_url', 'is', null).limit(60)
           .then(({ data: d2 }) => load(d2 || []))
       })
 
@@ -71,12 +71,18 @@ export default function Home() {
       .then(({ count }) => setStatsCount(count))
   }, [])
 
-  // Split covers into 5 columns
-  const cols = [0, 1, 2, 3, 4].map(i => covers.filter((_, idx) => idx % 5 === i))
-  const hasCols = covers.length >= 5
-  const SPEEDS   = [28, 22, 32, 24, 26]
-  const OFFSETS  = [0, -60, 30, -30, 50]
-  const DELAYS   = [0, -8, -4, -14, -6]
+  // Split covers into columns — 3 left, 5 right
+  const rightCovers = covers.slice(0, Math.ceil(covers.length * 0.6))
+  const leftCovers  = covers.slice(Math.ceil(covers.length * 0.6))
+  const rightCols = [0, 1, 2, 3, 4].map(i => rightCovers.filter((_, idx) => idx % 5 === i))
+  const leftCols  = [0, 1, 2].map(i => leftCovers.filter((_, idx) => idx % 3 === i))
+  const hasCols = covers.length >= 8
+  const R_SPEEDS  = [28, 22, 32, 24, 26]
+  const R_OFFSETS = [0, -60, 30, -30, 50]
+  const R_DELAYS  = [0, -8, -4, -14, -6]
+  const L_SPEEDS  = [30, 24, 27]
+  const L_OFFSETS = [-20, 40, -40]
+  const L_DELAYS  = [-5, -12, -2]
 
   return (
     <div style={{ background: 'var(--background)' }}>
@@ -84,23 +90,40 @@ export default function Home() {
       {/* ══ HERO ══════════════════════════════════════════════════════════════ */}
       <section className="relative flex flex-col overflow-hidden" style={{ minHeight: '100svh' }}>
 
-        {/* Cover wall — fills right ~60% */}
+        {/* Cover wall — fills both sides */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          {/* Left solid fade */}
+          {/* Centre solid fade — keeps text legible */}
           <div className="absolute inset-0 z-10"
-            style={{ background: 'linear-gradient(to right, var(--background) 35%, rgba(10,15,30,0.92) 55%, rgba(10,15,30,0.55) 75%, rgba(10,15,30,0.2) 100%)' }} />
+            style={{ background: 'linear-gradient(to right, rgba(10,15,30,0.3) 0%, rgba(10,15,30,0.65) 18%, var(--background) 32%, var(--background) 68%, rgba(10,15,30,0.65) 82%, rgba(10,15,30,0.3) 100%)' }} />
           {/* Top + bottom vignette */}
           <div className="absolute inset-x-0 top-0 h-32 z-10" style={{ background: 'linear-gradient(to bottom, var(--background), transparent)' }} />
           <div className="absolute inset-x-0 bottom-0 h-40 z-10" style={{ background: 'linear-gradient(to top, var(--background), transparent)' }} />
 
-          {/* Columns — offset so they start mid-screen */}
-          <div className="absolute top-0 bottom-0 right-0 flex gap-2.5 items-start" style={{ left: '30%' }}>
+          {/* LEFT columns */}
+          <div className="absolute top-0 bottom-0 left-0 flex gap-2.5 items-start" style={{ width: '22%' }}>
+            {hasCols
+              ? [0,1,2].map(i => (
+                  <CoverColumn key={i} covers={leftCols[i].length ? leftCols[i] : covers.slice(0, 6)} speed={L_SPEEDS[i]} offset={L_OFFSETS[i]} delay={L_DELAYS[i]} />
+                ))
+              : Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="flex flex-col gap-2 flex-shrink-0" style={{ width: 110, marginTop: L_OFFSETS[i] }}>
+                    {Array.from({ length: 8 }).map((_, j) => (
+                      <div key={j} className="rounded-lg flex-shrink-0 animate-pulse"
+                        style={{ aspectRatio: '2/3', background: 'rgba(99,102,241,0.07)' }} />
+                    ))}
+                  </div>
+                ))
+            }
+          </div>
+
+          {/* RIGHT columns */}
+          <div className="absolute top-0 bottom-0 right-0 flex gap-2.5 items-start" style={{ width: '32%' }}>
             {hasCols
               ? [0,1,2,3,4].map(i => (
-                  <CoverColumn key={i} covers={cols[i].length ? cols[i] : covers.slice(0, 6)} speed={SPEEDS[i]} offset={OFFSETS[i]} delay={DELAYS[i]} />
+                  <CoverColumn key={i} covers={rightCols[i].length ? rightCols[i] : covers.slice(0, 6)} speed={R_SPEEDS[i]} offset={R_OFFSETS[i]} delay={R_DELAYS[i]} />
                 ))
               : Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="flex flex-col gap-2 flex-shrink-0" style={{ width: 110, marginTop: OFFSETS[i] }}>
+                  <div key={i} className="flex flex-col gap-2 flex-shrink-0" style={{ width: 110, marginTop: R_OFFSETS[i] }}>
                     {Array.from({ length: 8 }).map((_, j) => (
                       <div key={j} className="rounded-lg flex-shrink-0 animate-pulse"
                         style={{ aspectRatio: '2/3', background: 'rgba(99,102,241,0.07)' }} />

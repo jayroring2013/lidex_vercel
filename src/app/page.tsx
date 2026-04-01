@@ -92,15 +92,15 @@ export default function Home() {
 
         {/* Cover wall — fills both sides */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          {/* Centre solid fade — keeps text legible */}
+          {/* Overlay — dims the art everywhere, stronger at edges, soft in center */}
           <div className="absolute inset-0 z-10"
-            style={{ background: 'linear-gradient(to right, rgba(10,15,30,0.3) 0%, rgba(10,15,30,0.65) 18%, var(--background) 32%, var(--background) 68%, rgba(10,15,30,0.65) 82%, rgba(10,15,30,0.3) 100%)' }} />
+            style={{ background: 'linear-gradient(to right, rgba(10,15,30,0.25) 0%, rgba(10,15,30,0.55) 18%, rgba(10,15,30,0.72) 34%, rgba(10,15,30,0.72) 66%, rgba(10,15,30,0.55) 82%, rgba(10,15,30,0.25) 100%)' }} />
           {/* Top + bottom vignette */}
           <div className="absolute inset-x-0 top-0 h-32 z-10" style={{ background: 'linear-gradient(to bottom, var(--background), transparent)' }} />
           <div className="absolute inset-x-0 bottom-0 h-40 z-10" style={{ background: 'linear-gradient(to top, var(--background), transparent)' }} />
 
           {/* LEFT columns */}
-          <div className="absolute top-0 bottom-0 left-0 flex gap-2.5 items-start" style={{ width: '22%' }}>
+          <div className="absolute top-0 bottom-0 left-0 flex gap-2.5 items-start" style={{ width: '50%' }}>
             {hasCols
               ? [0,1,2].map(i => (
                   <CoverColumn key={i} covers={leftCols[i].length ? leftCols[i] : covers.slice(0, 6)} speed={L_SPEEDS[i]} offset={L_OFFSETS[i]} delay={L_DELAYS[i]} />
@@ -117,7 +117,7 @@ export default function Home() {
           </div>
 
           {/* RIGHT columns */}
-          <div className="absolute top-0 bottom-0 right-0 flex gap-2.5 items-start" style={{ width: '32%' }}>
+          <div className="absolute top-0 bottom-0 right-0 flex gap-2.5 items-start" style={{ width: '50%' }}>
             {hasCols
               ? [0,1,2,3,4].map(i => (
                   <CoverColumn key={i} covers={rightCols[i].length ? rightCols[i] : covers.slice(0, 6)} speed={R_SPEEDS[i]} offset={R_OFFSETS[i]} delay={R_DELAYS[i]} />

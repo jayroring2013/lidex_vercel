@@ -232,10 +232,13 @@ export default function Home() {
 
         {/* Hero content */}
         <div className="relative z-20 flex-1 flex flex-col justify-center">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
+            <div className="flex flex-col lg:flex-row items-center gap-10 lg:gap-16">
+            {/* ── Left column ── */}
+            <div className="flex-1 min-w-0">
 
-            {/* Genre tags — feels like AniList */}
-            <div className="flex flex-wrap gap-2 mb-7">
+            {/* Type tags */}
+            <div className="flex flex-wrap gap-2 mb-5">
               {[
                 { label: 'Anime', color: '#6366f1' },
                 { label: 'Manga', color: '#ec4899' },
@@ -243,9 +246,9 @@ export default function Home() {
               ].map(t => <TypeTag key={t.label} {...t} />)}
             </div>
 
-            {/* Main headline — casual, discovery-oriented */}
+            {/* Headline */}
             <h1
-              className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-black leading-[1.05] tracking-tight mb-5 max-w-xl"
+              className="text-4xl sm:text-5xl lg:text-6xl font-black leading-[1.05] tracking-tight mb-4 max-w-lg"
               style={{ fontFamily: 'var(--font-inter), "Be Vietnam Pro", sans-serif' }}
             >
               <span style={{ color: 'var(--foreground)' }}>
@@ -254,53 +257,135 @@ export default function Home() {
               <br />
               <span style={{
                 background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 45%, #ec4899 100%)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
+                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
               }}>
                 {vi ? 'tiếp theo của bạn ✦' : 'next obsession ✦'}
               </span>
             </h1>
 
-            <p className="text-base sm:text-lg leading-relaxed max-w-md mb-7"
+            {/* Description */}
+            <p className="text-sm sm:text-base leading-relaxed max-w-xs sm:max-w-sm mb-6"
               style={{ color: 'var(--foreground-secondary)' }}>
               {vi
-                ? 'Điểm số, xu hướng và thống kê cho cộng đồng yêu thích Anime, Manga và Light Novel.'
+                ? 'Điểm số, xu hướng và thống kê sâu cho cộng đồng yêu thích Anime, Manga và Light Novel.'
                 : 'Scores, trends and deep stats for fans of Anime, Manga & Light Novels.'}
             </p>
 
-            {/* Primary CTA */}
-            <div className="flex flex-wrap gap-3">
-              <Link
-                href="/browse"
-                className="group inline-flex items-center gap-2.5 px-6 py-3.5 rounded-2xl text-sm font-bold text-white transition-all duration-200 hover:scale-105 hover:-translate-y-0.5"
-                style={{
-                  background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                  boxShadow: '0 6px 24px rgba(99,102,241,0.4)',
-                }}
-              >
-                <Sparkles className="w-4 h-4" />
+            {/* ── Stat strip — frosted glass pill ── */}
+            <div className="inline-flex items-stretch rounded-2xl overflow-hidden mb-7"
+              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.10)', backdropFilter: 'blur(16px)' }}>
+              {[
+                { val: '3K+',   label: vi ? 'Tựa'       : 'Titles',   color: '#818cf8' },
+                { val: '7',     label: vi ? 'Tín hiệu'  : 'Signals',  color: '#fbbf24' },
+                { val: '3',     label: vi ? 'Loại'      : 'Types',    color: '#34d399' },
+                { val: '100%',  label: vi ? 'Miễn phí'  : 'Free',     color: '#f472b6' },
+              ].map((s, i, arr) => (
+                <div key={s.label} className="flex flex-col items-center justify-center px-4 py-2.5"
+                  style={{ borderRight: i < arr.length - 1 ? '1px solid rgba(255,255,255,0.08)' : 'none', minWidth: 64 }}>
+                  <span className="text-base font-black leading-none" style={{ color: s.color }}>{s.val}</span>
+                  <span className="text-[10px] mt-0.5 whitespace-nowrap" style={{ color: 'rgba(255,255,255,0.38)' }}>{s.label}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* CTAs */}
+            <div className="flex flex-wrap gap-3 mb-6">
+              <Link href="/browse"
+                className="group inline-flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-bold text-white transition-all duration-200 hover:scale-105 hover:-translate-y-0.5"
+                style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 6px 20px rgba(99,102,241,0.4)' }}>
+                <Sparkles className="w-3.5 h-3.5" />
                 {vi ? 'Bắt đầu khám phá' : 'Start Exploring'}
-                <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
               </Link>
-              <Link
-                href="/dashboard"
-                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-2xl text-sm font-bold transition-all duration-200 hover:scale-105 hover:-translate-y-0.5"
-                style={{
-                  background: 'rgba(255,255,255,0.07)',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  color: 'var(--foreground)',
-                  backdropFilter: 'blur(8px)',
-                }}
-              >
-                {vi ? 'Dashboard' : 'Dashboard'}
+              <Link href="/dashboard"
+                className="inline-flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-bold transition-all duration-200 hover:scale-105"
+                style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--foreground)', backdropFilter: 'blur(8px)' }}>
+                <BarChart2 className="w-3.5 h-3.5" />
+                Dashboard
               </Link>
             </div>
 
-            {/* Quick-access feature pills */}
-            <div className="flex flex-wrap gap-2 mt-7">
+            {/* Live indicator */}
+            <p className="text-xs flex items-center gap-1.5 mb-6" style={{ color: 'var(--foreground-muted)' }}>
+              <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#4ade80' }} />
+              {vi ? 'Dữ liệu cộng đồng · cập nhật liên tục' : 'Community data · continuously updated'}
+            </p>
+
+            {/* Feature pills */}
+            <div className="flex flex-wrap gap-2">
               {features.map(f => <FeaturePill key={f.href + f.label} {...f} />)}
             </div>
+            </div>{/* end left column */}
+
+            {/* ── Right column — visible cover stack ── */}
+            <div className="hidden lg:flex flex-shrink-0 items-center justify-center relative" style={{ width: 340 }}>
+              {/* Frosted info card floating on top */}
+              <div className="absolute top-0 right-0 z-20 rounded-2xl p-3 w-44"
+                style={{ background: 'rgba(15,23,42,0.75)', border: '1px solid rgba(255,255,255,0.12)', backdropFilter: 'blur(16px)' }}>
+                <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: '#818cf8' }}>
+                  {vi ? 'LiDex Score' : 'LiDex Score'}
+                </p>
+                {[
+                  { label: 'Community', val: 94, color: '#6366f1' },
+                  { label: 'Popularity', val: 88, color: '#22c55e' },
+                  { label: 'Completion', val: 91, color: '#fbbf24' },
+                ].map(row => (
+                  <div key={row.label} className="mb-1.5">
+                    <div className="flex justify-between mb-0.5">
+                      <span className="text-[9px]" style={{ color: 'rgba(255,255,255,0.4)' }}>{row.label}</span>
+                      <span className="text-[9px] font-bold" style={{ color: row.color }}>{row.val}</span>
+                    </div>
+                    <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                      <div className="h-full rounded-full" style={{ width: `${row.val}%`, background: row.color, opacity: 0.8 }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Staggered cover cards */}
+              <div className="relative w-full h-80 mt-8">
+                {heroCovers.slice(0, 4).map((anime, i) => {
+                  const transforms = [
+                    { left: '0%',   top: '10%',  rotate: '-6deg',  w: 110, z: 1 },
+                    { left: '22%',  top: '0%',   rotate: '-2deg',  w: 120, z: 2 },
+                    { left: '45%',  top: '5%',   rotate: '3deg',   w: 115, z: 3 },
+                    { left: '65%',  top: '15%',  rotate: '7deg',   w: 105, z: 1 },
+                  ]
+                  const t = transforms[i] || transforms[0]
+                  return (
+                    <Link key={anime.id} href={`/content/${anime.id}`}
+                      className="absolute rounded-xl overflow-hidden transition-transform duration-300 hover:scale-110 hover:z-30"
+                      style={{
+                        left: t.left, top: t.top, width: t.w,
+                        aspectRatio: '2/3',
+                        transform: `rotate(${t.rotate})`,
+                        zIndex: t.z,
+                        border: '2px solid rgba(255,255,255,0.10)',
+                        boxShadow: '0 16px 40px rgba(0,0,0,0.6)',
+                      }}>
+                      {anime.cover_url
+                        ? <SafeImg src={anime.cover_url} alt={anime.title} className="w-full h-full object-cover block" />
+                        : <div className="w-full h-full" style={{ background: 'rgba(99,102,241,0.2)' }} />
+                      }
+                    </Link>
+                  )
+                })}
+                {heroCovers.length === 0 && Array.from({ length: 4 }).map((_, i) => {
+                  const transforms = [
+                    { left: '0%',  top: '10%', rotate: '-6deg', w: 110 },
+                    { left: '22%', top: '0%',  rotate: '-2deg', w: 120 },
+                    { left: '45%', top: '5%',  rotate: '3deg',  w: 115 },
+                    { left: '65%', top: '15%', rotate: '7deg',  w: 105 },
+                  ]
+                  const t = transforms[i]
+                  return (
+                    <div key={i} className="absolute rounded-xl animate-pulse"
+                      style={{ left: t.left, top: t.top, width: t.w, aspectRatio: '2/3', transform: `rotate(${t.rotate})`, background: 'rgba(99,102,241,0.12)', border: '2px solid rgba(255,255,255,0.06)' }} />
+                  )
+                })}
+              </div>
+            </div>
+            </div>{/* end flex row */}
           </div>
         </div>
 

@@ -42,19 +42,17 @@ const PAGE_SIZE_OPTS    = [12, 24, 48, 96]
 
 const SORT_OPTS: Record<ContentType, { id: string; label: string }[]> = {
   anime: [
-    { id: 'score_desc',   label: 'Điểm cao nhất'    },
     { id: 'popular_desc', label: 'Phổ biến nhất'    },
-    { id: 'year_desc',    label: 'Mới nhất'          },
-    { id: 'title_asc',    label: 'Tên A–Z'           },
+    { id: 'score_desc',   label: 'Điểm cao nhất'    },
+    { id: 'year_desc',    label: 'Mới cập nhật'     },
+    { id: 'title_asc',    label: 'Tên A–Z'          },
   ],
   manga: [
-    { id: 'rating_desc',  label: 'Điểm cao nhất'    },
-    { id: 'follows_desc', label: 'Nhiều follow nhất' },
-    { id: 'year_desc',    label: 'Mới nhất'          },
-    { id: 'title_asc',    label: 'Tên A–Z'           },
+    { id: 'year_desc',    label: 'Mới cập nhật'     },
+    { id: 'title_asc',    label: 'Tên A–Z'          },
   ],
   novel: [
-    { id: 'votes_desc',   label: 'Nhiều votes nhất' },
+    { id: 'year_desc',    label: 'Mới cập nhật'     },
     { id: 'title_asc',    label: 'Tên A–Z'          },
   ],
 }
@@ -126,31 +124,31 @@ function toAnimeCards(rows: any[]): SeriesCard[] {
 function toMangaCards(rows: any[]): SeriesCard[] {
   return rows.map(m => ({
     id:         m.id,
-    title:      m.title_en || m.title_ja_ro || String(m.id),
+    title:      m.title,
     cover_url:  proxyImg(m.cover_url),
-    scoreLabel: m.rating ? `★ ${Number(m.rating).toFixed(2)}` : m.follows ? `♥ ${fmtNum(m.follows)}` : '',
+    scoreLabel: '',
     status:     m.status,
     type:       'manga' as ContentType,
-    meta:       m.author ?? null,
-    year:       m.year   ?? null,
+    meta:       m.publisher ?? null,
+    year:       null,
     genres:     Array.isArray(m.genres) ? m.genres : [],
-    href:       `https://mangadex.org/title/${m.id}`,
-    external:   true,
+    href:       `/content/${m.id}`,
+    external:   false,
   }))
 }
 
 function toNovelCards(rows: any[]): SeriesCard[] {
   return (rows || []).filter(Boolean).map(n => ({
-    id:         n.series_id ?? n.id,
+    id:         n.id,
     title:      n.title,
-    cover_url:  n.cover_url ?? n.latest_volume_cover ?? null,
-    scoreLabel: (n.latest_votes ?? n.votes) ? `★ ${fmtNum(n.latest_votes ?? n.votes)}` : '',
-    status:     null,
+    cover_url:  proxyImg(n.cover_url),
+    scoreLabel: '',
+    status:     n.status,
     type:       'novel' as ContentType,
     meta:       n.publisher ?? null,
     year:       null,
-    genres:     [],
-    href:       `/content/${n.series_id ?? n.id}`,
+    genres:     Array.isArray(n.genres) ? n.genres : [],
+    href:       `/content/${n.id}`,
     external:   false,
   }))
 }
@@ -433,76 +431,39 @@ export default function BrowsePage() {
       try {
         if (type === 'anime') {
           const [{ data: pop }, { data: rec }] = await Promise.all([
-            supabase.from('series').select('id, title, cover_url, status, studio, anime_meta(mean_score, popularity, season_year)')
-              .eq('item_type', 'anime').not('cover_url', 'is', null)
+            supabase.from('series').select('id, title, cover_url, status, publisher, anime_meta(mean_score, popularity, season_year)')
+              .eq('item_type', 'anime').not('cover_url', 'is', null).not('genres', 'cs', '{"Hentai"}')
               .order('anime_meta(popularity)', { ascending: false }).limit(14),
-            supabase.from('series').select('id, title, cover_url, status, studio, anime_meta(mean_score, season_year)')
-              .eq('item_type', 'anime').not('cover_url', 'is', null)
-              .order('anime_meta(season_year)', { ascending: false }).limit(14),
+            supabase.from('series').select('id, title, cover_url, status, publisher, anime_meta(mean_score, season_year)')
+              .eq('item_type', 'anime').not('cover_url', 'is', null).not('genres', 'cs', '{"Hentai"}')
+              .order('updated_at', { ascending: false }).limit(14),
           ])
           if (!cancelled) { setPopular(toAnimeCards(pop || [])); setRecent(toAnimeCards(rec || [])) }
 
         } else if (type === 'manga') {
           const [{ data: pop }, { data: rec }] = await Promise.all([
-            supabase.from('manga').select('id, title_en, title_ja_ro, cover_url, rating, follows, status, genres, author, year')
-              .not('cover_url', 'is', null).order('follows', { ascending: false }).limit(14),
-            supabase.from('manga').select('id, title_en, title_ja_ro, cover_url, rating, follows, status, genres, author, year')
-              .not('cover_url', 'is', null).order('year', { ascending: false }).limit(14),
+            supabase.from('series').select('*').eq('item_type', 'manga').not('cover_url', 'is', null).not('genres', 'cs', '{"Hentai"}')
+              .order('updated_at', { ascending: false }).limit(14),
+            supabase.from('series').select('*').eq('item_type', 'manga').not('cover_url', 'is', null).not('genres', 'cs', '{"Hentai"}')
+              .order('created_at', { ascending: false }).limit(14),
           ])
           if (!cancelled) {
-            setPopular(toMangaCards(pop || []))
-            setRecent(toMangaCards(rec || []))
+            setPopular(toMangaCards(pop || [])); setRecent(toMangaCards(rec || []))
             const gs = new Set<string>()
             ;[...(pop || []), ...(rec || [])].forEach((m: any) => { if (Array.isArray(m.genres)) m.genres.forEach((g: string) => gs.add(g)) })
             setGenreOpts(Array.from(gs).sort())
           }
 
         } else {
-          // Novel: popular = top by votes (dashboard_top_novels), recent = latest volume release
-          const [{ data: d1, error: e1 }, { data: recentVols }] = await Promise.all([
-            supabase.from('dashboard_top_novels').select('series_id, title, latest_votes, cover_url').order('rank').limit(14),
-            supabase.from('volumes')
-              .select('series_id, release_date, cover_url, is_special')
-              .not('cover_url', 'is', null)
-              .order('release_date', { ascending: false })
-              .limit(100),
+          const [{ data: pop }, { data: rec }] = await Promise.all([
+            supabase.from('series').select('*').eq('item_type', 'novel').not('cover_url', 'is', null).not('genres', 'cs', '{"Hentai"}')
+              .order('updated_at', { ascending: false }).limit(14),
+            supabase.from('series').select('*').eq('item_type', 'novel').not('cover_url', 'is', null).not('genres', 'cs', '{"Hentai"}')
+              .order('created_at', { ascending: false }).limit(14),
           ])
-
-          // Popular: from pre-computed table
-          let popCards: SeriesCard[] = []
-          if (!e1 && d1 && d1.length > 0) {
-            popCards = toNovelCards(d1)
-          } else {
-            const { data: nd } = await supabase.from('novel_dashboard')
-              .select('id, series_id, title, latest_votes, latest_volume_cover')
-              .order('latest_votes', { ascending: false }).limit(14)
-            popCards = toNovelCards((nd || []).map((n: any) => ({ ...n, cover_url: n.latest_volume_cover, series_id: n.series_id ?? n.id })))
+          if (!cancelled) {
+            setPopular(toNovelCards(pop || [])); setRecent(toNovelCards(rec || []))
           }
-
-          // Recent: deduplicate volumes by series_id, pick newest non-special
-          const seenSeries = new Set<number>()
-          const recentIds: number[] = []
-          const recentCoverMap: Record<number, string> = {}
-          for (const v of recentVols || []) {
-            const isSpecial = typeof v.is_special === 'boolean' ? v.is_special : v.is_special?.toUpperCase?.() === 'TRUE'
-            if (isSpecial || seenSeries.has(v.series_id)) continue
-            seenSeries.add(v.series_id)
-            recentIds.push(v.series_id)
-            if (v.cover_url) recentCoverMap[v.series_id] = v.cover_url
-            if (recentIds.length >= 14) break
-          }
-          const { data: recentSeries } = await supabase
-            .from('series').select('id, title, publisher')
-            .in('id', recentIds)
-          const recentCards = toNovelCards((recentSeries || []).map((s: any) => ({
-            id: s.id, series_id: s.id,
-            title: s.title,
-            cover_url: recentCoverMap[s.id] ?? null,
-            latest_votes: null,
-            publisher: s.publisher,
-          })))
-
-          if (!cancelled) { setPopular(popCards); setRecent(recentCards) }
         }
       } catch (e) { console.error('Discovery error:', e) }
       finally { if (!cancelled) setDiscLoading(false) }
@@ -521,71 +482,39 @@ export default function BrowsePage() {
 
       if (type === 'anime') {
         let q = supabase.from('series')
-          .select('id, title, cover_url, status, studio, anime_meta(mean_score, popularity, format, season_year)')
-          .eq('item_type', 'anime')
+          .select('id, title, cover_url, status, publisher, anime_meta(mean_score, popularity, format, season_year)')
+          .eq('item_type', 'anime').not('genres', 'cs', '{"Hentai"}')
         if (search)           q = q.ilike('title', `%${search}%`)
         if (status !== 'all') q = q.ilike('status', status)
         if (sort === 'score_desc')        q = q.order('anime_meta(mean_score)',    { ascending: false })
         else if (sort === 'popular_desc') q = q.order('anime_meta(popularity)',    { ascending: false })
-        else if (sort === 'year_desc')    q = q.order('anime_meta(season_year)',   { ascending: false })
+        else if (sort === 'year_desc')    q = q.order('updated_at',                { ascending: false })
         else                              q = q.order('title',                     { ascending: true  })
         const { data } = await q.range(offset, offset + pageSize - 1)
         results = toAnimeCards(data || [])
         more = results.length === pageSize
 
       } else if (type === 'manga') {
-        let q = supabase.from('manga')
-          .select('id, title_en, title_ja_ro, cover_url, rating, follows, status, genres, author, year')
-        if (search)           q = q.or(`title_en.ilike.%${search}%,title_ja_ro.ilike.%${search}%`)
+        let q = supabase.from('series')
+          .select('*').eq('item_type', 'manga').not('genres', 'cs', '{"Hentai"}')
+        if (search)           q = q.ilike('title', `%${search}%`)
         if (status !== 'all') q = q.ilike('status', status)
         if (genre  !== 'all') q = q.contains('genres', [genre])
-        if (sort === 'rating_desc')       q = q.order('rating',   { ascending: false })
-        else if (sort === 'follows_desc') q = q.order('follows',  { ascending: false })
-        else if (sort === 'year_desc')    q = q.order('year',     { ascending: false })
-        else                              q = q.order('title_en', { ascending: true, nullsFirst: false })
+        if (sort === 'year_desc')         q = q.order('updated_at', { ascending: false })
+        else                              q = q.order('title',      { ascending: true })
         const { data } = await q.range(offset, offset + pageSize - 1)
         results = toMangaCards(data || [])
         more = results.length === pageSize
 
       } else {
-        // Novel — from series table, join latest non-special volume cover
         let q = supabase.from('series')
-          .select('id, title, publisher, status, cover_url')
-          .eq('item_type', 'novel')
+          .select('*').eq('item_type', 'novel').not('genres', 'cs', '{"Hentai"}')
         if (search) q = q.ilike('title', `%${search}%`)
-        q = q.order('title', { ascending: sort !== 'votes_desc' })
-        const { data: sData } = await q.range(offset, offset + pageSize - 1)
-
-        if (!sData || sData.length === 0) {
-          results = []; more = false
-        } else {
-          // For each series, try to get a cover from novel_dashboard (fast lookup)
-          const ids = sData.map((s: any) => s.id)
-          const { data: ndData } = await supabase
-            .from('novel_dashboard')
-            .select('series_id, latest_votes, latest_volume_cover')
-            .in('series_id', ids)
-          const ndMap: Record<number, any> = {}
-          for (const nd of ndData || []) ndMap[nd.series_id] = nd
-
-          results = sData.map((s: any) => {
-            const nd = ndMap[s.id]
-            return {
-              id:         s.id,
-              title:      s.title,
-              cover_url:  nd?.latest_volume_cover ?? s.cover_url ?? null,
-              scoreLabel: nd?.latest_votes ? `★ ${fmtNum(nd.latest_votes)}` : '',
-              status:     null,
-              type:       'novel' as ContentType,
-              meta:       s.publisher ?? null,
-              year:       null,
-              genres:     [],
-              href:       `/content/${s.id}`,
-              external:   false,
-            }
-          })
-          more = results.length === pageSize
-        }
+        if (sort === 'year_desc')         q = q.order('updated_at', { ascending: false })
+        else                              q = q.order('title',      { ascending: true })
+        const { data } = await q.range(offset, offset + pageSize - 1)
+        results = toNovelCards(data || [])
+        more = results.length === pageSize
       }
 
       if (reset) { setCards(results); setPage(1) }

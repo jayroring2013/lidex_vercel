@@ -163,12 +163,15 @@ export default function Dashboard() {
           novelTableData,
         ] = await Promise.all([
           getTopRatedSeries({ limit: 10 }),
-          supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'anime'),
-          supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'novel'),
-          supabase.from('manga').select('id', { count: 'exact', head: true }),
-          supabase.from('manga').select('id, title_en, title_ja_ro, cover_url, rating')
-            .order('rating', { ascending: false }).not('cover_url', 'is', null).limit(10),
-          supabase.from('dashboard_top_novels').select('series_id, title, latest_votes, cover_url').order('rank'),
+          supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'anime').not('genres', 'cs', '{"Hentai"}'),
+          supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'novel').not('genres', 'cs', '{"Hentai"}'),
+          supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'manga').not('genres', 'cs', '{"Hentai"}'),
+          supabase.from('series').select('id, title, cover_url')
+            .eq('item_type', 'manga').not('cover_url', 'is', null).not('genres', 'cs', '{"Hentai"}')
+            .order('updated_at', { ascending: false }).limit(10),
+          supabase.from('series').select('id, title, cover_url')
+            .eq('item_type', 'novel').not('cover_url', 'is', null).not('genres', 'cs', '{"Hentai"}')
+            .order('updated_at', { ascending: false }).limit(10),
         ])
 
         const anime = animeCount ?? 0
@@ -178,9 +181,9 @@ export default function Dashboard() {
         setStatsLoading(false)
 
         setCarouselData({
-          anime: (topAnimeData.data || []).map((s: any) => ({ id: s.id, title: s.title, cover_url: s.cover_url, score: s.score, href: `/content/${s.id}` })),
-          manga: ((mangaCarouselData.data) || []).map((m: any) => ({ id: m.id, title: m.title_en || m.title_ja_ro || m.id, cover_url: proxyImg(m.cover_url), score: m.rating ? Number(m.rating) : null, href: '#' })),
-          novel: ((novelTableData as any)?.data || novelTableData || []).map((n: any) => ({ id: n.series_id, title: n.title, cover_url: n.cover_url, score: n.latest_votes ?? null, href: `/content/${n.series_id}` })),
+          anime: (topAnimeData.data || []).map((s: any) => ({ id: s.id, title: s.title, cover_url: s.cover_url, score: s.anime_mean_score, href: `/content/${s.id}` })),
+          manga: ((mangaCarouselData.data) || []).map((m: any) => ({ id: m.id, title: m.title, cover_url: proxyImg(m.cover_url), score: null, href: `/content/${m.id}` })),
+          novel: ((novelTableData as any)?.data || novelTableData || []).map((n: any) => ({ id: n.id, title: n.title, cover_url: n.cover_url, score: null, href: `/content/${n.id}` })),
         })
         setCarouselReady(true)
       } catch (e) {

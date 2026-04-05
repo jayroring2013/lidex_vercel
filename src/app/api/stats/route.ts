@@ -4,11 +4,11 @@ import { supabase } from '@/lib/supabase'
 // GET /api/stats
 export async function GET() {
   try {
-    const [seriesCount, animeCount, mangaCount, voteCount] = await Promise.all([
-      supabase.from('series').select('*', { count: 'exact', head: true }),
-      supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'anime'),
-      supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'manga'),
-      supabase.from('novel_votes').select('*', { count: 'exact', head: true })
+    const [seriesCount, animeCount, mangaCount, novelCount] = await Promise.all([
+      supabase.from('series').select('*', { count: 'exact', head: true }).not('genres', 'cs', '{"Hentai"}'),
+      supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'anime').not('genres', 'cs', '{"Hentai"}'),
+      supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'manga').not('genres', 'cs', '{"Hentai"}'),
+      supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'novel').not('genres', 'cs', '{"Hentai"}')
     ])
 
     // ✅ Get dynamic popularity distribution from anime_meta
@@ -47,7 +47,7 @@ export async function GET() {
       totalSeries: seriesCount.count || 0,
       totalAnime: animeCount.count || 0,
       totalManga: mangaCount.count || 0,
-      totalVotes: voteCount.count || 0,
+      totalNovels: novelCount.count || 0,
       popularityStats, // ✅ Dynamic percentiles
     })
   } catch (error: any) {

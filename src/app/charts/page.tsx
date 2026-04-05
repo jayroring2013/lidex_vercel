@@ -228,6 +228,7 @@ export default function ChartsPage() {
         .select('id, title, anime_meta(*)')
         .eq('item_type', 'anime')
         .not('anime_meta', 'is', null)
+        .not('genres', 'cs', '{"Hentai"}')
         .limit(2000)
       if (!error && data) setAllAnime(data as any)
       setAnimeLoading(false)
@@ -245,6 +246,7 @@ export default function ChartsPage() {
         .from('series')
         .select('id, title, publisher')
         .eq('item_type', 'novel')
+        .not('genres', 'cs', '{"Hentai"}')
 
       if (sErr || !seriesData) {
         console.error('[Novel] series fetch error:', sErr)

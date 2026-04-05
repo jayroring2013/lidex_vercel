@@ -7,6 +7,11 @@
 -- Write operations are protected separately (no anon INSERT/UPDATE/DELETE).
 -- ============================================================
 
+-- Grant core permissions (Fixes 42501: Permission Denied)
+GRANT USAGE ON SCHEMA public TO anon, authenticated;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO anon, authenticated;
+GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
+
 -- ── publishers ───────────────────────────────────────────────────────────────
 ALTER TABLE publishers ENABLE ROW LEVEL SECURITY;
 

@@ -2,13 +2,14 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ArrowRight, Sparkles, BarChart2, Flame } from 'lucide-react'
 import supabase from '@/lib/supabaseClient'
 import { useLocale } from '@/contexts/LocaleContext'
 
 interface Cover { id: number; title: string; cover_url: string | null }
+interface TypeCounts { anime: number; manga: number; novel: number }
 
 // ── Safe image ────────────────────────────────────────────────────────────────
 function SafeImg({ src, alt }: { src: string; alt: string }) {
@@ -42,13 +43,17 @@ export default function Home() {
   const { locale } = useLocale()
   const vi = locale === 'vi'
 
+  // Cover wall — all content types mixed
   const [covers,     setCovers]     = useState<Cover[]>([])
-  const [popular,    setPopular]    = useState<Cover[]>([])
-  const [statsCount, setStatsCount] = useState<number | null>(null)
+  // Trending row — top anime by anime_meta.trending ASC
+  const [trending,   setTrending]   = useState<Cover[]>([])
+  // Hero stat line — per-type counts from series
+  const [typeCounts, setTypeCounts] = useState<TypeCounts | null>(null)
 
   useEffect(() => {
-    // Fetch covers from all types (anime, manga, novel) for the wall
-    supabase.from('series')
+    // ── 1.  Cover wall: mix of anime + manga + novel ───────────────────────
+    supabase
+      .from('series')
       .select('id, title, cover_url, item_type')
       .in('item_type', ['anime', 'manga', 'novel'])
       .not('cover_url', 'is', null)
@@ -56,19 +61,47 @@ export default function Home() {
       .then(({ data, error }) => {
         const source = error ? null : data
         const load = (d: any[]) => {
-          // Shuffle so types are mixed across columns
           const shuffled = [...d].sort(() => Math.random() - 0.5)
-          const mapped: Cover[] = shuffled.map((s: any) => ({ id: s.id, title: s.title, cover_url: s.cover_url }))
-          setCovers(mapped)
-          setPopular(mapped.slice(0, 6))
+          setCovers(shuffled.map((s: any) => ({ id: s.id, title: s.title, cover_url: s.cover_url })))
         }
         if (source && source.length > 0) { load(source); return }
+        // Fallback: any series with a cover
         supabase.from('series').select('id, title, cover_url').not('cover_url', 'is', null).limit(60)
           .then(({ data: d2 }) => load(d2 || []))
       })
 
-    supabase.from('series').select('*', { count: 'exact', head: true })
-      .then(({ count }) => setStatsCount(count))
+    // ── 2.  Trending row: anime_meta.trending ASC joined to series ─────────
+    //        anime_meta is populated (~500 rows); voting_results is not yet.
+    supabase
+      .from('anime_meta')
+      .select('series_id, trending, series!inner(id, title, cover_url)')
+      .not('trending', 'is', null)
+      .order('trending', { ascending: true })
+      .limit(12)
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          setTrending(
+            data.map((r: any) => ({
+              id:        r.series.id,
+              title:     r.series.title,
+              cover_url: r.series.cover_url,
+            }))
+          )
+        }
+      })
+
+    // ── 3.  Per-type counts: series table, one count per item_type ─────────
+    Promise.all([
+      supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'anime'),
+      supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'manga'),
+      supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'novel'),
+    ]).then(([animeRes, mangaRes, novelRes]) => {
+      setTypeCounts({
+        anime: animeRes.count ?? 0,
+        manga: mangaRes.count ?? 0,
+        novel: novelRes.count ?? 0,
+      })
+    })
   }, [])
 
   // Split covers into columns — 3 left, 5 right
@@ -136,7 +169,7 @@ export default function Home() {
               {vi ? 'Phân tích · Dữ liệu · Cộng đồng' : 'Analytics · Data · Community'}
             </p>
 
-            {/* Headline — large, clean, no gradient on colored text */}
+            {/* Headline */}
             <h1 className="font-black leading-none tracking-tight mb-6"
               style={{
                 fontSize: 'clamp(2.8rem, 7vw, 5.5rem)',
@@ -176,10 +209,18 @@ export default function Home() {
               </Link>
             </div>
 
-            {/* Subtle stat line */}
-            {statsCount && (
-              <p className="mt-8 text-xs" style={{ color: 'rgba(255,255,255,0.25)' }}>
-                {statsCount.toLocaleString()} {vi ? 'tựa trong cơ sở dữ liệu' : 'titles in the database'}
+            {/* Per-type stat line — replaces the old single total count */}
+            {typeCounts && (
+              <p className="mt-8 text-xs" style={{ color: 'rgba(255,255,255,0.28)' }}>
+                <span style={{ color: 'rgba(129,140,248,0.65)' }}>{typeCounts.anime.toLocaleString()}</span>
+                {' '}{vi ? 'anime' : 'anime'}
+                {' · '}
+                <span style={{ color: 'rgba(34,197,94,0.65)' }}>{typeCounts.manga.toLocaleString()}</span>
+                {' '}{vi ? 'manga' : 'manga'}
+                {' · '}
+                <span style={{ color: 'rgba(236,72,153,0.65)' }}>{typeCounts.novel.toLocaleString()}</span>
+                {' '}{vi ? 'light novel' : 'light novels'}
+                {' '}{vi ? 'trong cơ sở dữ liệu' : 'in the database'}
               </p>
             )}
           </div>
@@ -194,8 +235,10 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ══ POPULAR ROW ═══════════════════════════════════════════════════════ */}
-      {popular.length > 0 && (
+      {/* ══ TRENDING ROW ════════════════════════════════════════════════════════
+           Source: anime_meta.trending ASC → series
+           Replaces the old "popular" row which was just a slice of cover wall  */}
+      {trending.length > 0 && (
         <section className="py-12">
           <div className="max-w-7xl mx-auto px-6 sm:px-10 lg:px-16">
 
@@ -203,7 +246,7 @@ export default function Home() {
               <div className="flex items-center gap-2">
                 <Flame className="w-4 h-4" style={{ color: '#f97316' }} />
                 <span className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--foreground-muted)' }}>
-                  {vi ? 'Phổ biến nhất' : 'Most Popular'}
+                  {vi ? 'Đang thịnh hành' : 'Trending Now'}
                 </span>
               </div>
               <Link href="/browse"
@@ -215,12 +258,12 @@ export default function Home() {
             </div>
 
             <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-              {popular.map(anime => (
-                <Link key={anime.id} href={`/content/${anime.id}`}
+              {trending.map(item => (
+                <Link key={item.id} href={`/content/${item.id}`}
                   className="group flex-shrink-0 rounded-xl overflow-hidden transition-all duration-200 hover:scale-[1.04] hover:-translate-y-1"
                   style={{ width: 130, aspectRatio: '2/3', boxShadow: '0 4px 16px rgba(0,0,0,0.35)' }}>
-                  {anime.cover_url
-                    ? <SafeImg src={anime.cover_url} alt={anime.title} />
+                  {item.cover_url
+                    ? <SafeImg src={item.cover_url} alt={item.title} />
                     : <div className="w-full h-full" style={{ background: 'var(--background-secondary)' }} />
                   }
                 </Link>

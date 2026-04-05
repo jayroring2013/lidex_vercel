@@ -4,152 +4,196 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-// Debug logging
-console.log('🔍 Supabase URL:', supabaseUrl ? '✅ Set' : '❌ Missing')
-console.log('🔍 Supabase Key:', supabaseAnonKey ? '✅ Set' : '❌ Missing')
-
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('❌ Missing Supabase environment variables!')
-  console.error('Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to Vercel')
   throw new Error('Missing Supabase environment variables')
 }
 
-// Create and export supabase client
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 // ============================================
-// EXPORTED FUNCTIONS
+// SITE STATS
+// Uses: series (by item_type)
+// Skipped: voting_results (no data yet)
 // ============================================
-
-// Get site statistics
 export async function getSiteStats() {
   try {
-    const [seriesCount, animeCount, mangaCount, voteCount] = await Promise.all([
-      supabase.from('series').select('*', { count: 'exact', head: true }),
+    const [animeRes, mangaRes, novelRes] = await Promise.all([
       supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'anime'),
       supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'manga'),
-      supabase.from('novel_votes').select('*', { count: 'exact', head: true })
+      supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'novel'),
     ])
 
+    const totalAnime  = animeRes.count  ?? 0
+    const totalManga  = mangaRes.count  ?? 0
+    const totalNovels = novelRes.count  ?? 0
+
     return {
-      totalSeries: seriesCount.count || 0,
-      totalAnime: animeCount.count || 0,
-      totalManga: mangaCount.count || 0,
-      totalVotes: voteCount.count || 0
+      totalSeries: totalAnime + totalManga + totalNovels,
+      totalAnime,
+      totalManga,
+      totalNovels,
+      // voting_results has no data yet — reserved for future community voting feature
+      totalVotes: 0,
     }
   } catch (error) {
     console.error('Failed to get stats:', error)
-    return { totalSeries: 0, totalAnime: 0, totalManga: 0, totalVotes: 0 }
+    return { totalSeries: 0, totalAnime: 0, totalManga: 0, totalNovels: 0, totalVotes: 0 }
   }
 }
 
-// Get trending series
+// ============================================
+// TRENDING SERIES
+// Uses: anime_meta (trending ASC) → series
+// Old: series.is_featured (column does not exist)
+// ============================================
 export async function getTrendingSeries({ limit = 10 } = {}) {
   try {
     const { data, error } = await supabase
-      .from('series')
-      .select('*')
-      .order('is_featured', { ascending: false })
+      .from('anime_meta')
+      .select(`
+        series_id,
+        trending,
+        mean_score,
+        popularity,
+        format,
+        episodes,
+        season,
+        season_year,
+        series!inner (
+          id, title, title_vi, title_native, slug, cover_url,
+          banner_url, status, genres, item_type
+        )
+      `)
+      .not('trending', 'is', null)
+      .order('trending', { ascending: true })
       .limit(limit)
-    
+
     if (error) throw error
-    return { data: data || [], error: null }
+
+    // Flatten for easy consumption
+    const flat = (data || []).map(r => ({
+      ...r.series,
+      anime_trending:   r.trending,
+      anime_mean_score: r.mean_score,
+      anime_popularity: r.popularity,
+      anime_format:     r.format,
+      anime_episodes:   r.episodes,
+      anime_season:     r.season,
+      anime_season_year: r.season_year,
+    }))
+
+    return { data: flat, error: null }
   } catch (error) {
     console.error('Failed to get trending:', error)
     return { data: [], error }
   }
 }
 
-// Get top rated series
+// ============================================
+// TOP RATED SERIES
+// Uses: anime_meta (mean_score DESC) → series
+// Old: series.score (column does not exist)
+// ============================================
 export async function getTopRatedSeries({ limit = 10 } = {}) {
   try {
     const { data, error } = await supabase
-      .from('series')
-      .select('*')
-      .not('score', 'is', null)
-      .order('score', { ascending: false })
+      .from('anime_meta')
+      .select(`
+        series_id,
+        mean_score,
+        average_score,
+        popularity,
+        favourites,
+        format,
+        episodes,
+        series!inner (
+          id, title, title_vi, title_native, slug, cover_url,
+          banner_url, status, genres, item_type
+        )
+      `)
+      .not('mean_score', 'is', null)
+      .order('mean_score', { ascending: false })
       .limit(limit)
-    
+
     if (error) throw error
-    return { data: data || [], error: null }
+
+    const flat = (data || []).map(r => ({
+      ...r.series,
+      anime_mean_score:    r.mean_score,
+      anime_average_score: r.average_score,
+      anime_popularity:    r.popularity,
+      anime_favourites:    r.favourites,
+      anime_format:        r.format,
+      anime_episodes:      r.episodes,
+    }))
+
+    return { data: flat, error: null }
   } catch (error) {
     console.error('Failed to get top rated:', error)
     return { data: [], error }
   }
 }
 
-// Get series count by type
+// ============================================
+// SERIES COUNT BY TYPE
+// Uses: series (item_type filter)
+// ============================================
 export async function getSeriesCountByType() {
   try {
-    const [anime, manga, ln] = await Promise.all([
+    const [anime, manga, novel] = await Promise.all([
       supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'anime'),
       supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'manga'),
-      supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'novel')
+      supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'novel'),
     ])
-    
-    return { data: [anime.count || 0, manga.count || 0, ln.count || 0], error: null }
+    return {
+      data: [anime.count ?? 0, manga.count ?? 0, novel.count ?? 0],
+      error: null,
+    }
   } catch (error) {
     console.error('Failed to get type distribution:', error)
     return { data: [0, 0, 0], error }
   }
 }
 
-// Get vote stats (last N days)
+// ============================================
+// VOTE STATS — STUB (no data yet)
+// voting_periods and voting_results exist in schema
+// but have not been populated yet.
+// TODO: implement when community voting feature is live.
+// ============================================
 export async function getVoteStats({ days = 30 } = {}) {
-  try {
-    const startDate = new Date()
-    startDate.setDate(startDate.getDate() - days)
-    
-    const { data, error } = await supabase
-      .from('novel_votes')
-      .select('created_at')
-      .gte('created_at', startDate.toISOString())
-      .order('created_at', { ascending: true })
-    
-    if (error) throw error
-    
-    // Group by day
-    const votesByDay = {}
-    data?.forEach(vote => {
-      const date = new Date(vote.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-      votesByDay[date] = (votesByDay[date] || 0) + 1
-    })
-    
-    const labels = Object.keys(votesByDay)
-    const values = Object.values(votesByDay)
-    
-    return { data: { labels, values }, error: null }
-  } catch (error) {
-    console.error('Failed to get vote stats:', error)
-    return { data: { labels: [], values: [] }, error }
-  }
+  // voting_results has no data — return empty shape
+  return { data: { labels: [], values: [] }, error: null }
 }
 
-// Get recent activity
+// ============================================
+// RECENT ACTIVITY
+// Uses: stat_snapshots (most recently snapshotted anime)
+// Old: novel_votes (table does not exist)
+// ============================================
 export async function getRecentActivity({ limit = 10 } = {}) {
   try {
     const { data, error } = await supabase
-      .from('novel_votes')
+      .from('stat_snapshots')
       .select(`
-        *,
-        series (
-          id,
-          title,
-          item_type,
-          cover_url
+        id, week_start, aired_episode,
+        series!inner (
+          id, title, item_type, cover_url, slug
         )
       `)
-      .order('created_at', { ascending: false })
+      .order('week_start', { ascending: false })
       .limit(limit)
-    
+
     if (error) throw error
-    
-    const activities = data?.map(v => ({
-      type: 'vote',
-      series: v.series,
-      created_at: v.created_at
-    })) || []
-    
+
+    const activities = (data || []).map(snap => ({
+      type:       'snapshot',
+      series:     snap.series,
+      week_start: snap.week_start,
+      episode:    snap.aired_episode,
+    }))
+
     return { data: activities, error: null }
   } catch (error) {
     console.error('Failed to get activity:', error)
@@ -157,24 +201,32 @@ export async function getRecentActivity({ limit = 10 } = {}) {
   }
 }
 
-// Get release schedule
+// ============================================
+// RELEASE SCHEDULE
+// Uses: volumes (release_date >= today) → series
+// Old: release_schedule (table does not exist)
+// ============================================
 export async function getReleaseSchedule({ limit = 10 } = {}) {
   try {
+    const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
+
     const { data, error } = await supabase
-      .from('release_schedule')
+      .from('volumes')
       .select(`
-        *,
-        series (
-          id,
-          title,
-          item_type,
-          cover_url
+        id, volume_number, title, release_date, price, currency,
+        cover_url, is_special, is_digital, translator,
+        series!inner (
+          id, title, title_vi, item_type, cover_url, slug
+        ),
+        publishers (
+          id, name
         )
       `)
-      .gte('release_date', new Date().toISOString())
+      .gte('release_date', today)
+      .eq('is_special', false)
       .order('release_date', { ascending: true })
       .limit(limit)
-    
+
     if (error) throw error
     return { data: data || [], error: null }
   } catch (error) {
@@ -183,7 +235,10 @@ export async function getReleaseSchedule({ limit = 10 } = {}) {
   }
 }
 
-// Get series by ID
+// ============================================
+// SERIES BY ID
+// Uses: series
+// ============================================
 export async function getSeriesById(id) {
   try {
     const { data, error } = await supabase
@@ -191,7 +246,7 @@ export async function getSeriesById(id) {
       .select('*')
       .eq('id', id)
       .single()
-    
+
     if (error) throw error
     return { data, error: null }
   } catch (error) {
@@ -200,32 +255,22 @@ export async function getSeriesById(id) {
   }
 }
 
-// Get vote count for series
+// ============================================
+// VOTE COUNT — STUB (no data yet)
+// voting_results exists in schema but is empty.
+// TODO: implement when community voting feature is live.
+// ============================================
 export async function getVoteCount(seriesId) {
-  try {
-    const { count } = await supabase
-      .from('novel_votes')
-      .select('*', { count: 'exact', head: true })
-      .eq('novel_id', seriesId)
-    
-    return count || 0
-  } catch (error) {
-    console.error('Failed to get vote count:', error)
-    return 0
-  }
+  // voting_results has no data — return 0
+  return 0
 }
 
-// Submit vote
+// ============================================
+// SUBMIT VOTE — STUB (not implemented yet)
+// voting_periods must exist before votes can be recorded.
+// TODO: implement when community voting feature is live.
+// ============================================
 export async function submitVote(seriesId) {
-  try {
-    const { data, error } = await supabase
-      .from('novel_votes')
-      .insert([{ novel_id: seriesId, created_at: new Date().toISOString() }])
-    
-    if (error) throw error
-    return { data, error: null }
-  } catch (error) {
-    console.error('Failed to submit vote:', error)
-    return { data: null, error }
-  }
+  console.warn('submitVote: community voting feature is not yet implemented.')
+  return { data: null, error: new Error('Voting feature not yet available') }
 }

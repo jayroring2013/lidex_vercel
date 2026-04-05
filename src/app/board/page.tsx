@@ -41,6 +41,18 @@ const SECTION_COLORS: Record<CarouselSection, string> = {
 
 const ROTATE_INTERVAL = 6000 // 6s per section
 
+// Proxy ALL external images to avoid CORS / hotlink issues
+function proxyImg(url: string | null): string | null {
+  if (!url) return null
+  try {
+    const h = new URL(url).hostname
+    if (!h.includes('supabase') && !h.includes('localhost') && !url.startsWith('/')) {
+      return `/api/image-proxy?url=${encodeURIComponent(url)}`
+    }
+  } catch {}
+  return url
+}
+
 export default function Dashboard() {
   const [stats,    setStats]    = useState<SiteStats | null>(null)
   const [loading,  setLoading]  = useState(true)
@@ -97,7 +109,7 @@ export default function Dashboard() {
         const mangaItems: CarouselItem[] = (mangaData || []).map((m: any) => ({
           id:        m.id,
           title:     m.title,
-          cover_url: m.cover_url,
+          cover_url: proxyImg(m.cover_url),
           score:     null,
           href:      `/content/${m.id}`,
         }))
@@ -105,7 +117,7 @@ export default function Dashboard() {
         const novelItems: CarouselItem[] = (novelData || []).map((n: any) => ({
           id:        n.id,
           title:     n.title,
-          cover_url: n.cover_url,
+          cover_url: proxyImg(n.cover_url),
           score:     null,
           href:      `/content/${n.id}`,
         }))

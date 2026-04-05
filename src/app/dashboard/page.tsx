@@ -22,12 +22,14 @@ const SECTION_CONFIG: Record<CarouselSection, { label: string; labelVI: string; 
 }
 const ROTATE_INTERVAL = 6000
 
-const MANGADEX_DOMAINS = ['uploads.mangadex.org', 'cmdxd98ubx3fv.cloudfront.net', 'mangadex.org']
+// Proxy ALL external images to avoid CORS / hotlink issues
 function proxyImg(url: string | null): string | null {
   if (!url) return null
   try {
     const h = new URL(url).hostname
-    if (MANGADEX_DOMAINS.some(d => h.endsWith(d))) return `/api/image-proxy?url=${encodeURIComponent(url)}`
+    if (!h.includes('supabase') && !h.includes('localhost') && !url.startsWith('/')) {
+      return `/api/image-proxy?url=${encodeURIComponent(url)}`
+    }
   } catch {}
   return url
 }
@@ -183,7 +185,7 @@ export default function Dashboard() {
         setCarouselData({
           anime: (topAnimeData.data || []).map((s: any) => ({ id: s.id, title: s.title, cover_url: s.cover_url, score: s.anime_mean_score, href: `/content/${s.id}` })),
           manga: ((mangaCarouselData.data) || []).map((m: any) => ({ id: m.id, title: m.title, cover_url: proxyImg(m.cover_url), score: null, href: `/content/${m.id}` })),
-          novel: ((novelTableData as any)?.data || novelTableData || []).map((n: any) => ({ id: n.id, title: n.title, cover_url: n.cover_url, score: null, href: `/content/${n.id}` })),
+          novel: ((novelTableData as any)?.data || novelTableData || []).map((n: any) => ({ id: n.id, title: n.title, cover_url: proxyImg(n.cover_url), score: null, href: `/content/${n.id}` })),
         })
         setCarouselReady(true)
       } catch (e) {

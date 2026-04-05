@@ -49,8 +49,14 @@ export default function Home() {
   const [trending,   setTrending]   = useState<Cover[]>([])
   // Hero stat line — per-type counts from series
   const [typeCounts, setTypeCounts] = useState<TypeCounts | null>(null)
+  // Debug state — shows query results/errors visually on the page
+  const [debug, setDebug] = useState<Record<string, any>>({})
 
   useEffect(() => {
+    const dbg: Record<string, any> = {
+      supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ?? '(not set)',
+    }
+
     // ── 1.  Cover wall: mix of anime + manga + novel ───────────────────────
     supabase
       .from('series')
@@ -59,26 +65,35 @@ export default function Home() {
       .not('cover_url', 'is', null)
       .limit(60)
       .then(({ data, error }) => {
+        dbg.seriesError = error ? `${error.code}: ${error.message}` : null
+        dbg.seriesRows  = data?.length ?? 0
+        setDebug(prev => ({ ...prev, ...dbg }))
+
         const source = error ? null : data
         const load = (d: any[]) => {
           const shuffled = [...d].sort(() => Math.random() - 0.5)
           setCovers(shuffled.map((s: any) => ({ id: s.id, title: s.title, cover_url: s.cover_url })))
         }
         if (source && source.length > 0) { load(source); return }
-        // Fallback: any series with a cover
         supabase.from('series').select('id, title, cover_url').not('cover_url', 'is', null).limit(60)
-          .then(({ data: d2 }) => load(d2 || []))
+          .then(({ data: d2, error: e2 }) => {
+            dbg.seriesFallbackError = e2 ? `${e2.code}: ${e2.message}` : null
+            setDebug(prev => ({ ...prev, ...dbg }))
+            load(d2 || [])
+          })
       })
 
     // ── 2.  Trending row: anime_meta.trending ASC joined to series ─────────
-    //        anime_meta is populated (~500 rows); voting_results is not yet.
     supabase
       .from('anime_meta')
       .select('series_id, trending, series!inner(id, title, cover_url)')
       .not('trending', 'is', null)
       .order('trending', { ascending: true })
       .limit(12)
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        dbg.trendingError = error ? `${error.code}: ${error.message}` : null
+        dbg.trendingRows  = data?.length ?? 0
+        setDebug(prev => ({ ...prev, ...dbg }))
         if (data && data.length > 0) {
           setTrending(
             data.map((r: any) => ({
@@ -90,12 +105,17 @@ export default function Home() {
         }
       })
 
-    // ── 3.  Per-type counts: series table, one count per item_type ─────────
+    // ── 3.  Per-type counts ─────────────────────────────────────────────────
     Promise.all([
       supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'anime'),
       supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'manga'),
       supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'novel'),
     ]).then(([animeRes, mangaRes, novelRes]) => {
+      dbg.countAnimeError = animeRes.error ? `${animeRes.error.code}: ${animeRes.error.message}` : null
+      dbg.countAnime  = animeRes.count
+      dbg.countManga  = mangaRes.count
+      dbg.countNovel  = novelRes.count
+      setDebug(prev => ({ ...prev, ...dbg }))
       setTypeCounts({
         anime: animeRes.count ?? 0,
         manga: mangaRes.count ?? 0,
@@ -122,6 +142,13 @@ export default function Home() {
 
       {/* ══ HERO ══════════════════════════════════════════════════════════════ */}
       <section className="relative flex flex-col overflow-hidden" style={{ minHeight: '100svh' }}>
+
+        {Object.keys(debug).length > 0 && (
+          <div className="absolute top-0 inset-x-0 z-50 p-4 bg-black/80 font-mono text-sm border-b border-red-500/50 backdrop-blur" style={{ color: '#fff' }}>
+            <h3 className="font-bold text-red-400 mb-2">Supabase Debug Panel</h3>
+            <pre className="whitespace-pre-wrap">{JSON.stringify(debug, null, 2)}</pre>
+          </div>
+        )}
 
         {/* Cover wall — fills both sides */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">

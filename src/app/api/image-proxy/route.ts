@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 
 // Map image hostname → correct Referer to pass hotlink protection
 const REFERER_MAP: Record<string, string> = {
-<<<<<<< HEAD
   // Docln / Hako domains
   'docln.net':                  'https://docln.net/',
   'i.docln.net':                'https://docln.net/',
@@ -29,35 +28,18 @@ const REFERER_MAP: Record<string, string> = {
   'media.kitsu.app':            'https://kitsu.app/',
   // RanobeDB
   'ranobedb.org':               'https://ranobedb.org/',
-=======
-  'i2.hako.vip':                'https://docln.net/',
-  'hako.vip':                   'https://docln.net/',
-  'i.hako.vip':                 'https://docln.net/',
-  'uploads.mangadex.org':       'https://mangadex.org/',
-  'mangadex.org':               'https://mangadex.org/',
-  'cdn.myanimelist.net':        'https://myanimelist.net/',
-  's4.anilist.co':              'https://anilist.co/',
-  'img.anili.st':               'https://anilist.co/',
-  'media.kitsu.app':            'https://kitsu.app/',
->>>>>>> 9a421baca9b6284c03b9795ded7f7c4ef1a7e66c
   'images.ranobedb.org':        'https://ranobedb.org/',
 }
 
 function getReferer(hostname: string): string {
   // Exact match first
   if (REFERER_MAP[hostname]) return REFERER_MAP[hostname]
-<<<<<<< HEAD
-  
-=======
->>>>>>> 9a421baca9b6284c03b9795ded7f7c4ef1a7e66c
+
   // Partial match (e.g. subdomain.hako.vip)
   for (const [key, val] of Object.entries(REFERER_MAP)) {
     if (hostname.endsWith(key)) return val
   }
-<<<<<<< HEAD
-  
-=======
->>>>>>> 9a421baca9b6284c03b9795ded7f7c4ef1a7e66c
+
   // Default: use the image's own origin so hotlink checks pass
   return `https://${hostname}/`
 }
@@ -72,27 +54,17 @@ export async function GET(req: NextRequest) {
   try {
     const parsed = new URL(url)
     hostname = parsed.hostname
-<<<<<<< HEAD
     
     if (
       blocked.some(b => hostname === b) || 
       hostname.match(/^10\./) || 
       hostname.match(/^192\.168\./) || 
-=======
-    if (
-      blocked.some(b => hostname === b) ||
-      hostname.match(/^10\./) ||
-      hostname.match(/^192\.168\./) ||
->>>>>>> 9a421baca9b6284c03b9795ded7f7c4ef1a7e66c
       hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./)
     ) {
       return new NextResponse('Domain not allowed', { status: 403 })
     }
-<<<<<<< HEAD
     
     // Only allow http/https
-=======
->>>>>>> 9a421baca9b6284c03b9795ded7f7c4ef1a7e66c
     if (!['http:', 'https:'].includes(parsed.protocol)) {
       return new NextResponse('Invalid protocol', { status: 400 })
     }

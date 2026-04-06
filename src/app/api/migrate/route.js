@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import supabase from '@/lib/supabaseClient'
 
 const STORAGE_BUCKET = process.env.STORAGE_BUCKET || 'novel-covers';
 const BATCH_SIZE = 10; // images per request (keep under Vercel 10s limit)

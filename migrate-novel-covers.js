@@ -4,6 +4,10 @@
 
 import supabase from '@/lib/supabaseClient'
 
+const STORAGE_BUCKET = 'novel-covers'; // Must create this bucket in Supabase first
+const BATCH_SIZE = 5; // Process N rows at a time (adjust if timeout)
+const DELAY_MS = 300; // Delay between each image to avoid rate limits
+
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }

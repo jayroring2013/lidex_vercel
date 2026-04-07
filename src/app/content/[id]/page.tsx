@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useRef, useState, useEffect, useId } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -19,6 +19,19 @@ import {
   buildPopulationStats,
   type LiDexScoreBreakdown,
 } from '@/lib/lidexScore'
+
+interface Volume {
+  volume_number?: number
+  price: string | number
+}
+ 
+interface TooltipState {
+  visible: boolean
+  x: number
+  y: number
+  price: number
+  volNumber: number | undefined
+}
 
 // ── Score helpers ─────────────────────────────────────────────────────────────
 
@@ -1203,125 +1216,280 @@ function MangaStats({ volumes, locale }: { volumes: any[]; locale: string }) {
 
 // ── UPDATED: Polished Line Chart for Pricing ───────────────────────────────
 
-function PricingLineChart({ volumes }: { volumes: any[] }) {
-  const sortedVols = [...volumes].sort((a, b) => (a.volume_number || 0) - (b.volume_number || 0))
-  const prices = sortedVols.map(v => parseFloat(v.price) || 0)
-
+export function PricingLineChart({ volumes }: { volumes: Volume[] }) {
+  const svgRef = useRef<SVGSVGElement>(null)
+  const lineRef = useRef<SVGPathElement>(null)
+  const [tooltip, setTooltip] = useState<TooltipState>({ visible: false, x: 0, y: 0, price: 0, volNumber: 0 })
+  const gradId = useId().replace(/:/g, "")
+ 
+  const sorted = [...volumes].sort((a, b) => (a.volume_number ?? 0) - (b.volume_number ?? 0))
+  const prices = sorted.map(v => parseFloat(String(v.price)) || 0)
   if (prices.length === 0) return null
-
+ 
   const minPrice = Math.min(...prices)
   const maxPrice = Math.max(...prices)
-  const range = maxPrice - minPrice || 1
-  
-  // Add padding to y-axis
-  const yMin = Math.floor(minPrice - range * 0.1)
-  const yMax = Math.ceil(maxPrice + range * 0.1)
+  const avgPrice = prices.reduce((a, b) => a + b, 0) / prices.length
+  const priceRange = maxPrice - minPrice
+  const firstPrice = prices[0]
+  const lastPrice = prices[prices.length - 1]
+  const delta = lastPrice - firstPrice
+  const deltaPct = firstPrice ? (delta / firstPrice) * 100 : 0
+ 
+  // Smart Y padding: if all prices are identical, pad ±500; otherwise ±25%
+  const yPad = priceRange < 1 ? 500 : priceRange * 0.25
+  const yMin = minPrice - yPad
+  const yMax = maxPrice + yPad
   const yRange = yMax - yMin
-
-  const width = 800
-  const height = 400
-  const padding = { top: 40, right: 40, bottom: 60, left: 80 }
-  const chartWidth = width - padding.left - padding.right
-  const chartHeight = height - padding.top - padding.bottom
-
-  // Generate points
-  const points = sortedVols.map((vol, i) => {
-    const x = padding.left + (i / (sortedVols.length - 1 || 1)) * chartWidth
-    const y = padding.top + chartHeight - ((parseFloat(vol.price) - yMin) / yRange) * chartHeight
-    return { x, y, price: parseFloat(vol.price), vol }
-  })
-
-  // Generate path
-  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
-  const areaPath = `${linePath} L ${points[points.length - 1]?.x} ${padding.top + chartHeight} L ${padding.left} ${padding.top + chartHeight} Z`
-
-  // Y-axis ticks (5 ticks)
-  const yTicks = Array.from({ length: 5 }, (_, i) => {
-    const value = yMin + (yRange * i) / 4
-    const y = padding.top + chartHeight - (i / 4) * chartHeight
-    return { value: Math.round(value), y }
-  })
-
+ 
+  const W = 680
+  const H = 220
+  const pad = { top: 24, right: 32, bottom: 36, left: 72 }
+  const cW = W - pad.left - pad.right
+  const cH = H - pad.top - pad.bottom
+ 
+  const xOf = (i: number) =>
+    pad.left + (sorted.length > 1 ? (i / (sorted.length - 1)) * cW : cW / 2)
+  const yOf = (v: number) =>
+    pad.top + cH - ((v - yMin) / yRange) * cH
+ 
+  const points = sorted.map((vol, i) => ({
+    x: xOf(i),
+    y: yOf(parseFloat(String(vol.price))),
+    price: parseFloat(String(vol.price)),
+    vol,
+  }))
+ 
+  const lineD = points.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ")
+  const areaD =
+    lineD +
+    ` L${points[points.length - 1].x},${pad.top + cH} L${pad.left},${pad.top + cH} Z`
+ 
+  const NUM_TICKS = 5
+  const yTicks = Array.from({ length: NUM_TICKS + 1 }, (_, i) => ({
+    v: yMin + (yRange * i) / NUM_TICKS,
+    y: yOf(yMin + (yRange * i) / NUM_TICKS),
+  }))
+ 
+  // Show at most 6 x-axis labels, always including first and last
+  const xStep = Math.max(1, Math.floor(sorted.length / 6))
+  const showXLabel = (i: number) =>
+    i === 0 || i === sorted.length - 1 || i % xStep === 0
+ 
+  const minIdx = prices.indexOf(minPrice)
+  const maxIdx = prices.indexOf(maxPrice)
+ 
+  const fmt = (v: number) => Math.round(v).toLocaleString("vi-VN")
+ 
+  // Line draw animation on mount
+  useEffect(() => {
+    const line = lineRef.current
+    if (!line) return
+    const len = line.getTotalLength()
+    line.style.strokeDasharray = String(len)
+    line.style.strokeDashoffset = String(len)
+    requestAnimationFrame(() => {
+      line.style.transition = "stroke-dashoffset 1s cubic-bezier(0.4,0,0.2,1)"
+      line.style.strokeDashoffset = "0"
+    })
+  }, [lineD])
+ 
+  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    const svg = svgRef.current
+    if (!svg) return
+    const rect = svg.getBoundingClientRect()
+    const mx = ((e.clientX - rect.left) / rect.width) * W
+    let closest = 0
+    let minD = Infinity
+    points.forEach((p, i) => {
+      const d = Math.abs(p.x - mx)
+      if (d < minD) { minD = d; closest = i }
+    })
+    const p = points[closest]
+    setTooltip({
+      visible: true,
+      x: (p.x / W) * 100,
+      y: (p.y / H) * 100,
+      price: p.price,
+      volNumber: sorted[closest].volume_number,
+    })
+  }
+ 
+  const deltaLabel =
+    Math.abs(deltaPct) < 0.001
+      ? "Không đổi"
+      : `${delta > 0 ? "+" : ""}${deltaPct.toFixed(2)}%`
+ 
+  const badgeClass =
+    Math.abs(deltaPct) < 0.001
+      ? "bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
+      : delta > 0
+      ? "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+      : "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+ 
+  const trendIcon =
+    Math.abs(deltaPct) < 0.001 ? "▸" : delta > 0 ? "▲" : "▼"
+ 
   return (
-    <div className="w-full bg-[#1a1f2e] rounded-lg p-6">
-      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto" preserveAspectRatio="xMidYMid meet">
-        {/* Grid lines */}
-        {yTicks.map((tick, i) => (
-          <line
-            key={i}
-            x1={padding.left}
-            y1={tick.y}
-            x2={width - padding.right}
-            y2={tick.y}
-            stroke="#2d3748"
-            strokeWidth="1"
-            strokeDasharray="4 4"
-            opacity="0.5"
-          />
+    <div className="w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 p-5">
+      {/* Header */}
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-widest text-neutral-400 dark:text-neutral-500 mb-1">
+            Lịch sử giá (VNĐ)
+          </p>
+          <p className="text-xl font-medium text-neutral-900 dark:text-neutral-100 tabular-nums">
+            {fmt(minPrice)}
+            {priceRange > 0 && (
+              <span className="text-neutral-400 dark:text-neutral-600 mx-2">–</span>
+            )}
+            {priceRange > 0 && fmt(maxPrice)}
+          </p>
+        </div>
+        <div className="flex flex-col items-end gap-1.5">
+          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${badgeClass}`}>
+            {trendIcon} {deltaLabel}
+          </span>
+          <span className="text-xs text-neutral-400 dark:text-neutral-600">
+            Vol.{sorted[0]?.volume_number} → Vol.{sorted[sorted.length - 1]?.volume_number}
+          </span>
+        </div>
+      </div>
+ 
+      {/* Summary stats */}
+      <div className="flex gap-5 mb-4 pb-4 border-b border-neutral-100 dark:border-neutral-800">
+        {[
+          { label: "Thấp nhất", value: fmt(minPrice), color: "text-red-600 dark:text-red-400" },
+          { label: "Cao nhất",  value: fmt(maxPrice), color: "text-green-600 dark:text-green-400" },
+          { label: "Trung bình", value: fmt(avgPrice), color: "text-neutral-900 dark:text-neutral-100" },
+          { label: "Số tập", value: `${sorted.length} tập`, color: "text-neutral-900 dark:text-neutral-100" },
+        ].map(({ label, value, color }) => (
+          <div key={label} className="flex flex-col">
+            <span className="text-[11px] text-neutral-400 dark:text-neutral-600 mb-0.5">{label}</span>
+            <span className={`text-sm font-medium tabular-nums ${color}`}>{value}</span>
+          </div>
         ))}
-
-        {/* Area fill */}
-        <path
-          d={areaPath}
-          fill="url(#areaGradient)"
-          opacity="0.3"
-        />
-
-        {/* Line */}
-        <path
-          d={linePath}
-          fill="none"
-          stroke="#06b6d4"
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-
-        {/* Data points */}
-        {points.map((p, i) => (
-          <circle
-            key={i}
-            cx={p.x}
-            cy={p.y}
-            r="6"
-            fill="#1a1f2e"
-            stroke="#06b6d4"
-            strokeWidth="3"
-            className="hover:r-8 transition-all"
-          />
-        ))}
-
-        {/* Y-axis labels */}
-        {yTicks.map((tick, i) => (
-          <text
-            key={i}
-            x={padding.left - 15}
-            y={tick.y + 4}
-            fill="#718096"
-            fontSize="12"
-            textAnchor="end"
-            fontFamily="monospace"
+      </div>
+ 
+      {/* Chart */}
+      <div className="relative w-full">
+        {/* Tooltip */}
+        {tooltip.visible && (
+          <div
+            className="absolute pointer-events-none z-10 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg px-3 py-2 shadow-md text-xs -translate-y-full -translate-x-1/2"
+            style={{ left: `${Math.min(tooltip.x, 80)}%`, top: `${tooltip.y}%` }}
           >
-            {tick.value.toLocaleString('vi-VN')}
-          </text>
-        ))}
-
-        {/* X-axis labels */}
-        <text x={padding.left} y={height - 10} fill="#718096" fontSize="12" textAnchor="start">
-          Vol.{sortedVols[0]?.volume_number}
-        </text>
-        <text x={width - padding.right} y={height - 10} fill="#718096" fontSize="12" textAnchor="end">
-          Vol.{sortedVols[sortedVols.length - 1]?.volume_number}
-        </text>
-
-        {/* Gradient definition */}
-        <defs>
-          <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#06b6d4" />
-            <stop offset="100%" stopColor="#06b6d4" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-      </svg>
+            <div className="text-neutral-400 dark:text-neutral-500 mb-0.5">Vol.{tooltip.volNumber}</div>
+            <div className="font-medium text-sm text-neutral-900 dark:text-neutral-100 tabular-nums">
+              {fmt(tooltip.price)} ₫
+            </div>
+          </div>
+        )}
+ 
+        <svg
+          ref={svgRef}
+          viewBox={`0 0 ${W} ${H}`}
+          className="w-full h-auto overflow-visible"
+          preserveAspectRatio="xMidYMid meet"
+          onMouseMove={handleMouseMove}
+          onMouseLeave={() => setTooltip(t => ({ ...t, visible: false }))}
+        >
+          <defs>
+            <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.3" />
+              <stop offset="90%" stopColor="#3b82f6" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+ 
+          {/* Grid lines */}
+          {yTicks.map((tick, i) => (
+            <line
+              key={i}
+              x1={pad.left} y1={tick.y}
+              x2={W - pad.right} y2={tick.y}
+              stroke="currentColor"
+              strokeWidth="1"
+              className="text-neutral-100 dark:text-neutral-800"
+            />
+          ))}
+ 
+          {/* Y-axis labels */}
+          {yTicks.map((tick, i) => (
+            <text
+              key={i}
+              x={pad.left - 10}
+              y={tick.y + 4}
+              textAnchor="end"
+              fontSize="11"
+              fontFamily="monospace"
+              className="fill-neutral-400 dark:fill-neutral-600"
+            >
+              {fmt(tick.v)}
+            </text>
+          ))}
+ 
+          {/* Area */}
+          <path d={areaD} fill={`url(#${gradId})`} />
+ 
+          {/* Line */}
+          <path
+            ref={lineRef}
+            d={lineD}
+            fill="none"
+            stroke="#3b82f6"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+ 
+          {/* Data points */}
+          {points.map((p, i) => {
+            const isMin = i === minIdx && priceRange > 0
+            const isMax = i === maxIdx && priceRange > 0
+            const color = isMin ? "#ef4444" : isMax ? "#22c55e" : "#3b82f6"
+            const r = isMin || isMax ? 6 : 5
+            return (
+              <g key={i}>
+                {/* Invisible hit area */}
+                <circle cx={p.x} cy={p.y} r={12} fill="transparent" />
+                <circle
+                  cx={p.x} cy={p.y} r={r}
+                  fill="white"
+                  className="fill-white dark:fill-neutral-950"
+                  stroke={color}
+                  strokeWidth="2.5"
+                  style={{ pointerEvents: "none" }}
+                />
+                {isMin && (
+                  <text x={p.x} y={p.y + 18} textAnchor="middle" fontSize="10" fill="#ef4444" fontWeight="500">
+                    ▼ min
+                  </text>
+                )}
+                {isMax && (
+                  <text x={p.x} y={p.y - 10} textAnchor="middle" fontSize="10" fill="#22c55e" fontWeight="500">
+                    ▲ max
+                  </text>
+                )}
+              </g>
+            )
+          })}
+ 
+          {/* X-axis labels */}
+          {sorted.map((vol, i) =>
+            showXLabel(i) ? (
+              <text
+                key={i}
+                x={xOf(i)}
+                y={H - 8}
+                textAnchor="middle"
+                fontSize="11"
+                className="fill-neutral-400 dark:fill-neutral-600"
+              >
+                Vol.{vol.volume_number}
+              </text>
+            ) : null
+          )}
+        </svg>
+      </div>
     </div>
   )
 }

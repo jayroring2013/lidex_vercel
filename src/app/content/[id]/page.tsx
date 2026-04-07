@@ -1222,6 +1222,28 @@ function PricingLineChart({ volumes }: { volumes: Volume[] }) {
   const [tooltip, setTooltip] = useState<TooltipState>({ visible: false, x: 0, y: 0, price: 0, volNumber: 0 })
   const gradId = useId().replace(/:/g, "")
 
+  // Detect dark mode from document
+  const [isDark, setIsDark] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)")
+    // Also check for class-based dark mode (Tailwind default)
+    const checkDark = () => {
+      setIsDark(
+        document.documentElement.classList.contains("dark") ||
+        mq.matches
+      )
+    }
+    checkDark()
+    mq.addEventListener("change", checkDark)
+    // Observe class changes on <html> for toggle-based dark mode
+    const observer = new MutationObserver(checkDark)
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] })
+    return () => {
+      mq.removeEventListener("change", checkDark)
+      observer.disconnect()
+    }
+  }, [])
+
   const sorted = [...volumes].sort((a, b) => (a.volume_number ?? 0) - (b.volume_number ?? 0))
   const prices = sorted.map(v => parseFloat(String(v.price)) || 0)
   if (prices.length === 0) return null
@@ -1326,6 +1348,16 @@ function PricingLineChart({ volumes }: { volumes: Volume[] }) {
   const trendIcon =
     Math.abs(deltaPct) < 0.001 ? "▸" : delta > 0 ? "▲" : "▼"
 
+  // Theme-aware colors — NO Tailwind dark: classes inside SVG
+  const colors = {
+    dotFill: isDark ? "#171717" : "#ffffff",
+    gridStroke: isDark ? "#262626" : "#f5f5f5",
+    axisFill: isDark ? "#525252" : "#a3a3a3",
+    lineStroke: "#3b82f6",
+    areaStart: isDark ? "rgba(59,130,246,0.08)" : "rgba(59,130,246,0.15)",
+    areaEnd: isDark ? "rgba(59,130,246,0.01)" : "rgba(59,130,246,0.01)",
+  }
+
   return (
     <div className="w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 p-5">
       {/* Header */}
@@ -1390,25 +1422,22 @@ function PricingLineChart({ volumes }: { volumes: Volume[] }) {
           onMouseMove={handleMouseMove}
           onMouseLeave={() => setTooltip(t => ({ ...t, visible: false }))}
         >
+          {/* Area gradient — single gradient, colors controlled by JS */}
           <defs>
-            <linearGradient id={`${gradId}-light`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.15" />
-              <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.01" />
-            </linearGradient>
-            <linearGradient id={`${gradId}-dark`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#60a5fa" stopOpacity="0.2" />
-              <stop offset="100%" stopColor="#60a5fa" stopOpacity="0.01" />
+            <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={colors.areaStart} />
+              <stop offset="100%" stopColor={colors.areaEnd} />
             </linearGradient>
           </defs>
 
-          {/* Grid lines — use className, NOT stroke="currentColor" */}
+          {/* Grid lines */}
           {yTicks.map((tick, i) => (
             <line
               key={i}
               x1={pad.left} y1={tick.y}
               x2={W - pad.right} y2={tick.y}
+              stroke={colors.gridStroke}
               strokeWidth="1"
-              className="stroke-neutral-100 dark:stroke-neutral-800"
             />
           ))}
 
@@ -1421,68 +1450,51 @@ function PricingLineChart({ volumes }: { volumes: Volume[] }) {
               textAnchor="end"
               fontSize="11"
               fontFamily="monospace"
-              className="fill-neutral-400 dark:fill-neutral-600"
+              fill={colors.axisFill}
             >
               {fmt(tick.v)}
             </text>
           ))}
 
-          {/* Area fill — two paths toggled by dark mode */}
-          <path
-            d={areaD}
-            fill={`url(#${gradId}-light)`}
-            className="dark:opacity-0 transition-opacity"
-          />
-          <path
-            d={areaD}
-            fill={`url(#${gradId}-dark)`}
-            className="opacity-0 dark:opacity-100 transition-opacity"
-          />
+          {/* Area fill */}
+          <path d={areaD} fill={`url(#${gradId})`} />
 
-          {/* Line — use className for stroke, NOT stroke attribute */}
+          {/* Line */}
           <path
             ref={lineRef}
             d={lineD}
             fill="none"
+            stroke={colors.lineStroke}
             strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="stroke-blue-500"
           />
 
           {/* Data points */}
           {points.map((p, i) => {
             const isMin = i === minIdx && priceRange > 0
             const isMax = i === maxIdx && priceRange > 0
-            const colorClass = isMin
-              ? "stroke-red-500"
-              : isMax
-                ? "stroke-green-500"
-                : "stroke-blue-500"
+            const strokeColor = isMin ? "#ef4444" : isMax ? "#22c55e" : "#3b82f6"
             const r = isMin || isMax ? 6 : 5
             return (
               <g key={i}>
                 <circle cx={p.x} cy={p.y} r={12} fill="transparent" />
-                {/* FIX: removed fill="white" attribute — use className only so dark: variant works */}
                 <circle
                   cx={p.x}
                   cy={p.y}
                   r={r}
-                  className={`fill-white dark:fill-neutral-950 ${colorClass}`}
+                  fill={colors.dotFill}
+                  stroke={strokeColor}
                   strokeWidth="2.5"
                   style={{ pointerEvents: "none" }}
                 />
                 {isMin && (
-                  <text x={p.x} y={p.y + 18} textAnchor="middle" fontSize="10" fontWeight="500"
-                    className="fill-red-500"
-                  >
+                  <text x={p.x} y={p.y + 18} textAnchor="middle" fontSize="10" fill="#ef4444" fontWeight="500">
                     ▼ min
                   </text>
                 )}
                 {isMax && (
-                  <text x={p.x} y={p.y - 10} textAnchor="middle" fontSize="10" fontWeight="500"
-                    className="fill-green-500"
-                  >
+                  <text x={p.x} y={p.y - 10} textAnchor="middle" fontSize="10" fill="#22c55e" fontWeight="500">
                     ▲ max
                   </text>
                 )}
@@ -1499,7 +1511,7 @@ function PricingLineChart({ volumes }: { volumes: Volume[] }) {
                 y={H - 8}
                 textAnchor="middle"
                 fontSize="11"
-                className="fill-neutral-400 dark:fill-neutral-600"
+                fill={colors.axisFill}
               >
                 Vol.{vol.volume_number}
               </text>

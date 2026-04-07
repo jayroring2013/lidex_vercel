@@ -159,7 +159,7 @@ function toMangaCards(rows: any[], volCovers: Record<string | number, string | n
     scoreLabel: '',
     status:     m.status,
     type:       'manga' as ContentType,
-    meta:       m.publisher ?? null,
+    meta:       null,   // publisher name not available from series table directly
     year:       null,
     genres:     Array.isArray(m.genres) ? m.genres : [],
     href:       `/content/${m.id}`,
@@ -176,7 +176,7 @@ function toNovelCards(rows: any[], volCovers: Record<string | number, string | n
     scoreLabel: '',
     status:     n.status,
     type:       'novel' as ContentType,
-    meta:       n.publisher ?? null,
+    meta:       null,   // publisher name not available from series table directly
     year:       null,
     genres:     Array.isArray(n.genres) ? n.genres : [],
     href:       `/content/${n.id}`,
@@ -473,9 +473,9 @@ export default function BrowsePage() {
 
         } else if (type === 'manga') {
           const [{ data: pop }, { data: rec }] = await Promise.all([
-            supabase.from('series').select('id, title, cover_url, status, genres, publisher').eq('item_type', 'manga').not('genres', 'cs', '{"Hentai"}')
+            supabase.from('series').select('id, title, cover_url, status, genres').eq('item_type', 'manga').not('genres', 'cs', '{"Hentai"}')
               .order('updated_at', { ascending: false }).limit(14),
-            supabase.from('series').select('id, title, cover_url, status, genres, publisher').eq('item_type', 'manga').not('genres', 'cs', '{"Hentai"}')
+            supabase.from('series').select('id, title, cover_url, status, genres').eq('item_type', 'manga').not('genres', 'cs', '{"Hentai"}')
               .order('created_at', { ascending: false }).limit(14),
           ])
           const allRows = [...(pop || []), ...(rec || [])]
@@ -490,9 +490,9 @@ export default function BrowsePage() {
 
         } else {
           const [{ data: pop }, { data: rec }] = await Promise.all([
-            supabase.from('series').select('id, title, cover_url, status, genres, publisher').eq('item_type', 'novel').not('genres', 'cs', '{"Hentai"}')
+            supabase.from('series').select('id, title, cover_url, status, genres').eq('item_type', 'novel').not('genres', 'cs', '{"Hentai"}')
               .order('updated_at', { ascending: false }).limit(14),
-            supabase.from('series').select('id, title, cover_url, status, genres, publisher').eq('item_type', 'novel').not('genres', 'cs', '{"Hentai"}')
+            supabase.from('series').select('id, title, cover_url, status, genres').eq('item_type', 'novel').not('genres', 'cs', '{"Hentai"}')
               .order('created_at', { ascending: false }).limit(14),
           ])
           const allRows = [...(pop || []), ...(rec || [])]
@@ -533,7 +533,7 @@ export default function BrowsePage() {
 
       } else if (type === 'manga') {
         let q = supabase.from('series')
-          .select('id, title, cover_url, status, genres, publisher').eq('item_type', 'manga').not('genres', 'cs', '{"Hentai"}')
+          .select('id, title, cover_url, status, genres').eq('item_type', 'manga').not('genres', 'cs', '{"Hentai"}')
         if (search)           q = q.ilike('title', `%${search}%`)
         if (status !== 'all') q = q.ilike('status', status)
         if (genre  !== 'all') q = q.contains('genres', [genre])
@@ -546,7 +546,7 @@ export default function BrowsePage() {
 
       } else {
         let q = supabase.from('series')
-          .select('id, title, cover_url, status, genres, publisher').eq('item_type', 'novel').not('genres', 'cs', '{"Hentai"}')
+          .select('id, title, cover_url, status, genres').eq('item_type', 'novel').not('genres', 'cs', '{"Hentai"}')
         if (search) q = q.ilike('title', `%${search}%`)
         if (sort === 'year_desc')         q = q.order('updated_at', { ascending: false })
         else                              q = q.order('title',      { ascending: true })

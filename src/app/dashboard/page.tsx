@@ -192,7 +192,7 @@ export default function Dashboard() {
             .eq('item_type', 'manga').not('cover_url', 'is', null).not('genres', 'cs', '{"Hentai"}')
             .order('updated_at', { ascending: false }).limit(10),
           supabase.from('series').select('id, title, cover_url')
-            .eq('item_type', 'novel').not('cover_url', 'is', null).not('genres', 'cs', '{"Hentai"}')
+            .eq('item_type', 'novel').not('genres', 'cs', '{"Hentai"}')
             .order('updated_at', { ascending: false }).limit(10),
         ])
 

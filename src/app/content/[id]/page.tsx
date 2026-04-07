@@ -82,6 +82,7 @@ export default function ContentDetail() {
   const [volumeCount,  setVolumeCount]  = useState<number | null>(null)
   const [publisherName,setPublisherName]= useState<string | null>(null)
   const [seriesLinks,  setSeriesLinks]  = useState<any[]>([])
+  const [allVolumes,   setAllVolumes]   = useState<any[]>([]) // <--- NEW STATE FOR STATS
 
   const { locale } = useLocale()
   const isVI       = locale === 'vi'
@@ -130,27 +131,25 @@ export default function ContentDetail() {
         }
       }
 
-      // 3. All non-special volumes ordered DESC by volume_number — strictly take index 0
-      //    for the cover (highest volume number = latest), regardless of whether it has a cover.
-      //    Fall back down the list until we find one with a cover_url.
+      // 3. All non-special volumes ordered DESC by volume_number
       const { data: vols } = await supabase
         .from('volumes')
-        .select('id, volume_number, release_date, cover_url, price, currency')
+        .select('id, volume_number, release_date, cover_url, price, currency, is_special')
         .eq('series_id', series.id)
-        .eq('is_special', false)
+        .eq('is_special', false) 
         .not('volume_number', 'is', null)
         .order('volume_number', { ascending: false })
 
       if (vols && vols.length > 0) {
+        setAllVolumes(vols) // <--- SAVE FULL LIST FOR STATS
         setVolumeCount(vols.length)
         // The latest volume is always vols[0] (highest number).
         // For the displayed cover, walk from the latest downward until we find one with a cover_url.
         const withCover = vols.find((v: any) => v.cover_url)
-        // latestVolume tracks the newest volume (for metadata display)
         setLatestVolume(vols[0])
-        // Cover shows the latest volume's cover if it exists, otherwise nearest older one with cover
         setCoverSrc(withCover?.cover_url || series.cover_url || null)
       } else {
+        setAllVolumes([])
         setCoverSrc(series.cover_url || null)
       }
 
@@ -301,7 +300,7 @@ export default function ContentDetail() {
         <div className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row md:items-end gap-5 md:gap-8 pt-24 sm:pt-28 pb-10 sm:pb-14">
 
-            {/* ── Cover — latest volume ── */}
+            {/* ── Cover ── */}
             <div className="flex-shrink-0 mx-auto md:mx-0">
               <div className="relative w-36 sm:w-44 md:w-52 lg:w-60 rounded-xl overflow-hidden shadow-2xl border-2 border-white/20 bg-dark-800">
                 {coverSrc && !imageError ? (
@@ -316,7 +315,6 @@ export default function ContentDetail() {
                     <BookOpen className="w-16 h-16 sm:w-20 sm:h-20 text-white/50" />
                   </div>
                 )}
-                {/* Badge showing which volume is displayed */}
                 {isManga && latestVolume?.volume_number && (
                   <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md text-[10px] font-bold text-white"
                     style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(6px)', border: '1px solid rgba(255,255,255,0.15)' }}>
@@ -338,7 +336,6 @@ export default function ContentDetail() {
                     <Award className="w-3 h-3" /> Featured
                   </span>
                 )}
-                {/* VN Licensed badge for manga */}
                 {isManga && mangaMeta?.vn_licensed && (
                   <span className="px-3 py-1 bg-emerald-500/90 rounded-full text-xs font-semibold text-white flex items-center gap-1 whitespace-nowrap">
                     <BadgeCheck className="w-3 h-3" /> VN Licensed
@@ -357,7 +354,6 @@ export default function ContentDetail() {
                 </div>
               )}
 
-              {/* ── Score (anime only, no votes shown) ── */}
               {series.score && (
                 <div className="flex items-center justify-center md:justify-start gap-1.5 mb-4">
                   <Star className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400 fill-yellow-400" />
@@ -384,7 +380,6 @@ export default function ContentDetail() {
                 </div>
               )}
 
-              {/* ── Synopsis ── */}
               {(series.description || series.description_vi) && (
                 <div className="mt-4 max-w-2xl">
                   <div className="relative">
@@ -528,11 +523,9 @@ export default function ContentDetail() {
                     <InfoItem icon={Calendar} label={isVI ? 'Trạng thái' : 'Status'}    value={(series.status || '--').toUpperCase()} />
                     {series.source && <InfoItem icon={Globe} label={isVI ? 'Nguồn gốc' : 'Source'} value={series.source} />}
                     {series.author && <InfoItem icon={BookOpen} label={isVI ? 'Tác giả' : 'Author'} value={series.author} />}
-                    {/* Publisher: resolved name from publishers table */}
                     {(publisherName || series.publisher) && (
                       <InfoItem icon={Award} label={isVI ? 'Nhà xuất bản' : 'Publisher'} value={publisherName || series.publisher} />
                     )}
-                    {/* Studio: only meaningful for anime */}
                     {series.studio && <InfoItem icon={Layers} label="Studio" value={series.studio} />}
 
                     {/* Anime-specific */}
@@ -553,7 +546,6 @@ export default function ContentDetail() {
                       </h2>
                     </div>
 
-                    {/* Always render all 4 fields so the grid is visually consistent */}
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                       <InfoItem
                         icon={Users}
@@ -587,13 +579,11 @@ export default function ContentDetail() {
                         label={isVI ? 'Số tập (VN)' : 'Volumes (VN)'}
                         value={volumeCount != null ? String(volumeCount) : '--'}
                       />
-                      {/* Publisher resolved from DB */}
                       <InfoItem
                         icon={Building2}
                         label={isVI ? 'NXB Việt Nam' : 'VN Publisher'}
                         value={publisherName || '--'}
                       />
-                      {/* Latest volume number */}
                       <InfoItem
                         icon={BookMarked}
                         label={isVI ? 'Tập mới nhất' : 'Latest Vol.'}
@@ -676,6 +666,7 @@ export default function ContentDetail() {
             {activeTab === 'stats' && (
               <div className="space-y-6 animate-in fade-in duration-200">
                 {series.anime_meta ? (
+                  /* --- Existing Anime Stats --- */
                   <>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                       <StatBig label="Điểm trung bình" value={series.anime_meta.mean_score ? `${series.anime_meta.mean_score}` : '—'} sub="/100" color="#fbbf24" />
@@ -707,12 +698,8 @@ export default function ContentDetail() {
                     <RadarChart series={series} />
                   </>
                 ) : isManga ? (
-                  <div className="glass rounded-2xl p-10 flex flex-col items-center gap-3">
-                    <BarChart2 className="w-10 h-10 opacity-20 text-primary-500" />
-                    <p className="text-sm" style={{ color: 'var(--foreground-muted)' }}>
-                      {isVI ? 'Không có dữ liệu thống kê cho Manga' : 'No stats available for Manga'}
-                    </p>
-                  </div>
+                  /* --- NEW MANGA STATS SECTION --- */
+                  <MangaStats volumes={allVolumes} locale={locale} />
                 ) : (
                   <div className="glass rounded-2xl p-10 flex flex-col items-center gap-3">
                     <BarChart2 className="w-10 h-10 opacity-20 text-primary-500" />
@@ -827,7 +814,7 @@ export default function ContentDetail() {
               </div>
             </div>
 
-            {/* External Links — real links from series_links for manga, fallback search links for anime */}
+            {/* External Links */}
             <div className="glass rounded-2xl p-5">
               <div className="flex items-center gap-2 mb-4">
                 <ExternalLink className="w-4 h-4 text-primary-500 flex-shrink-0" />
@@ -861,7 +848,6 @@ export default function ContentDetail() {
                     </p>
                   )
                 ) : (
-                  /* Anime: keep AniList + MAL search fallbacks */
                   <>
                     <a href={`https://anilist.co/search/anime?search=${encodeURIComponent(series.title)}`}
                       target="_blank" rel="noopener noreferrer"
@@ -887,8 +873,6 @@ export default function ContentDetail() {
                 )}
               </div>
             </div>
-
-
 
             {/* Last updated */}
             <div className="glass rounded-2xl p-5">
@@ -1105,6 +1089,133 @@ function ScoreDistribution({ data }: { data: Record<string, number> | string }) 
           </span>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── NEW: Manga Stats Component ───────────────────────────────────────────────
+
+function MangaStats({ volumes, locale }: { volumes: any[]; locale: string }) {
+  const isVI = locale === 'vi'
+  
+  // Calculate basic stats
+  const prices = volumes.map(v => v.price || 0).filter(p => p > 0)
+  const avgPrice = prices.length ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length) : 0
+  const maxPrice = prices.length ? Math.max(...prices) : 0
+  const minPrice = prices.length ? Math.min(...prices) : 0
+
+  if (volumes.length === 0) {
+    return (
+      <div className="glass rounded-2xl p-10 flex flex-col items-center gap-3">
+        <BookOpen className="w-10 h-10 opacity-20 text-primary-500" />
+        <p className="text-sm" style={{ color: 'var(--foreground-muted)' }}>
+          {isVI ? 'Chưa có dữ liệu tập' : 'No volume data available'}
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <StatBig label={isVI ? 'Tổng tập' : 'Total Vols'} value={String(volumes.length)} color="#6366f1" />
+        <StatBig label={isVI ? 'Giá TB' : 'Avg Price'} value={avgPrice ? avgPrice.toLocaleString('vi-VN') : '—'} sub="VND" color="#fbbf24" />
+        <StatBig label={isVI ? 'Giá cao nhất' : 'Max Price'} value={maxPrice ? maxPrice.toLocaleString('vi-VN') : '—'} sub="VND" color="#f87171" />
+        <StatBig label={isVI ? 'Giá thấp nhất' : 'Min Price'} value={minPrice ? minPrice.toLocaleString('vi-VN') : '—'} sub="VND" color="#4ade80" />
+      </div>
+
+      {/* Pricing Chart */}
+      <div className="glass rounded-2xl p-5 sm:p-6">
+        <div className="flex items-center gap-2 mb-5">
+          <TrendingUp className="w-5 h-5 text-primary-500" />
+          <h2 className="text-base font-bold" style={{ color: 'var(--foreground)' }}>
+            {isVI ? 'Lịch sử giá (VNĐ)' : 'Pricing History (VND)'}
+          </h2>
+        </div>
+        <PricingChart volumes={volumes} />
+      </div>
+
+      {/* Release Timeline */}
+      <div className="glass rounded-2xl p-5 sm:p-6">
+        <div className="flex items-center gap-2 mb-5">
+          <Calendar className="w-5 h-5 text-primary-500" />
+          <h2 className="text-base font-bold" style={{ color: 'var(--foreground)' }}>
+            {isVI ? 'Dòng thời gian phát hành' : 'Release Timeline'}
+          </h2>
+        </div>
+        <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+          {/* Sort ascending for timeline (Oldest -> Newest) */}
+          {[...volumes].sort((a, b) => (a.volume_number || 0) - (b.volume_number || 0)).map((vol, i) => (
+            <div key={vol.id || i} className="flex items-center justify-between p-3 rounded-lg transition-colors hover:bg-white/5" style={{ border: '1px solid var(--card-border)' }}>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-md bg-primary-500/20 flex items-center justify-center text-xs font-bold text-primary-400 border border-primary-500/30">
+                  {vol.volume_number}
+                </div>
+                <div>
+                  <p className="text-xs font-semibold" style={{ color: 'var(--foreground)' }}>
+                    {isVI ? 'Tập' : 'Volume'} {vol.volume_number}
+                  </p>
+                  {vol.release_date && (
+                    <p className="text-[10px]" style={{ color: 'var(--foreground-muted)' }}>
+                      {new Date(vol.release_date).toLocaleDateString(isVI ? 'vi-VN' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                    </p>
+                  )}
+                </div>
+              </div>
+              {vol.price && (
+                <span className="text-sm font-bold tabular-nums" style={{ color: 'var(--foreground-secondary)' }}>
+                  {Number(vol.price).toLocaleString('vi-VN')}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+    </div>
+  )
+}
+
+// ── NEW: Simple Bar Chart for Pricing ────────────────────────────────────────
+
+function PricingChart({ volumes }: { volumes: any[] }) {
+  const maxVal = Math.max(...volumes.map(v => v.price || 0), 100) // Avoid div by zero
+  const MAX_BAR_HEIGHT_PX = 150
+
+  return (
+    <div className="w-full overflow-x-auto">
+      <div className="flex items-end gap-2 min-w-[300px] sm:min-w-full" style={{ height: `${MAX_BAR_HEIGHT_PX + 30}px` }}>
+        {volumes.slice().reverse().map((vol, i) => {
+          const price = vol.price || 0
+          const heightPct = (price / maxVal) * 100
+          
+          return (
+            <div key={vol.id || i} className="flex-1 flex flex-col items-center justify-end h-full group">
+              {/* Tooltip */}
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-full mb-2 pointer-events-none z-10">
+                <div className="bg-dark-800 border border-white/10 text-white text-[10px] px-2 py-1 rounded shadow-lg whitespace-nowrap">
+                  Vol.{vol.volume_number}: {price.toLocaleString('vi-VN')} đ
+                </div>
+              </div>
+              
+              {/* Bar */}
+              <div 
+                className="w-full max-w-[24px] rounded-t-sm transition-all duration-300 hover:opacity-80"
+                style={{ 
+                  height: `${heightPct}%`, 
+                  background: price === maxVal ? '#f87171' : '#6366f1', // Highlight highest price
+                  minHeight: '4px' 
+                }}
+              />
+              
+              {/* Label */}
+              <span className="text-[9px] text-gray-500 mt-1 font-mono">{vol.volume_number}</span>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

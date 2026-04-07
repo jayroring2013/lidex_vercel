@@ -4,12 +4,13 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import {
-  Star, Heart, Calendar, BookOpen, Info, Tags,
+  Star, Calendar, BookOpen, Info, Tags,
   ExternalLink, Share2, Copy, Twitter, Loader2,
   ArrowLeft, Award, TrendingUp, Globe, ChevronDown, ChevronUp,
-  BarChart2, FlaskConical, Users, Film, Layers
+  BarChart2, FlaskConical, Users, Film, Layers, BookMarked,
+  Languages, BadgeCheck, Building2, Image as ImageIcon
 } from 'lucide-react'
-import { fetchSeries, fetchVoteCount } from '@/lib/api'
+import { fetchSeries } from '@/lib/api'
 import { useLocale } from '@/contexts/LocaleContext'
 import RadarChart from '@/components/RadarChart'
 import supabase from '@/lib/supabaseClient'
@@ -39,45 +40,59 @@ function scoreGrade(s: number) {
 }
 
 const COMPONENT_META: { key: keyof LiDexScoreBreakdown; label: string; weight: number }[] = [
-  { key: 'community',        label: 'Community Score',   weight: 30 },
-  { key: 'popularity',       label: 'Popularity',        weight: 18 },
-  { key: 'favourites',       label: 'Favourites',        weight: 17 },
-  { key: 'distribution',     label: 'Score Distribution',weight: 13 },
-  { key: 'viewerEngagement', label: 'Viewer Engagement', weight: 12 },
-  { key: 'animeStatus',      label: 'Status',            weight:  5 },
-  { key: 'studio',           label: 'Studio Rep.',       weight:  5 },
+  { key: 'community',        label: 'Community Score',    weight: 30 },
+  { key: 'popularity',       label: 'Popularity',         weight: 18 },
+  { key: 'favourites',       label: 'Favourites',         weight: 17 },
+  { key: 'distribution',     label: 'Score Distribution', weight: 13 },
+  { key: 'viewerEngagement', label: 'Viewer Engagement',  weight: 12 },
+  { key: 'animeStatus',      label: 'Status',             weight:  5 },
+  { key: 'studio',           label: 'Studio Rep.',        weight:  5 },
 ]
+
+// ── Language code → readable label ───────────────────────────────────────────
+const LANG_LABELS: Record<string, string> = {
+  ja: 'Japanese', ko: 'Korean', zh: 'Chinese',
+  vi: 'Vietnamese', th: 'Thai', en: 'English',
+}
+
+// ── Demographic → readable label ──────────────────────────────────────────────
+const DEMO_LABELS: Record<string, string> = {
+  shounen: 'Shounen', shoujo: 'Shoujo',
+  seinen: 'Seinen',   josei: 'Josei', none: 'General',
+}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function ContentDetail() {
   const params = useParams()
-  const [series,      setSeries]      = useState<any>(null)
-  const [voteCount,   setVoteCount]   = useState(0)
-  const [loading,     setLoading]     = useState(true)
-  const [error,       setError]       = useState<string | null>(null)
-  const [imageError,  setImageError]  = useState(false)
+  const [series,       setSeries]       = useState<any>(null)
+  const [loading,      setLoading]      = useState(true)
+  const [error,        setError]        = useState<string | null>(null)
+  const [imageError,   setImageError]   = useState(false)
+  const [coverSrc,     setCoverSrc]     = useState<string | null>(null)   // ← latest volume cover
   const [synopsisExpanded, setSynopsisExpanded] = useState(false)
-  const [copied,      setCopied]      = useState(false)
-  const [lidexScore,  setLidexScore]  = useState<LiDexScoreBreakdown | null>(null)
-  const [scoreLoading,setScoreLoading]= useState(false)
-  const [activeTab,   setActiveTab]   = useState<'info' | 'stats' | 'analyze'>('info')
+  const [copied,       setCopied]       = useState(false)
+  const [lidexScore,   setLidexScore]   = useState<LiDexScoreBreakdown | null>(null)
+  const [scoreLoading, setScoreLoading] = useState(false)
+  const [activeTab,    setActiveTab]    = useState<'info' | 'stats' | 'analyze'>('info')
 
-  const { locale }  = useLocale()
-  const isVI        = locale === 'vi'
-  const seriesId    = params.id ? parseInt(params.id as string) : undefined
-  const coverImage = !imageError && series?.cover_url ? series.cover_url : null
+  // Manga-specific enrichment pulled directly from Supabase
+  const [mangaMeta,    setMangaMeta]    = useState<any>(null)
+  const [latestVolume, setLatestVolume] = useState<any>(null)   // { volume_number, release_date, cover_url }
+  const [volumeCount,  setVolumeCount]  = useState<number | null>(null)
+
+  const { locale } = useLocale()
+  const isVI       = locale === 'vi'
+  const seriesId   = params.id ? parseInt(params.id as string) : undefined
   const bannerImage = series?.banner_url || series?.cover_url
 
-  // Load series + votes
+  // ── Load series ──────────────────────────────────────────────────────────────
   useEffect(() => {
     async function loadData() {
       if (!seriesId) { setError('No series ID provided'); setLoading(false); return }
       try {
-        const data  = await fetchSeries(seriesId)
+        const data = await fetchSeries(seriesId)
         setSeries(data)
-        const votes = await fetchVoteCount(seriesId)
-        setVoteCount(votes.count)
       } catch (err: any) {
         console.error('Failed to load series:', err)
         setError(err.message)
@@ -88,20 +103,65 @@ export default function ContentDetail() {
     loadData()
   }, [seriesId])
 
-  // Calculate LiDex Score once series is loaded (anime only)
+  // ── Manga-specific: fetch manga_meta + latest volume cover ───────────────────
+  useEffect(() => {
+    if (!series || series.item_type !== 'manga') return
+
+    async function loadMangaEnrichment() {
+      // 1. manga_meta — only fields that are actually populated (no MangaDex data yet)
+      const { data: meta } = await supabase
+        .from('manga_meta')
+        .select('series_id, demographic, original_language, vn_licensed, vn_publisher_id, updated_at')
+        .eq('series_id', series.id)
+        .single()
+      if (meta) setMangaMeta(meta)
+
+      // 2. All non-special volumes — we want the latest by volume_number for the cover,
+      //    and the count for volume count.
+      const { data: vols } = await supabase
+        .from('volumes')
+        .select('id, volume_number, release_date, cover_url')
+        .eq('series_id', series.id)
+        .eq('is_special', false)
+        .not('volume_number', 'is', null)
+        .order('volume_number', { ascending: false })
+
+      if (vols && vols.length > 0) {
+        setVolumeCount(vols.length)
+
+        // Pick the latest volume that actually has a cover URL
+        const withCover = vols.find((v: any) => v.cover_url)
+        setLatestVolume(withCover || vols[0])
+
+        // Set cover to the latest volume cover (or fall back to series cover)
+        setCoverSrc(withCover?.cover_url || series.cover_url || null)
+      } else {
+        // No volumes — fall back to series cover
+        setCoverSrc(series.cover_url || null)
+      }
+    }
+
+    loadMangaEnrichment()
+  }, [series])
+
+  // ── Anime: set cover from series directly ────────────────────────────────────
+  useEffect(() => {
+    if (!series || series.item_type === 'manga') return
+    setCoverSrc(series.cover_url || null)
+  }, [series])
+
+  // ── Calculate LiDex Score (anime only) ──────────────────────────────────────
   useEffect(() => {
     if (!series || series.item_type !== 'anime' || !series.anime_meta) return
 
     async function calcScore() {
       setScoreLoading(true)
       try {
-        // Fetch population data for percentile baselines
         const { data: popData } = await supabase
           .from('anime_meta')
           .select('mean_score, popularity, favourites')
           .limit(3000)
 
-        // Also fetch studio data for studio reputation component
         const { data: studioData } = await supabase
           .from('series')
           .select('studio, anime_meta(mean_score)')
@@ -122,7 +182,6 @@ export default function ContentDetail() {
         ]
 
         const stats = buildPopulationStats(allRows)
-
         const breakdown = calculateLiDexScore(
           {
             mean_score:          series.anime_meta.mean_score,
@@ -191,9 +250,10 @@ export default function ContentDetail() {
     )
   }
 
-  const typeText = (series.item_type || 'Series').replace('_', ' ').toUpperCase()
+  const typeText  = (series.item_type || 'Series').replace('_', ' ').toUpperCase()
   const isOngoing = series.status === 'ongoing' || series.status === 'Ongoing'
   const isAnime   = series.item_type === 'anime'
+  const isManga   = series.item_type === 'manga'
 
   return (
     <div className="min-h-screen overflow-x-hidden" style={{ background: 'var(--background)' }}>
@@ -203,7 +263,7 @@ export default function ContentDetail() {
         <div className="absolute inset-0">
           {bannerImage ? (
             <>
-              <img src={bannerImage} alt="" className="w-full h-full object-cover object-center" onError={() => setImageError(true)} />
+              <img src={bannerImage} alt="" className="w-full h-full object-cover object-center" />
               <div className="absolute inset-0 backdrop-blur-md bg-dark-900/55" />
               <div className="absolute inset-0 bg-gradient-to-t from-dark-900 via-dark-900/40 to-transparent" />
             </>
@@ -216,23 +276,34 @@ export default function ContentDetail() {
         </div>
 
         <div className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Outer row: cover | meta | score box */}
           <div className="flex flex-col md:flex-row md:items-end gap-5 md:gap-8 pt-24 sm:pt-28 pb-10 sm:pb-14">
 
-            {/* Cover */}
+            {/* ── Cover — latest volume ── */}
             <div className="flex-shrink-0 mx-auto md:mx-0">
-              <div className="w-36 sm:w-44 md:w-52 lg:w-60 rounded-xl overflow-hidden shadow-2xl border-2 border-white/20 bg-dark-800">
-                {coverImage ? (
-                  <img src={coverImage} alt={series.title} className="w-full h-auto block" onError={() => setImageError(true)} />
+              <div className="relative w-36 sm:w-44 md:w-52 lg:w-60 rounded-xl overflow-hidden shadow-2xl border-2 border-white/20 bg-dark-800">
+                {coverSrc && !imageError ? (
+                  <img
+                    src={coverSrc}
+                    alt={series.title}
+                    className="w-full h-auto block"
+                    onError={() => setImageError(true)}
+                  />
                 ) : (
                   <div className="w-full h-52 sm:h-64 bg-gradient-to-br from-primary-600 to-purple-700 flex items-center justify-center">
                     <BookOpen className="w-16 h-16 sm:w-20 sm:h-20 text-white/50" />
                   </div>
                 )}
+                {/* Badge showing which volume is displayed */}
+                {isManga && latestVolume?.volume_number && (
+                  <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md text-[10px] font-bold text-white"
+                    style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(6px)', border: '1px solid rgba(255,255,255,0.15)' }}>
+                    Vol.{latestVolume.volume_number}
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Meta — flex-1 so it takes remaining space */}
+            {/* ── Meta ── */}
             <div className="flex-1 min-w-0 text-center md:text-left">
               <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mb-3">
                 <span className="px-3 py-1 bg-primary-500/90 rounded-full text-xs font-semibold text-white whitespace-nowrap">{typeText}</span>
@@ -242,6 +313,12 @@ export default function ContentDetail() {
                 {series.is_featured && (
                   <span className="px-3 py-1 bg-yellow-500/90 rounded-full text-xs font-semibold text-white flex items-center gap-1 whitespace-nowrap">
                     <Award className="w-3 h-3" /> Featured
+                  </span>
+                )}
+                {/* VN Licensed badge for manga */}
+                {isManga && mangaMeta?.vn_licensed && (
+                  <span className="px-3 py-1 bg-emerald-500/90 rounded-full text-xs font-semibold text-white flex items-center gap-1 whitespace-nowrap">
+                    <BadgeCheck className="w-3 h-3" /> VN Licensed
                   </span>
                 )}
               </div>
@@ -257,20 +334,14 @@ export default function ContentDetail() {
                 </div>
               )}
 
-              <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 sm:gap-6 mb-4">
-                {series.score && (
-                  <div className="flex items-center gap-1.5">
-                    <Star className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400 fill-yellow-400" />
-                    <span className="text-lg sm:text-xl font-bold text-white">{series.score}</span>
-                    <span className="text-xs text-gray-400">/100</span>
-                  </div>
-                )}
-                <div className="flex items-center gap-1.5">
-                  <Heart className="w-4 h-4 text-pink-400" />
-                  <span className="text-base sm:text-lg font-semibold text-white">{voteCount.toLocaleString()}</span>
-                  <span className="text-xs text-gray-400">votes</span>
+              {/* ── Score (anime only, no votes shown) ── */}
+              {series.score && (
+                <div className="flex items-center justify-center md:justify-start gap-1.5 mb-4">
+                  <Star className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400 fill-yellow-400" />
+                  <span className="text-lg sm:text-xl font-bold text-white">{series.score}</span>
+                  <span className="text-xs text-gray-400">/100</span>
                 </div>
-              </div>
+              )}
 
               {(series.author || series.studio || series.publisher) && (
                 <div className="flex flex-wrap items-center justify-center md:justify-start gap-x-4 gap-y-1 text-xs sm:text-sm text-gray-300 mb-4">
@@ -290,7 +361,7 @@ export default function ContentDetail() {
                 </div>
               )}
 
-              {/* ── Synopsis in hero ── */}
+              {/* ── Synopsis ── */}
               {(series.description || series.description_vi) && (
                 <div className="mt-4 max-w-2xl">
                   <div className="relative">
@@ -315,14 +386,13 @@ export default function ContentDetail() {
               )}
             </div>
 
-            {/* ── LiDex Score Box — only for anime ── */}
+            {/* ── LiDex Score Box (anime only) ── */}
             {isAnime && (
               <div className="flex-shrink-0 mx-auto md:mx-0 w-52 sm:w-56">
                 <div
                   className="rounded-2xl overflow-hidden"
                   style={{ background: 'rgba(15,23,42,0.75)', border: '1px solid rgba(255,255,255,0.12)', backdropFilter: 'blur(12px)' }}
                 >
-                  {/* Header */}
                   <div className="px-4 py-3 flex items-center gap-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
                     <TrendingUp className="w-4 h-4 text-primary-400 flex-shrink-0" />
                     <span className="text-xs font-bold uppercase tracking-widest text-gray-300">LiDex Score</span>
@@ -336,13 +406,9 @@ export default function ContentDetail() {
                       </div>
                     ) : lidexScore ? (
                       <>
-                        {/* Big score + grade */}
                         <div className="flex items-end justify-between mb-4">
                           <div>
-                            <span
-                              className="text-5xl font-black leading-none"
-                              style={{ color: scoreColor(lidexScore.total) }}
-                            >
+                            <span className="text-5xl font-black leading-none" style={{ color: scoreColor(lidexScore.total) }}>
                               {lidexScore.total.toFixed(1)}
                             </span>
                             <span className="text-gray-500 text-sm ml-1">/100</span>
@@ -359,7 +425,6 @@ export default function ContentDetail() {
                           </div>
                         </div>
 
-                        {/* Component bars */}
                         <div className="space-y-2">
                           {COMPONENT_META.map(({ key, label, weight }) => {
                             const val = lidexScore[key] as number
@@ -382,10 +447,7 @@ export default function ContentDetail() {
                           })}
                         </div>
 
-                        {/* Weight note */}
-                        <p className="text-[0.6rem] text-gray-600 text-center mt-3">
-                          Composite of 7 signals
-                        </p>
+                        <p className="text-[0.6rem] text-gray-600 text-center mt-3">Composite of 7 signals</p>
                       </>
                     ) : (
                       <p className="text-xs text-gray-500 text-center py-4">Score unavailable</p>
@@ -428,29 +490,124 @@ export default function ContentDetail() {
               ))}
             </div>
 
-            {/* ── Tab: Thông tin chung ── */}
+            {/* ── Tab: General Info ── */}
             {activeTab === 'info' && (
               <div className="space-y-6 animate-in fade-in duration-200">
 
-                {/* Info grid */}
+                {/* Base info grid */}
                 <div className="glass rounded-2xl p-5 sm:p-6">
                   <div className="flex items-center gap-2 mb-5">
                     <Info className="w-5 h-5 text-primary-500 flex-shrink-0" />
-                    <h2 className="text-base font-bold" style={{ color: 'var(--foreground)' }}>{isVI ? 'Thông tin'    : 'Information'}</h2>
+                    <h2 className="text-base font-bold" style={{ color: 'var(--foreground)' }}>{isVI ? 'Thông tin' : 'Information'}</h2>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    <InfoItem icon={Film}       label="Thể loại"     value={typeText} />
-                    <InfoItem icon={Calendar}   label="Trạng thái"   value={(series.status || '--').toUpperCase()} />
-                    <InfoItem icon={Globe}      label="Nguồn gốc"    value={series.source || 'Manual'} />
-                    <InfoItem icon={BookOpen}   label="Tác giả"      value={series.author || '--'} />
-                    <InfoItem icon={Award}      label="Nhà xuất bản" value={series.publisher || '--'} />
-                    <InfoItem icon={Layers}     label="Studio"       value={series.studio || '--'} />
-                    {series.anime_meta?.format      && <InfoItem icon={Film}      label="Format"     value={series.anime_meta.format} />}
-                    {series.anime_meta?.season      && <InfoItem icon={Calendar}  label="Mùa"        value={`${series.anime_meta.season} ${series.anime_meta.season_year || ''}`} />}
-                    {series.anime_meta?.episodes    && <InfoItem icon={Layers}    label="Số tập"     value={String(series.anime_meta.episodes)} />}
-                    {series.anime_meta?.duration_min&& <InfoItem icon={TrendingUp}label="Thời lượng" value={`${series.anime_meta.duration_min} phút`} />}
+                    <InfoItem icon={Film}       label={isVI ? 'Thể loại'     : 'Type'}        value={typeText} />
+                    <InfoItem icon={Calendar}   label={isVI ? 'Trạng thái'   : 'Status'}      value={(series.status || '--').toUpperCase()} />
+                    <InfoItem icon={Globe}      label={isVI ? 'Nguồn gốc'    : 'Source'}      value={series.source || 'Manual'} />
+                    <InfoItem icon={BookOpen}   label={isVI ? 'Tác giả'      : 'Author'}      value={series.author || '--'} />
+                    <InfoItem icon={Award}      label={isVI ? 'Nhà xuất bản' : 'Publisher'}   value={series.publisher || '--'} />
+                    <InfoItem icon={Layers}     label={isVI ? 'Studio'       : 'Studio'}      value={series.studio || '--'} />
+
+                    {/* Anime-specific */}
+                    {series.anime_meta?.format       && <InfoItem icon={Film}       label="Format"                     value={series.anime_meta.format} />}
+                    {series.anime_meta?.season       && <InfoItem icon={Calendar}   label={isVI ? 'Mùa' : 'Season'}   value={`${series.anime_meta.season} ${series.anime_meta.season_year || ''}`} />}
+                    {series.anime_meta?.episodes     && <InfoItem icon={Layers}     label={isVI ? 'Số tập' : 'Episodes'} value={String(series.anime_meta.episodes)} />}
+                    {series.anime_meta?.duration_min && <InfoItem icon={TrendingUp} label={isVI ? 'Thời lượng' : 'Duration'} value={`${series.anime_meta.duration_min} ${isVI ? 'phút' : 'min'}`} />}
                   </div>
                 </div>
+
+                {/* ── Manga-specific enrichment ── */}
+                {isManga && (
+                  <div className="glass rounded-2xl p-5 sm:p-6">
+                    <div className="flex items-center gap-2 mb-5">
+                      <BookMarked className="w-5 h-5 text-primary-500 flex-shrink-0" />
+                      <h2 className="text-base font-bold" style={{ color: 'var(--foreground)' }}>
+                        {isVI ? 'Chi tiết Manga' : 'Manga Details'}
+                      </h2>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {/* Demographic */}
+                      {mangaMeta?.demographic && mangaMeta.demographic !== 'none' && (
+                        <InfoItem
+                          icon={Users}
+                          label={isVI ? 'Đối tượng' : 'Demographic'}
+                          value={DEMO_LABELS[mangaMeta.demographic] || mangaMeta.demographic}
+                        />
+                      )}
+
+                      {/* Original language */}
+                      {mangaMeta?.original_language && (
+                        <InfoItem
+                          icon={Languages}
+                          label={isVI ? 'Ngôn ngữ gốc' : 'Origin Language'}
+                          value={LANG_LABELS[mangaMeta.original_language] || mangaMeta.original_language.toUpperCase()}
+                        />
+                      )}
+
+                      {/* VN Licensed */}
+                      {mangaMeta?.vn_licensed !== undefined && (
+                        <InfoItem
+                          icon={BadgeCheck}
+                          label={isVI ? 'Bản quyền VN' : 'VN Licensed'}
+                          value={mangaMeta.vn_licensed ? (isVI ? 'Có' : 'Yes') : (isVI ? 'Không' : 'No')}
+                        />
+                      )}
+
+                      {/* Volume count (from volumes table, auto-calculated) */}
+                      {volumeCount !== null && (
+                        <InfoItem
+                          icon={Layers}
+                          label={isVI ? 'Số tập (VN)' : 'Volumes (VN)'}
+                          value={String(volumeCount)}
+                        />
+                      )}
+
+
+                    </div>
+
+                    {/* ── Latest volume release info ── */}
+                    {latestVolume && (
+                      <div className="mt-4 pt-4" style={{ borderTop: '1px solid var(--card-border)' }}>
+                        <div className="flex items-center gap-2 mb-3">
+                          <ImageIcon className="w-4 h-4 text-primary-400 flex-shrink-0" />
+                          <span className="text-xs font-semibold" style={{ color: 'var(--foreground-secondary)' }}>
+                            {isVI ? 'Thông tin tập mới nhất (VN)' : 'Latest VN Volume Info'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-4 p-3 rounded-xl" style={{ background: 'var(--background-secondary)', border: '1px solid var(--card-border)' }}>
+                          {latestVolume.cover_url && (
+                            <img
+                              src={latestVolume.cover_url}
+                              alt={`Vol. ${latestVolume.volume_number}`}
+                              className="w-10 h-auto rounded-md flex-shrink-0 shadow"
+                            />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold" style={{ color: 'var(--foreground)' }}>
+                              {isVI ? 'Tập' : 'Volume'} {latestVolume.volume_number}
+                            </p>
+                            {latestVolume.release_date && (
+                              <p className="text-xs mt-0.5" style={{ color: 'var(--foreground-muted)' }}>
+                                {isVI ? 'Phát hành' : 'Released'}:{' '}
+                                {new Date(latestVolume.release_date).toLocaleDateString(
+                                  isVI ? 'vi-VN' : 'en-US',
+                                  { year: 'numeric', month: 'long', day: 'numeric' }
+                                )}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex-shrink-0 text-right">
+                            <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold text-primary-300"
+                              style={{ background: 'var(--glass-bg)', border: '1px solid var(--card-border)' }}>
+                              {isVI ? 'Bìa đang hiển thị' : 'Cover shown'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Tags */}
                 {series.tags && series.tags.length > 0 && (
@@ -472,20 +629,18 @@ export default function ContentDetail() {
               </div>
             )}
 
-            {/* ── Tab: Thông số ── */}
+            {/* ── Tab: Stats ── */}
             {activeTab === 'stats' && (
               <div className="space-y-6 animate-in fade-in duration-200">
                 {series.anime_meta ? (
                   <>
-                    {/* Key stats row */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      <StatBig label="Điểm trung bình"  value={series.anime_meta.mean_score ? `${series.anime_meta.mean_score}` : '—'} sub="/100" color="#fbbf24" />
-                      <StatBig label="Độ phổ biến"      value={series.anime_meta.popularity  ? series.anime_meta.popularity.toLocaleString()  : '—'} color="#6366f1" />
-                      <StatBig label="Yêu thích"        value={series.anime_meta.favourites  ? fmtBig(series.anime_meta.favourites)  : '—'} color="#ec4899" />
-                      <StatBig label="Lượt xem"         value={series.anime_meta.average_score ? `${series.anime_meta.average_score}` : voteCount.toLocaleString()} color="#22c55e" />
+                      <StatBig label="Điểm trung bình" value={series.anime_meta.mean_score ? `${series.anime_meta.mean_score}` : '—'} sub="/100" color="#fbbf24" />
+                      <StatBig label="Độ phổ biến"     value={series.anime_meta.popularity  ? series.anime_meta.popularity.toLocaleString()  : '—'} color="#6366f1" />
+                      <StatBig label="Yêu thích"       value={series.anime_meta.favourites  ? fmtBig(series.anime_meta.favourites) : '—'} color="#ec4899" />
+                      <StatBig label="Lượt xem"        value={series.anime_meta.average_score ? `${series.anime_meta.average_score}` : '—'} color="#22c55e" />
                     </div>
 
-                    {/* Viewer status distribution */}
                     {series.anime_meta.status_distribution && (
                       <div className="glass rounded-2xl p-5 sm:p-6">
                         <div className="flex items-center gap-2 mb-5">
@@ -496,7 +651,6 @@ export default function ContentDetail() {
                       </div>
                     )}
 
-                    {/* Score distribution */}
                     {series.anime_meta.score_distribution && (
                       <div className="glass rounded-2xl p-5 sm:p-6">
                         <div className="flex items-center gap-2 mb-5">
@@ -507,9 +661,15 @@ export default function ContentDetail() {
                       </div>
                     )}
 
-                    {/* Radar */}
                     <RadarChart series={series} />
                   </>
+                ) : isManga ? (
+                  <div className="glass rounded-2xl p-10 flex flex-col items-center gap-3">
+                    <BarChart2 className="w-10 h-10 opacity-20 text-primary-500" />
+                    <p className="text-sm" style={{ color: 'var(--foreground-muted)' }}>
+                      {isVI ? 'Không có dữ liệu thống kê cho Manga' : 'No stats available for Manga'}
+                    </p>
+                  </div>
                 ) : (
                   <div className="glass rounded-2xl p-10 flex flex-col items-center gap-3">
                     <BarChart2 className="w-10 h-10 opacity-20 text-primary-500" />
@@ -519,19 +679,17 @@ export default function ContentDetail() {
               </div>
             )}
 
-            {/* ── Tab: Phân tích ── */}
+            {/* ── Tab: Analysis ── */}
             {activeTab === 'analyze' && (
               <div className="space-y-6 animate-in fade-in duration-200">
                 {isAnime && lidexScore ? (
                   <>
-                    {/* Total score hero */}
                     <div className="glass rounded-2xl p-6 sm:p-8">
                       <div className="flex items-center gap-2 mb-6">
                         <FlaskConical className="w-5 h-5 text-primary-500" />
                         <h2 className="text-base font-bold" style={{ color: 'var(--foreground)' }}>LiDex Score — Phân tích tổng hợp</h2>
                       </div>
 
-                      {/* Big score display */}
                       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 mb-8">
                         <div className="flex items-end gap-3">
                           <span className="text-7xl font-black leading-none" style={{ color: scoreColor(lidexScore.total) }}>
@@ -553,7 +711,6 @@ export default function ContentDetail() {
                         </div>
                       </div>
 
-                      {/* Component breakdown */}
                       <div className="space-y-4">
                         {COMPONENT_META.map(({ key, label, weight }) => {
                           const val = lidexScore[key] as number
@@ -580,7 +737,6 @@ export default function ContentDetail() {
                       </div>
                     </div>
 
-                    {/* Methodology note */}
                     <div className="rounded-2xl p-4 sm:p-5" style={{ background: 'var(--background-secondary)', border: '1px solid var(--card-border)' }}>
                       <p className="text-xs leading-relaxed" style={{ color: 'var(--foreground-muted)' }}>
                         <span className="font-bold" style={{ color: 'var(--foreground-secondary)' }}>Phương pháp:</span>{' '}
@@ -605,14 +761,14 @@ export default function ContentDetail() {
             )}
           </div>
 
-          {/* ── Right Sidebar (always visible) ── */}
+          {/* ── Right Sidebar ── */}
           <div className="space-y-4 sm:space-y-5 min-w-0">
 
             {/* Share */}
             <div className="glass rounded-2xl p-5">
               <div className="flex items-center gap-2 mb-4">
                 <Share2 className="w-4 h-4 text-primary-500 flex-shrink-0" />
-                <h3 className="text-sm font-bold" style={{ color: 'var(--foreground)' }}>{isVI ? 'Chia sẻ'      : 'Share'}</h3>
+                <h3 className="text-sm font-bold" style={{ color: 'var(--foreground)' }}>{isVI ? 'Chia sẻ' : 'Share'}</h3>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <button onClick={handleShare} className="p-2.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors text-xs font-medium"
@@ -628,7 +784,7 @@ export default function ContentDetail() {
               </div>
             </div>
 
-            {/* External links */}
+            {/* External Links */}
             <div className="glass rounded-2xl p-5">
               <div className="flex items-center gap-2 mb-4">
                 <ExternalLink className="w-4 h-4 text-primary-500 flex-shrink-0" />
@@ -655,8 +811,24 @@ export default function ContentDetail() {
                   </div>
                   <ExternalLink className="w-3.5 h-3.5 group-hover:text-primary-500" style={{ color: 'var(--foreground-muted)' }} />
                 </a>
+
               </div>
             </div>
+
+            {/* Publisher info (manga sidebar) */}
+            {isManga && mangaMeta?.vn_publisher_id && (
+              <div className="glass rounded-2xl p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <Building2 className="w-4 h-4 text-primary-500 flex-shrink-0" />
+                  <h3 className="text-sm font-bold" style={{ color: 'var(--foreground)' }}>
+                    {isVI ? 'Nhà xuất bản VN' : 'VN Publisher'}
+                  </h3>
+                </div>
+                <p className="text-xs" style={{ color: 'var(--foreground-secondary)' }}>
+                  {series.publisher || `Publisher #${mangaMeta.vn_publisher_id}`}
+                </p>
+              </div>
+            )}
 
             {/* Last updated */}
             <div className="glass rounded-2xl p-5">
@@ -674,6 +846,8 @@ export default function ContentDetail() {
     </div>
   )
 }
+
+// ── Sub-components ────────────────────────────────────────────────────────────
 
 function InfoItem({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
   return (
@@ -705,7 +879,6 @@ function StatBig({ label, value, sub, color }: { label: string; value: string; s
   )
 }
 
-// ── Waffle Chart (10×10 grid) ────────────────────────────────────────────────
 function StatusDistribution({ data }: { data: Record<string, number> | string }) {
   const parsed: Record<string, number> = typeof data === 'string'
     ? (() => { try { return JSON.parse(data) } catch { return {} } })()
@@ -724,7 +897,6 @@ function StatusDistribution({ data }: { data: Record<string, number> | string })
   const total = Object.values(parsed).reduce((s, v) => s + v, 0)
   if (!total) return null
 
-  // Build 100-cell waffle: each cell = 1%
   const cells: string[] = []
   for (const key of ORDER) {
     const pct = Math.round(((parsed[key] ?? 0) / total) * 100)
@@ -736,7 +908,6 @@ function StatusDistribution({ data }: { data: Record<string, number> | string })
 
   return (
     <div className="flex flex-col sm:flex-row gap-5 items-start">
-      {/* Waffle grid */}
       <div
         className="flex-shrink-0"
         style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: 3, width: 200 }}
@@ -758,11 +929,9 @@ function StatusDistribution({ data }: { data: Record<string, number> | string })
           />
         ))}
       </div>
-
-      {/* Legend */}
       <div className="flex-1 space-y-2 min-w-0">
         {ORDER.filter(k => (parsed[k] ?? 0) > 0).map(k => {
-          const pct = ((parsed[k] / total) * 100).toFixed(1)
+          const pct     = ((parsed[k] / total) * 100).toFixed(1)
           const isHovered = hoveredKey === k
           return (
             <div
@@ -781,10 +950,8 @@ function StatusDistribution({ data }: { data: Record<string, number> | string })
                   <span className="text-xs font-semibold" style={{ color: 'var(--foreground)' }}>{LABELS[k]}</span>
                   <span className="text-xs font-bold ml-2" style={{ color: COLORS[k] }}>{pct}%</span>
                 </div>
-                {/* Mini progress bar */}
                 <div className="h-1 rounded-full mt-1 overflow-hidden" style={{ background: 'var(--card-border)' }}>
-                  <div className="h-full rounded-full transition-all duration-500"
-                    style={{ width: `${pct}%`, background: COLORS[k] }} />
+                  <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: COLORS[k] }} />
                 </div>
                 <span className="text-[10px]" style={{ color: 'var(--foreground-muted)' }}>{fmtBig(parsed[k])} người</span>
               </div>
@@ -818,13 +985,12 @@ function ScoreDistribution({ data }: { data: Record<string, number> | string }) 
 
   return (
     <div>
-      {/* Chart */}
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: MAX_PX + 40 }}>
         {buckets.map((b, i) => {
-          const barH   = Math.max(Math.round((counts[i] / maxCount) * MAX_PX), counts[i] > 0 ? 4 : 0)
-          const isHov  = hoveredIdx === i
-          const color  = barColor(b)
-          const pct    = totalVotes > 0 ? ((counts[i] / totalVotes) * 100).toFixed(1) : '0'
+          const barH  = Math.max(Math.round((counts[i] / maxCount) * MAX_PX), counts[i] > 0 ? 4 : 0)
+          const isHov = hoveredIdx === i
+          const color = barColor(b)
+          const pct   = totalVotes > 0 ? ((counts[i] / totalVotes) * 100).toFixed(1) : '0'
 
           return (
             <div key={b}
@@ -832,18 +998,9 @@ function ScoreDistribution({ data }: { data: Record<string, number> | string }) 
               onMouseEnter={() => counts[i] > 0 && setHoveredIdx(i)}
               onMouseLeave={() => setHoveredIdx(null)}
             >
-              {/* Value label above bar — visible when hovered OR always shown for top bar */}
-              <div style={{
-                fontSize: 10, fontWeight: 700, color,
-                opacity: isHov || counts[i] === maxCount ? 1 : 0,
-                transition: 'opacity 0.15s',
-                whiteSpace: 'nowrap',
-                minHeight: 14,
-              }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color, opacity: isHov || counts[i] === maxCount ? 1 : 0, transition: 'opacity 0.15s', whiteSpace: 'nowrap', minHeight: 14 }}>
                 {counts[i] > 0 ? fmtBig(counts[i]) : ''}
               </div>
-
-              {/* Bar */}
               <div style={{
                 width: '100%', height: barH + 'px',
                 borderRadius: '4px 4px 0 0',
@@ -854,7 +1011,6 @@ function ScoreDistribution({ data }: { data: Record<string, number> | string }) 
                 transition: 'opacity 0.15s, transform 0.1s',
                 position: 'relative',
               }}>
-                {/* Tooltip popup on hover */}
                 {isHov && (
                   <div style={{
                     position: 'absolute', bottom: 'calc(100% + 6px)', left: '50%',
@@ -872,25 +1028,15 @@ function ScoreDistribution({ data }: { data: Record<string, number> | string }) 
                   </div>
                 )}
               </div>
-
-              {/* X label */}
-              <span style={{
-                fontSize: 9,
-                color: isHov ? color : 'var(--foreground-muted)',
-                fontWeight: isHov ? 700 : 400,
-                transition: 'color 0.15s',
-              }}>{b}</span>
+              <span style={{ fontSize: 9, color: isHov ? color : 'var(--foreground-muted)', fontWeight: isHov ? 700 : 400, transition: 'color 0.15s' }}>{b}</span>
             </div>
           )
         })}
       </div>
 
-      {/* Summary row */}
       {totalVotes > 0 && (
         <div className="flex items-center justify-between mt-3 pt-3" style={{ borderTop: '1px solid var(--card-border)' }}>
-          <span className="text-xs" style={{ color: 'var(--foreground-muted)' }}>
-            {fmtBig(totalVotes)} lượt đánh giá
-          </span>
+          <span className="text-xs" style={{ color: 'var(--foreground-muted)' }}>{fmtBig(totalVotes)} lượt đánh giá</span>
           <span className="text-xs font-semibold" style={{ color: 'var(--foreground-secondary)' }}>
             {hoveredIdx !== null
               ? `★ ${buckets[hoveredIdx]}/100 — ${fmtBig(counts[hoveredIdx])} votes (${((counts[hoveredIdx]/totalVotes)*100).toFixed(1)}%)`

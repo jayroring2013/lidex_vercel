@@ -1209,7 +1209,12 @@ function PricingLineChart({ volumes }: { volumes: any[] }) {
   
   if (prices.length === 0) return null
 
-  const maxPrice = Math.max(...prices, 1000) * 1.1 // Add 10% headroom
+  // Fix: Better maxPrice calculation - use actual data range
+  const minPrice = Math.min(...prices)
+  const maxPrice = Math.max(...prices)
+  const priceRange = maxPrice - minPrice || 1 // Avoid division by zero
+  const paddedMax = maxPrice + (priceRange * 0.1) // 10% padding
+  const paddedMin = Math.max(0, minPrice - (priceRange * 0.1))
   
   // SVG Coordinate System
   const width = 100
@@ -1223,32 +1228,34 @@ function PricingLineChart({ volumes }: { volumes: any[] }) {
     const x = sortedVols.length > 1 
       ? (i / (sortedVols.length - 1)) * innerWidth 
       : innerWidth / 2
-    const y = height - padding - ((vol.price || 0) / maxPrice) * innerHeight
+    // Fix: Normalize based on actual price range
+    const normalizedPrice = ((vol.price || 0) - paddedMin) / (paddedMax - paddedMin)
+    const y = height - padding - (normalizedPrice * innerHeight)
     return { x, y, vol }
   })
 
-  // Path data for Area (closed loop) and Line (open loop)
+  // Path data
   const linePathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ')
   const areaPathD = `${linePathD} L ${width},${height} L 0,${height} Z`
 
-  // Grid lines (0%, 50%, 100%)
+  // Fix: Better grid lines with actual price values
   const gridLines = [
-    { y: height - padding, label: (0).toLocaleString('vi-VN') },
-    { y: height - padding - (innerHeight / 2), label: (maxPrice / 2).toLocaleString('vi-VN') },
-    { y: height - padding - innerHeight, label: maxPrice.toLocaleString('vi-VN') },
+    { y: height - padding, label: paddedMin },
+    { y: height - padding - (innerHeight / 2), label: (paddedMin + paddedMax) / 2 },
+    { y: height - padding - innerHeight, label: paddedMax },
   ]
 
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
 
   return (
     <div className="w-full relative select-none">
-      {/* Tooltip - Floating Glassmorphism Style */}
+      {/* Fix: Tooltip positioning - convert SVG coords to percentages properly */}
       {hoveredIdx !== null && points[hoveredIdx] && (
         <div 
           className="absolute pointer-events-none z-30 flex flex-col items-center transition-opacity duration-200"
           style={{ 
-            left: `${points[hoveredIdx].x}%`, 
-            top: `${points[hoveredIdx].y}%`, 
+            left: `${(points[hoveredIdx].x / width) * 100}%`, 
+            top: `${(points[hoveredIdx].y / height) * 100}%`, 
             transform: 'translate(-50%, calc(-100% - 12px))' 
           }}
         >
@@ -1257,20 +1264,17 @@ function PricingLineChart({ volumes }: { volumes: any[] }) {
             <span className="text-gray-400">•</span>
             <span>{(points[hoveredIdx].vol.price || 0).toLocaleString('vi-VN')} đ</span>
           </div>
-          {/* Little triangle pointer */}
           <div className="w-2 h-2 bg-slate-900/90 border-r border-b border-white/10 transform rotate-45 -mt-1.5" style={{ backdropFilter: 'blur(12px)' }}></div>
         </div>
       )}
 
       <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-[220px] overflow-visible" preserveAspectRatio="none">
         <defs>
-          {/* Sophisticated Gradient: Indigo to Transparent */}
           <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#6366f1" stopOpacity="0.25" />
             <stop offset="100%" stopColor="#6366f1" stopOpacity="0" />
           </linearGradient>
           
-          {/* Glow Filter for the Line */}
           <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
             <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
             <feMerge>
@@ -1280,7 +1284,7 @@ function PricingLineChart({ volumes }: { volumes: any[] }) {
           </filter>
         </defs>
 
-        {/* 1. Grid Lines (Background) */}
+        {/* Grid Lines */}
         {gridLines.map((line, i) => (
           <g key={i}>
             <line
@@ -1289,31 +1293,32 @@ function PricingLineChart({ volumes }: { volumes: any[] }) {
               strokeWidth="0.2"
               strokeDasharray="2 2"
             />
+            {/* Fix: Position labels inside the viewBox */}
             <text
-              x={width + 2}
+              x={width - 2}
               y={line.y + 3}
-              fill="rgba(255,255,255,0.2)"
+              fill="rgba(255,255,255,0.3)"
               fontSize="3"
-              textAnchor="start"
+              textAnchor="end"
               style={{ fontFamily: 'monospace' }}
             >
-              {line.label}
+              {line.label.toLocaleString('vi-VN')}
             </text>
           </g>
         ))}
 
-        {/* 2. Area Fill */}
+        {/* Area Fill */}
         <path
           d={areaPathD}
           fill="url(#chartGradient)"
           className="transition-all duration-700 ease-in-out"
         />
 
-        {/* 3. The Main Line */}
+        {/* The Main Line */}
         <path
           d={linePathD}
           fill="none"
-          stroke="#22d3ee" // Cyan-400
+          stroke="#22d3ee"
           strokeWidth="1.2"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -1322,12 +1327,11 @@ function PricingLineChart({ volumes }: { volumes: any[] }) {
           className="transition-all duration-300"
         />
 
-        {/* 4. Interactive Data Points */}
+        {/* Interactive Data Points */}
         {points.map((p, i) => {
           const isHovered = hoveredIdx === i
           return (
             <g key={i}>
-              {/* Invisible hit area for easier hovering */}
               <circle
                 cx={p.x} cy={p.y} r={4}
                 fill="transparent"
@@ -1336,17 +1340,15 @@ function PricingLineChart({ volumes }: { volumes: any[] }) {
                 style={{ cursor: 'pointer' }}
               />
               
-              {/* Visible Dot */}
               <circle
                 cx={p.x} cy={p.y}
                 r={isHovered ? 3 : 1.5}
-                fill="#0f172a" // Dark center
-                stroke="#22d3ee" // Cyan border
+                fill="#0f172a"
+                stroke="#22d3ee"
                 strokeWidth={isHovered ? 2 : 1}
                 className="transition-all duration-200"
               />
               
-              {/* Vertical Guide Line on Hover */}
               {isHovered && (
                 <line
                   x1={p.x} y1={p.y} x2={p.x} y2={height}

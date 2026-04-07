@@ -822,32 +822,55 @@ export default function ContentDetail() {
               </div>
               <div className="space-y-2">
                 {isManga ? (
-                  seriesLinks.length > 0 ? (
-                    seriesLinks.map((link: any, i: number) => {
-                      const dotColor =
-                        link.link_type === 'purchase' ? '#22c55e' :
-                        link.link_type === 'official' ? '#6366f1' :
-                        link.link_type === 'stream'   ? '#f59e0b' : '#94a3b8'
-                      return (
-                        <a key={i} href={link.url} target="_blank" rel="noopener noreferrer"
-                          className="flex items-center justify-between p-2.5 rounded-lg group transition-colors"
-                          style={{ background: 'var(--background-secondary)', border: '1px solid var(--card-border)' }}>
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: dotColor }} />
-                            <span className="text-xs font-medium group-hover:text-primary-500 transition-colors truncate" style={{ color: 'var(--foreground-secondary)' }}>
-                              {link.label}
-                            </span>
-                          </div>
-                          <ExternalLink className="w-3.5 h-3.5 flex-shrink-0 ml-2 group-hover:text-primary-500" style={{ color: 'var(--foreground-muted)' }} />
-                        </a>
-                      )
-                    })
-                  ) : (
-                    <p className="text-xs text-center py-2" style={{ color: 'var(--foreground-muted)' }}>
-                      {isVI ? 'Chưa có liên kết' : 'No links available'}
-                    </p>
-                  )
+                  <>
+                    {/* NEW: Direct Link to Tana for the Series */}
+                    {series.slug && (
+                      <a 
+                        href={`https://tana.moe/manga/${series.slug}`} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between p-2.5 rounded-lg group transition-colors"
+                        style={{ background: 'var(--background-secondary)', border: '1px solid var(--card-border)' }}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="w-2 h-2 rounded-full flex-shrink-0 bg-[#ef4444]" /> {/* Tana Red */}
+                          <span className="text-xs font-medium group-hover:text-primary-500 transition-colors truncate" style={{ color: 'var(--foreground-secondary)' }}>
+                            Tana (Source)
+                          </span>
+                        </div>
+                        <ExternalLink className="w-3.5 h-3.5 flex-shrink-0 ml-2 group-hover:text-primary-500" style={{ color: 'var(--foreground-muted)' }} />
+                      </a>
+                    )}
+
+                    {/* Existing Dynamic Links from DB */}
+                    {seriesLinks.length > 0 ? (
+                      seriesLinks.map((link: any, i: number) => {
+                        const dotColor =
+                          link.link_type === 'purchase' ? '#22c55e' :
+                          link.link_type === 'official' ? '#6366f1' :
+                          link.link_type === 'stream'   ? '#f59e0b' : '#94a3b8'
+                        return (
+                          <a key={i} href={link.url} target="_blank" rel="noopener noreferrer"
+                            className="flex items-center justify-between p-2.5 rounded-lg group transition-colors"
+                            style={{ background: 'var(--background-secondary)', border: '1px solid var(--card-border)' }}>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: dotColor }} />
+                              <span className="text-xs font-medium group-hover:text-primary-500 transition-colors truncate" style={{ color: 'var(--foreground-secondary)' }}>
+                                {link.label}
+                              </span>
+                            </div>
+                            <ExternalLink className="w-3.5 h-3.5 flex-shrink-0 ml-2 group-hover:text-primary-500" style={{ color: 'var(--foreground-muted)' }} />
+                          </a>
+                        )
+                      })
+                    ) : (
+                      <p className="text-xs text-center py-2" style={{ color: 'var(--foreground-muted)' }}>
+                        {isVI ? 'Chưa có liên kết khác' : 'No other links'}
+                      </p>
+                    )}
+                  </>
                 ) : (
+                  /* Anime Fallback Links (Unchanged) */
                   <>
                     <a href={`https://anilist.co/search/anime?search=${encodeURIComponent(series.title)}`}
                       target="_blank" rel="noopener noreferrer"
@@ -1134,7 +1157,7 @@ function MangaStats({ volumes, locale }: { volumes: any[]; locale: string }) {
             {isVI ? 'Lịch sử giá (VNĐ)' : 'Pricing History (VND)'}
           </h2>
         </div>
-        <PricingChart volumes={volumes} />
+        <PricingLineChart volumes={volumes} />
       </div>
 
       {/* Release Timeline */}
@@ -1178,43 +1201,101 @@ function MangaStats({ volumes, locale }: { volumes: any[]; locale: string }) {
   )
 }
 
-// ── NEW: Simple Bar Chart for Pricing ────────────────────────────────────────
+// ── UPDATED: Line Chart for Pricing ────────────────────────────────────────
 
-function PricingChart({ volumes }: { volumes: any[] }) {
-  const maxVal = Math.max(...volumes.map(v => v.price || 0), 100) // Avoid div by zero
-  const MAX_BAR_HEIGHT_PX = 150
+function PricingLineChart({ volumes }: { volumes: any[] }) {
+  // Sort chronologically (Vol 1 -> Vol N) for the timeline
+  const sortedVols = [...volumes].sort((a, b) => (a.volume_number || 0) - (b.volume_number || 0))
+  const prices = sortedVols.map(v => v.price || 0)
+  const maxPrice = Math.max(...prices, 1000) // Avoid div by zero, ensure some scale
+  
+  // Chart dimensions
+  const width = 100
+  const height = 50
+  const padding = 5
+  const innerHeight = height - padding * 2
+  const innerWidth = width
+
+  const points = sortedVols.map((vol, i) => {
+    const x = sortedVols.length > 1 
+      ? (i / (sortedVols.length - 1)) * innerWidth 
+      : innerWidth / 2
+    const y = height - padding - ((vol.price || 0) / maxPrice) * innerHeight
+    return { x, y, vol }
+  })
+
+  const polylinePoints = points.map(p => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ')
+  const areaPoints = `0,${height} ${polylinePoints} ${width},${height}`
+
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
 
   return (
-    <div className="w-full overflow-x-auto">
-      <div className="flex items-end gap-2 min-w-[300px] sm:min-w-full" style={{ height: `${MAX_BAR_HEIGHT_PX + 30}px` }}>
-        {volumes.slice().reverse().map((vol, i) => {
-          const price = vol.price || 0
-          const heightPct = (price / maxVal) * 100
-          
-          return (
-            <div key={vol.id || i} className="flex-1 flex flex-col items-center justify-end h-full group">
-              {/* Tooltip */}
-              <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-full mb-2 pointer-events-none z-10">
-                <div className="bg-dark-800 border border-white/10 text-white text-[10px] px-2 py-1 rounded shadow-lg whitespace-nowrap">
-                  Vol.{vol.volume_number}: {price.toLocaleString('vi-VN')} đ
-                </div>
-              </div>
-              
-              {/* Bar */}
-              <div 
-                className="w-full max-w-[24px] rounded-t-sm transition-all duration-300 hover:opacity-80"
-                style={{ 
-                  height: `${heightPct}%`, 
-                  background: price === maxVal ? '#f87171' : '#6366f1', // Highlight highest price
-                  minHeight: '4px' 
-                }}
-              />
-              
-              {/* Label */}
-              <span className="text-[9px] text-gray-500 mt-1 font-mono">{vol.volume_number}</span>
-            </div>
-          )
-        })}
+    <div className="w-full relative group">
+      {/* Tooltip */}
+      {hoveredIdx !== null && points[hoveredIdx] && (
+        <div 
+          className="absolute pointer-events-none z-20 bg-dark-800/90 border border-white/20 text-white text-[10px] px-2 py-1 rounded shadow-xl flex flex-col items-center whitespace-nowrap"
+          style={{ 
+            left: `${points[hoveredIdx].x}%`, 
+            top: `${points[hoveredIdx].y}%`, 
+            transform: 'translate(-50%, -150%)' 
+          }}
+        >
+          <span className="font-bold text-primary-400">Vol. {points[hoveredIdx].vol.volume_number}</span>
+          <span>{(points[hoveredIdx].vol.price || 0).toLocaleString('vi-VN')} đ</span>
+        </div>
+      )}
+
+      {/* SVG Chart */}
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-[200px] overflow-visible" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#ec4899" stopOpacity="0.4" />
+            <stop offset="100%" stopColor="#ec4899" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+
+        {/* Area Fill */}
+        <polygon
+          points={areaPoints}
+          fill="url(#priceGradient)"
+          className="transition-all duration-300"
+        />
+
+        {/* The Line */}
+        <polyline
+          points={polylinePoints}
+          fill="none"
+          stroke="#ec4899"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+          className="drop-shadow-[0_0_8px_rgba(236,72,153,0.5)]"
+        />
+
+        {/* Interactive Points */}
+        {points.map((p, i) => (
+          <circle
+            key={i}
+            cx={p.x}
+            cy={p.y}
+            r={hoveredIdx === i ? 2.5 : 1.5}
+            fill="#fff"
+            stroke="#ec4899"
+            strokeWidth="1"
+            className="cursor-pointer transition-all duration-200 hover:r-3"
+            onMouseEnter={() => setHoveredIdx(i)}
+            onMouseLeave={() => setHoveredIdx(null)}
+          />
+        ))}
+      </svg>
+
+      {/* X-Axis Labels (First, Middle, Last) */}
+      <div className="flex justify-between text-[9px] text-gray-500 mt-2 font-mono">
+        <span>Vol.{points[0]?.vol.volume_number}</span>
+        {points.length > 2 && <span>Vol.{points[Math.floor(points.length / 2)]?.vol.volume_number}</span>}
+        <span>Vol.{points[points.length - 1]?.vol.volume_number}</span>
       </div>
     </div>
   )

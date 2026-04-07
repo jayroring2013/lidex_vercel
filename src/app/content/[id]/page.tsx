@@ -1343,12 +1343,12 @@ function PricingLineChart({ volumes }: { volumes: Volume[] }) {
 
   // Theme-aware colors — NO Tailwind dark: classes inside SVG
   const colors = {
-    dotFill: isDark ? "#171717" : "#ffffff",
-    gridStroke: isDark ? "#262626" : "#f5f5f5",
-    axisFill: isDark ? "#525252" : "#a3a3a3",
+    dotFill: isDark ? "#1e293b" : "#ffffff",
+    gridStroke: isDark ? "#334155" : "#e5e7eb",
+    axisFill: isDark ? "#94a3b8" : "#6b7280",
     lineStroke: "#3b82f6",
-    areaStart: isDark ? "rgba(59,130,246,0.08)" : "rgba(59,130,246,0.15)",
-    areaEnd: isDark ? "rgba(59,130,246,0.01)" : "rgba(59,130,246,0.01)",
+    areaStart: isDark ? "rgba(59,130,246,0.2)" : "rgba(59,130,246,0.15)",
+    areaEnd: isDark ? "rgba(59,130,246,0.02)" : "rgba(59,130,246,0.01)",
   }
 
   return (
@@ -1359,12 +1359,13 @@ function PricingLineChart({ volumes }: { volumes: Volume[] }) {
           <p className="text-xs font-medium uppercase tracking-widest mb-1" style={{ color: 'var(--foreground-muted)' }}>
             Lịch sử giá (VNĐ)
           </p>
-          <p className="text-xl font-medium tabular-nums" style={{ color: 'var(--foreground)' }}>
+          <p className="text-2xl font-bold tabular-nums" style={{ color: 'var(--foreground)' }}>
             {fmt(minPrice)}
             {priceRange > 0 && (
-              <span className="mx-2" style={{ color: 'var(--foreground-muted)' }}>–</span>
+              <span className="mx-3 font-light" style={{ color: 'var(--foreground-muted)' }}>–</span>
             )}
             {priceRange > 0 && fmt(maxPrice)}
+            <span className="text-sm font-normal ml-2" style={{ color: 'var(--foreground-muted)' }}>VND</span>
           </p>
         </div>
         <div className="flex flex-col items-end gap-1.5">
@@ -1389,21 +1390,6 @@ function PricingLineChart({ volumes }: { volumes: Volume[] }) {
             Vol.{sorted[0]?.volume_number} → Vol.{sorted[sorted.length - 1]?.volume_number}
           </span>
         </div>
-      </div>
-
-      {/* Summary stats */}
-      <div className="flex gap-5 mb-4 pb-4" style={{ borderBottom: '1px solid var(--card-border)' }}>
-        {[
-          { label: "Thấp nhất", value: fmt(minPrice), color: "#ef4444" },
-          { label: "Cao nhất",  value: fmt(maxPrice), color: "#22c55e" },
-          { label: "Trung bình", value: fmt(avgPrice), color: "var(--foreground)" },
-          { label: "Số tập", value: `${sorted.length} tập`, color: "var(--foreground)" },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="flex flex-col">
-            <span className="text-[11px] mb-0.5" style={{ color: 'var(--foreground-muted)' }}>{label}</span>
-            <span className="text-sm font-medium tabular-nums" style={{ color }}>{value}</span>
-          </div>
-        ))}
       </div>
 
       {/* Chart */}

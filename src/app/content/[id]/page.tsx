@@ -181,8 +181,29 @@ export default function ContentDetail() {
 
   // ── Anime: set cover from series directly ────────────────────────────────────
   useEffect(() => {
-    if (!series || series.item_type === 'manga') return
+    if (!series || series.item_type === 'manga' || series.item_type === 'novel') return
     setCoverSrc(series.cover_url || null)
+  }, [series])
+
+  // ── Novel: fetch latest volume cover (mirrors manga enrichment) ───────────────
+  useEffect(() => {
+    if (!series || series.item_type !== 'novel') return
+    async function loadNovelCover() {
+      const { data: vols } = await supabase
+        .from('volumes')
+        .select('volume_number, cover_url')
+        .eq('series_id', series.id)
+        .eq('is_special', false)
+        .not('volume_number', 'is', null)
+        .order('volume_number', { ascending: false })
+      if (vols && vols.length > 0) {
+        const withCover = vols.find((v: any) => v.cover_url)
+        setCoverSrc(withCover?.cover_url || series.cover_url || null)
+      } else {
+        setCoverSrc(series.cover_url || null)
+      }
+    }
+    loadNovelCover()
   }, [series])
 
   // ── Calculate LiDex Score (anime only) ──────────────────────────────────────

@@ -34,6 +34,26 @@ function proxyImg(url: string | null): string | null {
   return url
 }
 
+// Fetch latest non-special volume cover for each series id
+async function fetchLatestVolCovers(ids: (string | number)[]): Promise<Record<string | number, string | null>> {
+  if (!ids.length) return {}
+  const { data } = await supabase
+    .from('volumes')
+    .select('series_id, cover_url, volume_number')
+    .in('series_id', ids)
+    .eq('is_special', false)
+    .not('cover_url', 'is', null)
+    .order('volume_number', { ascending: false })
+  if (!data) return {}
+  const map: Record<string | number, string | null> = {}
+  for (const row of data) {
+    if (map[row.series_id] === undefined) {
+      map[row.series_id] = proxyImg(row.cover_url)
+    }
+  }
+  return map
+}
+
 // ── Skeleton components ───────────────────────────────────────────────────────
 function StatSkeleton() {
   return (
@@ -184,9 +204,31 @@ export default function Dashboard() {
 
         setCarouselData({
           anime: (topAnimeData.data || []).map((s: any) => ({ id: s.id, title: s.title, cover_url: s.cover_url, score: s.anime_mean_score, href: `/content/${s.id}` })),
-          manga: ((mangaCarouselData.data) || []).map((m: any) => ({ id: m.id, title: m.title, cover_url: proxyImg(m.cover_url), score: null, href: `/content/${m.id}` })),
-          novel: ((novelTableData as any)?.data || novelTableData || []).map((n: any) => ({ id: n.id, title: n.title, cover_url: proxyImg(n.cover_url), score: null, href: `/content/${n.id}` })),
+          manga: [], // will be filled below
+          novel: [], // will be filled below
         })
+
+        // Fetch latest volume covers for manga and novel
+        const mangaRows = (mangaCarouselData.data) || []
+        const novelRows = (novelTableData as any)?.data || novelTableData || []
+        const [mangaVolCovers, novelVolCovers] = await Promise.all([
+          fetchLatestVolCovers(mangaRows.map((m: any) => m.id)),
+          fetchLatestVolCovers(novelRows.map((n: any) => n.id)),
+        ])
+
+        setCarouselData(prev => ({
+          ...prev,
+          manga: mangaRows.map((m: any) => ({
+            id: m.id, title: m.title,
+            cover_url: mangaVolCovers[m.id] !== undefined ? mangaVolCovers[m.id] : proxyImg(m.cover_url),
+            score: null, href: `/content/${m.id}`
+          })),
+          novel: novelRows.map((n: any) => ({
+            id: n.id, title: n.title,
+            cover_url: novelVolCovers[n.id] !== undefined ? novelVolCovers[n.id] : proxyImg(n.cover_url),
+            score: null, href: `/content/${n.id}`
+          })),
+        }))
         setCarouselReady(true)
       } catch (e) {
         console.error(e)

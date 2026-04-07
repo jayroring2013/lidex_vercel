@@ -1205,170 +1205,123 @@ function MangaStats({ volumes, locale }: { volumes: any[]; locale: string }) {
 
 function PricingLineChart({ volumes }: { volumes: any[] }) {
   const sortedVols = [...volumes].sort((a, b) => (a.volume_number || 0) - (b.volume_number || 0))
-  const prices = sortedVols.map(v => v.price || 0)
-  
+  const prices = sortedVols.map(v => parseFloat(v.price) || 0)
+
   if (prices.length === 0) return null
 
-  // Fix: Better maxPrice calculation - use actual data range
   const minPrice = Math.min(...prices)
   const maxPrice = Math.max(...prices)
-  const priceRange = maxPrice - minPrice || 1 // Avoid division by zero
-  const paddedMax = maxPrice + (priceRange * 0.1) // 10% padding
-  const paddedMin = Math.max(0, minPrice - (priceRange * 0.1))
+  const range = maxPrice - minPrice || 1
   
-  // SVG Coordinate System
-  const width = 100
-  const height = 60
-  const padding = 5
-  const innerHeight = height - (padding * 2)
-  const innerWidth = width
+  // Add padding to y-axis
+  const yMin = Math.floor(minPrice - range * 0.1)
+  const yMax = Math.ceil(maxPrice + range * 0.1)
+  const yRange = yMax - yMin
 
-  // Calculate coordinates
+  const width = 800
+  const height = 400
+  const padding = { top: 40, right: 40, bottom: 60, left: 80 }
+  const chartWidth = width - padding.left - padding.right
+  const chartHeight = height - padding.top - padding.bottom
+
+  // Generate points
   const points = sortedVols.map((vol, i) => {
-    const x = sortedVols.length > 1 
-      ? (i / (sortedVols.length - 1)) * innerWidth 
-      : innerWidth / 2
-    // Fix: Normalize based on actual price range
-    const normalizedPrice = ((vol.price || 0) - paddedMin) / (paddedMax - paddedMin)
-    const y = height - padding - (normalizedPrice * innerHeight)
-    return { x, y, vol }
+    const x = padding.left + (i / (sortedVols.length - 1 || 1)) * chartWidth
+    const y = padding.top + chartHeight - ((parseFloat(vol.price) - yMin) / yRange) * chartHeight
+    return { x, y, price: parseFloat(vol.price), vol }
   })
 
-  // Path data
-  const linePathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ')
-  const areaPathD = `${linePathD} L ${width},${height} L 0,${height} Z`
+  // Generate path
+  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
+  const areaPath = `${linePath} L ${points[points.length - 1]?.x} ${padding.top + chartHeight} L ${padding.left} ${padding.top + chartHeight} Z`
 
-  // Fix: Better grid lines with actual price values
-  const gridLines = [
-    { y: height - padding, label: paddedMin },
-    { y: height - padding - (innerHeight / 2), label: (paddedMin + paddedMax) / 2 },
-    { y: height - padding - innerHeight, label: paddedMax },
-  ]
-
-  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
+  // Y-axis ticks (5 ticks)
+  const yTicks = Array.from({ length: 5 }, (_, i) => {
+    const value = yMin + (yRange * i) / 4
+    const y = padding.top + chartHeight - (i / 4) * chartHeight
+    return { value: Math.round(value), y }
+  })
 
   return (
-    <div className="w-full relative select-none">
-      {/* Fix: Tooltip positioning - convert SVG coords to percentages properly */}
-      {hoveredIdx !== null && points[hoveredIdx] && (
-        <div 
-          className="absolute pointer-events-none z-30 flex flex-col items-center transition-opacity duration-200"
-          style={{ 
-            left: `${(points[hoveredIdx].x / width) * 100}%`, 
-            top: `${(points[hoveredIdx].y / height) * 100}%`, 
-            transform: 'translate(-50%, calc(-100% - 12px))' 
-          }}
-        >
-          <div className="bg-slate-900/90 backdrop-blur-md border border-white/10 text-white text-[11px] font-medium px-3 py-1.5 rounded-lg shadow-2xl whitespace-nowrap flex items-center gap-2">
-            <span className="text-cyan-400">Vol. {points[hoveredIdx].vol.volume_number}</span>
-            <span className="text-gray-400">•</span>
-            <span>{(points[hoveredIdx].vol.price || 0).toLocaleString('vi-VN')} đ</span>
-          </div>
-          <div className="w-2 h-2 bg-slate-900/90 border-r border-b border-white/10 transform rotate-45 -mt-1.5" style={{ backdropFilter: 'blur(12px)' }}></div>
-        </div>
-      )}
-
-      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-[220px] overflow-visible" preserveAspectRatio="none">
-        <defs>
-          <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#6366f1" stopOpacity="0.25" />
-            <stop offset="100%" stopColor="#6366f1" stopOpacity="0" />
-          </linearGradient>
-          
-          <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
-            <feMerge>
-              <feMergeNode in="coloredBlur"/>
-              <feMergeNode in="SourceGraphic"/>
-            </feMerge>
-          </filter>
-        </defs>
-
-        {/* Grid Lines */}
-        {gridLines.map((line, i) => (
-          <g key={i}>
-            <line
-              x1="0" y1={line.y} x2={width} y2={line.y}
-              stroke="rgba(255,255,255,0.05)"
-              strokeWidth="0.2"
-              strokeDasharray="2 2"
-            />
-            {/* Fix: Position labels inside the viewBox */}
-            <text
-              x={width - 2}
-              y={line.y + 3}
-              fill="rgba(255,255,255,0.3)"
-              fontSize="3"
-              textAnchor="end"
-              style={{ fontFamily: 'monospace' }}
-            >
-              {line.label.toLocaleString('vi-VN')}
-            </text>
-          </g>
+    <div className="w-full bg-[#1a1f2e] rounded-lg p-6">
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto" preserveAspectRatio="xMidYMid meet">
+        {/* Grid lines */}
+        {yTicks.map((tick, i) => (
+          <line
+            key={i}
+            x1={padding.left}
+            y1={tick.y}
+            x2={width - padding.right}
+            y2={tick.y}
+            stroke="#2d3748"
+            strokeWidth="1"
+            strokeDasharray="4 4"
+            opacity="0.5"
+          />
         ))}
 
-        {/* Area Fill */}
+        {/* Area fill */}
         <path
-          d={areaPathD}
-          fill="url(#chartGradient)"
-          className="transition-all duration-700 ease-in-out"
+          d={areaPath}
+          fill="url(#areaGradient)"
+          opacity="0.3"
         />
 
-        {/* The Main Line */}
+        {/* Line */}
         <path
-          d={linePathD}
+          d={linePath}
           fill="none"
-          stroke="#22d3ee"
-          strokeWidth="1.2"
+          stroke="#06b6d4"
+          strokeWidth="3"
           strokeLinecap="round"
           strokeLinejoin="round"
-          vectorEffect="non-scaling-stroke"
-          filter="url(#glow)"
-          className="transition-all duration-300"
         />
 
-        {/* Interactive Data Points */}
-        {points.map((p, i) => {
-          const isHovered = hoveredIdx === i
-          return (
-            <g key={i}>
-              <circle
-                cx={p.x} cy={p.y} r={4}
-                fill="transparent"
-                onMouseEnter={() => setHoveredIdx(i)}
-                onMouseLeave={() => setHoveredIdx(null)}
-                style={{ cursor: 'pointer' }}
-              />
-              
-              <circle
-                cx={p.x} cy={p.y}
-                r={isHovered ? 3 : 1.5}
-                fill="#0f172a"
-                stroke="#22d3ee"
-                strokeWidth={isHovered ? 2 : 1}
-                className="transition-all duration-200"
-              />
-              
-              {isHovered && (
-                <line
-                  x1={p.x} y1={p.y} x2={p.x} y2={height}
-                  stroke="#22d3ee"
-                  strokeWidth="0.5"
-                  strokeDasharray="2 2"
-                  opacity="0.5"
-                />
-              )}
-            </g>
-          )
-        })}
-      </svg>
+        {/* Data points */}
+        {points.map((p, i) => (
+          <circle
+            key={i}
+            cx={p.x}
+            cy={p.y}
+            r="6"
+            fill="#1a1f2e"
+            stroke="#06b6d4"
+            strokeWidth="3"
+            className="hover:r-8 transition-all"
+          />
+        ))}
 
-      {/* X-Axis Labels */}
-      <div className="flex justify-between text-[10px] text-gray-500 mt-2 font-medium tracking-wide">
-        <span>Vol.{points[0]?.vol.volume_number}</span>
-        {points.length > 2 && <span className="opacity-50">Vol.{points[Math.floor(points.length / 2)]?.vol.volume_number}</span>}
-        <span>Vol.{points[points.length - 1]?.vol.volume_number}</span>
-      </div>
+        {/* Y-axis labels */}
+        {yTicks.map((tick, i) => (
+          <text
+            key={i}
+            x={padding.left - 15}
+            y={tick.y + 4}
+            fill="#718096"
+            fontSize="12"
+            textAnchor="end"
+            fontFamily="monospace"
+          >
+            {tick.value.toLocaleString('vi-VN')}
+          </text>
+        ))}
+
+        {/* X-axis labels */}
+        <text x={padding.left} y={height - 10} fill="#718096" fontSize="12" textAnchor="start">
+          Vol.{sortedVols[0]?.volume_number}
+        </text>
+        <text x={width - padding.right} y={height - 10} fill="#718096" fontSize="12" textAnchor="end">
+          Vol.{sortedVols[sortedVols.length - 1]?.volume_number}
+        </text>
+
+        {/* Gradient definition */}
+        <defs>
+          <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#06b6d4" />
+            <stop offset="100%" stopColor="#06b6d4" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+      </svg>
     </div>
   )
 }

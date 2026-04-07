@@ -78,8 +78,10 @@ export default function ContentDetail() {
 
   // Manga-specific enrichment pulled directly from Supabase
   const [mangaMeta,    setMangaMeta]    = useState<any>(null)
-  const [latestVolume, setLatestVolume] = useState<any>(null)   // { volume_number, release_date, cover_url }
+  const [latestVolume, setLatestVolume] = useState<any>(null)
   const [volumeCount,  setVolumeCount]  = useState<number | null>(null)
+  const [publisherName,setPublisherName]= useState<string | null>(null)
+  const [seriesLinks,  setSeriesLinks]  = useState<any[]>([])
 
   const { locale } = useLocale()
   const isVI       = locale === 'vi'
@@ -114,13 +116,26 @@ export default function ContentDetail() {
         .select('series_id, demographic, original_language, vn_licensed, vn_publisher_id, updated_at')
         .eq('series_id', series.id)
         .single()
-      if (meta) setMangaMeta(meta)
+      if (meta) {
+        setMangaMeta(meta)
 
-      // 2. All non-special volumes — we want the latest by volume_number for the cover,
-      //    and the count for volume count.
+        // 2. Resolve publisher name from vn_publisher_id
+        if (meta.vn_publisher_id) {
+          const { data: pub } = await supabase
+            .from('publishers')
+            .select('name, name_vi')
+            .eq('id', meta.vn_publisher_id)
+            .single()
+          if (pub) setPublisherName(pub.name_vi || pub.name)
+        }
+      }
+
+      // 3. All non-special volumes ordered DESC by volume_number — strictly take index 0
+      //    for the cover (highest volume number = latest), regardless of whether it has a cover.
+      //    Fall back down the list until we find one with a cover_url.
       const { data: vols } = await supabase
         .from('volumes')
-        .select('id, volume_number, release_date, cover_url')
+        .select('id, volume_number, release_date, cover_url, price, currency')
         .eq('series_id', series.id)
         .eq('is_special', false)
         .not('volume_number', 'is', null)
@@ -128,17 +143,25 @@ export default function ContentDetail() {
 
       if (vols && vols.length > 0) {
         setVolumeCount(vols.length)
-
-        // Pick the latest volume that actually has a cover URL
+        // The latest volume is always vols[0] (highest number).
+        // For the displayed cover, walk from the latest downward until we find one with a cover_url.
         const withCover = vols.find((v: any) => v.cover_url)
-        setLatestVolume(withCover || vols[0])
-
-        // Set cover to the latest volume cover (or fall back to series cover)
+        // latestVolume tracks the newest volume (for metadata display)
+        setLatestVolume(vols[0])
+        // Cover shows the latest volume's cover if it exists, otherwise nearest older one with cover
         setCoverSrc(withCover?.cover_url || series.cover_url || null)
       } else {
-        // No volumes — fall back to series cover
         setCoverSrc(series.cover_url || null)
       }
+
+      // 4. series_links — fetch real links from DB (official, purchase, stream)
+      const { data: links } = await supabase
+        .from('series_links')
+        .select('link_type, label, url')
+        .eq('series_id', series.id)
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true })
+      if (links) setSeriesLinks(links)
     }
 
     loadMangaEnrichment()
@@ -501,16 +524,20 @@ export default function ContentDetail() {
                     <h2 className="text-base font-bold" style={{ color: 'var(--foreground)' }}>{isVI ? 'Thông tin' : 'Information'}</h2>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    <InfoItem icon={Film}       label={isVI ? 'Thể loại'     : 'Type'}        value={typeText} />
-                    <InfoItem icon={Calendar}   label={isVI ? 'Trạng thái'   : 'Status'}      value={(series.status || '--').toUpperCase()} />
-                    <InfoItem icon={Globe}      label={isVI ? 'Nguồn gốc'    : 'Source'}      value={series.source || 'Manual'} />
-                    <InfoItem icon={BookOpen}   label={isVI ? 'Tác giả'      : 'Author'}      value={series.author || '--'} />
-                    <InfoItem icon={Award}      label={isVI ? 'Nhà xuất bản' : 'Publisher'}   value={series.publisher || '--'} />
-                    <InfoItem icon={Layers}     label={isVI ? 'Studio'       : 'Studio'}      value={series.studio || '--'} />
+                    <InfoItem icon={Film}     label={isVI ? 'Thể loại'   : 'Type'}      value={typeText} />
+                    <InfoItem icon={Calendar} label={isVI ? 'Trạng thái' : 'Status'}    value={(series.status || '--').toUpperCase()} />
+                    {series.source && <InfoItem icon={Globe} label={isVI ? 'Nguồn gốc' : 'Source'} value={series.source} />}
+                    {series.author && <InfoItem icon={BookOpen} label={isVI ? 'Tác giả' : 'Author'} value={series.author} />}
+                    {/* Publisher: resolved name from publishers table */}
+                    {(publisherName || series.publisher) && (
+                      <InfoItem icon={Award} label={isVI ? 'Nhà xuất bản' : 'Publisher'} value={publisherName || series.publisher} />
+                    )}
+                    {/* Studio: only meaningful for anime */}
+                    {series.studio && <InfoItem icon={Layers} label="Studio" value={series.studio} />}
 
                     {/* Anime-specific */}
-                    {series.anime_meta?.format       && <InfoItem icon={Film}       label="Format"                     value={series.anime_meta.format} />}
-                    {series.anime_meta?.season       && <InfoItem icon={Calendar}   label={isVI ? 'Mùa' : 'Season'}   value={`${series.anime_meta.season} ${series.anime_meta.season_year || ''}`} />}
+                    {series.anime_meta?.format       && <InfoItem icon={Film}       label="Format"                       value={series.anime_meta.format} />}
+                    {series.anime_meta?.season       && <InfoItem icon={Calendar}   label={isVI ? 'Mùa' : 'Season'}     value={`${series.anime_meta.season} ${series.anime_meta.season_year || ''}`} />}
                     {series.anime_meta?.episodes     && <InfoItem icon={Layers}     label={isVI ? 'Số tập' : 'Episodes'} value={String(series.anime_meta.episodes)} />}
                     {series.anime_meta?.duration_min && <InfoItem icon={TrendingUp} label={isVI ? 'Thời lượng' : 'Duration'} value={`${series.anime_meta.duration_min} ${isVI ? 'phút' : 'min'}`} />}
                   </div>
@@ -526,53 +553,61 @@ export default function ContentDetail() {
                       </h2>
                     </div>
 
+                    {/* Always render all 4 fields so the grid is visually consistent */}
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                      {/* Demographic */}
-                      {mangaMeta?.demographic && mangaMeta.demographic !== 'none' && (
-                        <InfoItem
-                          icon={Users}
-                          label={isVI ? 'Đối tượng' : 'Demographic'}
-                          value={DEMO_LABELS[mangaMeta.demographic] || mangaMeta.demographic}
-                        />
-                      )}
-
-                      {/* Original language */}
-                      {mangaMeta?.original_language && (
-                        <InfoItem
-                          icon={Languages}
-                          label={isVI ? 'Ngôn ngữ gốc' : 'Origin Language'}
-                          value={LANG_LABELS[mangaMeta.original_language] || mangaMeta.original_language.toUpperCase()}
-                        />
-                      )}
-
-                      {/* VN Licensed */}
-                      {mangaMeta?.vn_licensed !== undefined && (
-                        <InfoItem
-                          icon={BadgeCheck}
-                          label={isVI ? 'Bản quyền VN' : 'VN Licensed'}
-                          value={mangaMeta.vn_licensed ? (isVI ? 'Có' : 'Yes') : (isVI ? 'Không' : 'No')}
-                        />
-                      )}
-
-                      {/* Volume count (from volumes table, auto-calculated) */}
-                      {volumeCount !== null && (
-                        <InfoItem
-                          icon={Layers}
-                          label={isVI ? 'Số tập (VN)' : 'Volumes (VN)'}
-                          value={String(volumeCount)}
-                        />
-                      )}
-
-
+                      <InfoItem
+                        icon={Users}
+                        label={isVI ? 'Đối tượng' : 'Demographic'}
+                        value={
+                          mangaMeta?.demographic && mangaMeta.demographic !== 'none'
+                            ? (DEMO_LABELS[mangaMeta.demographic] || mangaMeta.demographic)
+                            : '--'
+                        }
+                      />
+                      <InfoItem
+                        icon={Languages}
+                        label={isVI ? 'Ngôn ngữ gốc' : 'Origin Language'}
+                        value={
+                          mangaMeta?.original_language
+                            ? (LANG_LABELS[mangaMeta.original_language] || mangaMeta.original_language.toUpperCase())
+                            : '--'
+                        }
+                      />
+                      <InfoItem
+                        icon={BadgeCheck}
+                        label={isVI ? 'Bản quyền VN' : 'VN Licensed'}
+                        value={
+                          mangaMeta?.vn_licensed != null
+                            ? (mangaMeta.vn_licensed ? (isVI ? 'Có' : 'Yes') : (isVI ? 'Không' : 'No'))
+                            : '--'
+                        }
+                      />
+                      <InfoItem
+                        icon={Layers}
+                        label={isVI ? 'Số tập (VN)' : 'Volumes (VN)'}
+                        value={volumeCount != null ? String(volumeCount) : '--'}
+                      />
+                      {/* Publisher resolved from DB */}
+                      <InfoItem
+                        icon={Building2}
+                        label={isVI ? 'NXB Việt Nam' : 'VN Publisher'}
+                        value={publisherName || '--'}
+                      />
+                      {/* Latest volume number */}
+                      <InfoItem
+                        icon={BookMarked}
+                        label={isVI ? 'Tập mới nhất' : 'Latest Vol.'}
+                        value={latestVolume?.volume_number != null ? `Vol. ${latestVolume.volume_number}` : '--'}
+                      />
                     </div>
 
-                    {/* ── Latest volume release info ── */}
+                    {/* ── Latest volume detail row ── */}
                     {latestVolume && (
                       <div className="mt-4 pt-4" style={{ borderTop: '1px solid var(--card-border)' }}>
                         <div className="flex items-center gap-2 mb-3">
                           <ImageIcon className="w-4 h-4 text-primary-400 flex-shrink-0" />
                           <span className="text-xs font-semibold" style={{ color: 'var(--foreground-secondary)' }}>
-                            {isVI ? 'Thông tin tập mới nhất (VN)' : 'Latest VN Volume Info'}
+                            {isVI ? 'Thông tin tập mới nhất (VN)' : 'Latest VN Volume'}
                           </span>
                         </div>
                         <div className="flex items-center gap-4 p-3 rounded-xl" style={{ background: 'var(--background-secondary)', border: '1px solid var(--card-border)' }}>
@@ -587,17 +622,25 @@ export default function ContentDetail() {
                             <p className="text-sm font-bold" style={{ color: 'var(--foreground)' }}>
                               {isVI ? 'Tập' : 'Volume'} {latestVolume.volume_number}
                             </p>
-                            {latestVolume.release_date && (
-                              <p className="text-xs mt-0.5" style={{ color: 'var(--foreground-muted)' }}>
-                                {isVI ? 'Phát hành' : 'Released'}:{' '}
-                                {new Date(latestVolume.release_date).toLocaleDateString(
-                                  isVI ? 'vi-VN' : 'en-US',
-                                  { year: 'numeric', month: 'long', day: 'numeric' }
-                                )}
-                              </p>
-                            )}
+                            <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-0.5">
+                              {latestVolume.release_date && (
+                                <p className="text-xs" style={{ color: 'var(--foreground-muted)' }}>
+                                  {isVI ? 'Phát hành' : 'Released'}:{' '}
+                                  {new Date(latestVolume.release_date).toLocaleDateString(
+                                    isVI ? 'vi-VN' : 'en-US',
+                                    { year: 'numeric', month: 'short', day: 'numeric' }
+                                  )}
+                                </p>
+                              )}
+                              {latestVolume.price && (
+                                <p className="text-xs font-semibold" style={{ color: 'var(--foreground-secondary)' }}>
+                                  {Number(latestVolume.price).toLocaleString('vi-VN')}{' '}
+                                  {latestVolume.currency || 'VND'}
+                                </p>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex-shrink-0 text-right">
+                          <div className="flex-shrink-0">
                             <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold text-primary-300"
                               style={{ background: 'var(--glass-bg)', border: '1px solid var(--card-border)' }}>
                               {isVI ? 'Bìa đang hiển thị' : 'Cover shown'}
@@ -784,51 +827,68 @@ export default function ContentDetail() {
               </div>
             </div>
 
-            {/* External Links */}
+            {/* External Links — real links from series_links for manga, fallback search links for anime */}
             <div className="glass rounded-2xl p-5">
               <div className="flex items-center gap-2 mb-4">
                 <ExternalLink className="w-4 h-4 text-primary-500 flex-shrink-0" />
                 <h3 className="text-sm font-bold" style={{ color: 'var(--foreground)' }}>{isVI ? 'Liên kết ngoài' : 'External Links'}</h3>
               </div>
               <div className="space-y-2">
-                <a href={`https://anilist.co/search/${series.item_type || 'anime'}?search=${encodeURIComponent(series.title)}`}
-                  target="_blank" rel="noopener noreferrer"
-                  className="flex items-center justify-between p-2.5 rounded-lg group transition-colors"
-                  style={{ background: 'var(--background-secondary)', border: '1px solid var(--card-border)' }}>
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-[#02a9ff]" />
-                    <span className="text-xs font-medium group-hover:text-primary-500 transition-colors" style={{ color: 'var(--foreground-secondary)' }}>AniList</span>
-                  </div>
-                  <ExternalLink className="w-3.5 h-3.5 group-hover:text-primary-500" style={{ color: 'var(--foreground-muted)' }} />
-                </a>
-                <a href={`https://myanimelist.net/search.php?q=${encodeURIComponent(series.title)}`}
-                  target="_blank" rel="noopener noreferrer"
-                  className="flex items-center justify-between p-2.5 rounded-lg group transition-colors"
-                  style={{ background: 'var(--background-secondary)', border: '1px solid var(--card-border)' }}>
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-[#2e51a2]" />
-                    <span className="text-xs font-medium group-hover:text-primary-500 transition-colors" style={{ color: 'var(--foreground-secondary)' }}>MyAnimeList</span>
-                  </div>
-                  <ExternalLink className="w-3.5 h-3.5 group-hover:text-primary-500" style={{ color: 'var(--foreground-muted)' }} />
-                </a>
-
+                {isManga ? (
+                  seriesLinks.length > 0 ? (
+                    seriesLinks.map((link: any, i: number) => {
+                      const dotColor =
+                        link.link_type === 'purchase' ? '#22c55e' :
+                        link.link_type === 'official' ? '#6366f1' :
+                        link.link_type === 'stream'   ? '#f59e0b' : '#94a3b8'
+                      return (
+                        <a key={i} href={link.url} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center justify-between p-2.5 rounded-lg group transition-colors"
+                          style={{ background: 'var(--background-secondary)', border: '1px solid var(--card-border)' }}>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: dotColor }} />
+                            <span className="text-xs font-medium group-hover:text-primary-500 transition-colors truncate" style={{ color: 'var(--foreground-secondary)' }}>
+                              {link.label}
+                            </span>
+                          </div>
+                          <ExternalLink className="w-3.5 h-3.5 flex-shrink-0 ml-2 group-hover:text-primary-500" style={{ color: 'var(--foreground-muted)' }} />
+                        </a>
+                      )
+                    })
+                  ) : (
+                    <p className="text-xs text-center py-2" style={{ color: 'var(--foreground-muted)' }}>
+                      {isVI ? 'Chưa có liên kết' : 'No links available'}
+                    </p>
+                  )
+                ) : (
+                  /* Anime: keep AniList + MAL search fallbacks */
+                  <>
+                    <a href={`https://anilist.co/search/anime?search=${encodeURIComponent(series.title)}`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="flex items-center justify-between p-2.5 rounded-lg group transition-colors"
+                      style={{ background: 'var(--background-secondary)', border: '1px solid var(--card-border)' }}>
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-[#02a9ff]" />
+                        <span className="text-xs font-medium group-hover:text-primary-500 transition-colors" style={{ color: 'var(--foreground-secondary)' }}>AniList</span>
+                      </div>
+                      <ExternalLink className="w-3.5 h-3.5 group-hover:text-primary-500" style={{ color: 'var(--foreground-muted)' }} />
+                    </a>
+                    <a href={`https://myanimelist.net/search.php?q=${encodeURIComponent(series.title)}`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="flex items-center justify-between p-2.5 rounded-lg group transition-colors"
+                      style={{ background: 'var(--background-secondary)', border: '1px solid var(--card-border)' }}>
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-[#2e51a2]" />
+                        <span className="text-xs font-medium group-hover:text-primary-500 transition-colors" style={{ color: 'var(--foreground-secondary)' }}>MyAnimeList</span>
+                      </div>
+                      <ExternalLink className="w-3.5 h-3.5 group-hover:text-primary-500" style={{ color: 'var(--foreground-muted)' }} />
+                    </a>
+                  </>
+                )}
               </div>
             </div>
 
-            {/* Publisher info (manga sidebar) */}
-            {isManga && mangaMeta?.vn_publisher_id && (
-              <div className="glass rounded-2xl p-5">
-                <div className="flex items-center gap-2 mb-3">
-                  <Building2 className="w-4 h-4 text-primary-500 flex-shrink-0" />
-                  <h3 className="text-sm font-bold" style={{ color: 'var(--foreground)' }}>
-                    {isVI ? 'Nhà xuất bản VN' : 'VN Publisher'}
-                  </h3>
-                </div>
-                <p className="text-xs" style={{ color: 'var(--foreground-secondary)' }}>
-                  {series.publisher || `Publisher #${mangaMeta.vn_publisher_id}`}
-                </p>
-              </div>
-            )}
+
 
             {/* Last updated */}
             <div className="glass rounded-2xl p-5">

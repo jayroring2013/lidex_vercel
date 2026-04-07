@@ -462,10 +462,10 @@ export default function BrowsePage() {
       try {
         if (type === 'anime') {
           const [{ data: pop }, { data: rec }] = await Promise.all([
-            supabase.from('series').select('id, title, cover_url, status, publisher, anime_meta(mean_score, popularity, season_year)')
+            supabase.from('series').select('id, title, cover_url, status, studio, anime_meta(mean_score, popularity, season_year)')
               .eq('item_type', 'anime').not('cover_url', 'is', null).not('genres', 'cs', '{"Hentai"}')
               .order('anime_meta(popularity)', { ascending: false }).limit(14),
-            supabase.from('series').select('id, title, cover_url, status, publisher, anime_meta(mean_score, season_year)')
+            supabase.from('series').select('id, title, cover_url, status, studio, anime_meta(mean_score, season_year)')
               .eq('item_type', 'anime').not('cover_url', 'is', null).not('genres', 'cs', '{"Hentai"}')
               .order('updated_at', { ascending: false }).limit(14),
           ])
@@ -478,10 +478,10 @@ export default function BrowsePage() {
             supabase.from('series').select('id, title, cover_url, status, genres, publisher').eq('item_type', 'manga').not('genres', 'cs', '{"Hentai"}')
               .order('created_at', { ascending: false }).limit(14),
           ])
+          const allRows = [...(pop || []), ...(rec || [])]
+          const ids = allRows.map((m: any) => m.id)
+          const volCovers = await fetchLatestVolCovers(ids)
           if (!cancelled) {
-            const allRows = [...(pop || []), ...(rec || [])]
-            const ids = allRows.map((m: any) => m.id)
-            const volCovers = await fetchLatestVolCovers(ids)
             setPopular(toMangaCards(pop || [], volCovers)); setRecent(toMangaCards(rec || [], volCovers))
             const gs = new Set<string>()
             allRows.forEach((m: any) => { if (Array.isArray(m.genres)) m.genres.forEach((g: string) => gs.add(g)) })
@@ -495,10 +495,10 @@ export default function BrowsePage() {
             supabase.from('series').select('id, title, cover_url, status, genres, publisher').eq('item_type', 'novel').not('genres', 'cs', '{"Hentai"}')
               .order('created_at', { ascending: false }).limit(14),
           ])
+          const allRows = [...(pop || []), ...(rec || [])]
+          const ids = allRows.map((n: any) => n.id)
+          const volCovers = await fetchLatestVolCovers(ids)
           if (!cancelled) {
-            const allRows = [...(pop || []), ...(rec || [])]
-            const ids = allRows.map((n: any) => n.id)
-            const volCovers = await fetchLatestVolCovers(ids)
             setPopular(toNovelCards(pop || [], volCovers)); setRecent(toNovelCards(rec || [], volCovers))
           }
         }
@@ -523,9 +523,8 @@ export default function BrowsePage() {
           .eq('item_type', 'anime').not('genres', 'cs', '{"Hentai"}')
         if (search)           q = q.ilike('title', `%${search}%`)
         if (status !== 'all') q = q.ilike('status', status)
-        if (format !== 'all') q = (q as any).eq('anime_meta.format', format)
-        if (sort === 'score_desc')        q = q.order('anime_meta(mean_score)',    { ascending: false, nullsFirst: false })
-        else if (sort === 'popular_desc') q = q.order('anime_meta(popularity)',    { ascending: false, nullsFirst: false })
+        if (sort === 'score_desc')        q = q.order('anime_meta(mean_score)',    { ascending: false })
+        else if (sort === 'popular_desc') q = q.order('anime_meta(popularity)',    { ascending: false })
         else if (sort === 'year_desc')    q = q.order('updated_at',                { ascending: false })
         else                              q = q.order('title',                     { ascending: true  })
         const { data } = await q.range(offset, offset + pageSize - 1)

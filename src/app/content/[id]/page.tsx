@@ -1216,7 +1216,7 @@ function MangaStats({ volumes, locale }: { volumes: any[]; locale: string }) {
 
 // ── UPDATED: Polished Line Chart for Pricing ───────────────────────────────
 
-export function PricingLineChart({ volumes }: { volumes: Volume[] }) {
+function PricingLineChart({ volumes }: { volumes: Volume[] }) {
   const svgRef = useRef<SVGSVGElement>(null)
   const lineRef = useRef<SVGPathElement>(null)
   const [tooltip, setTooltip] = useState<TooltipState>({ visible: false, x: 0, y: 0, price: 0, volNumber: 0 })

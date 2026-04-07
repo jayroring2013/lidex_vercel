@@ -1221,11 +1221,11 @@ function PricingLineChart({ volumes }: { volumes: Volume[] }) {
   const lineRef = useRef<SVGPathElement>(null)
   const [tooltip, setTooltip] = useState<TooltipState>({ visible: false, x: 0, y: 0, price: 0, volNumber: 0 })
   const gradId = useId().replace(/:/g, "")
- 
+
   const sorted = [...volumes].sort((a, b) => (a.volume_number ?? 0) - (b.volume_number ?? 0))
   const prices = sorted.map(v => parseFloat(String(v.price)) || 0)
   if (prices.length === 0) return null
- 
+
   const minPrice = Math.min(...prices)
   const maxPrice = Math.max(...prices)
   const avgPrice = prices.reduce((a, b) => a + b, 0) / prices.length
@@ -1234,53 +1234,50 @@ function PricingLineChart({ volumes }: { volumes: Volume[] }) {
   const lastPrice = prices[prices.length - 1]
   const delta = lastPrice - firstPrice
   const deltaPct = firstPrice ? (delta / firstPrice) * 100 : 0
- 
-  // Smart Y padding: if all prices are identical, pad ±500; otherwise ±25%
+
   const yPad = priceRange < 1 ? 500 : priceRange * 0.25
   const yMin = minPrice - yPad
   const yMax = maxPrice + yPad
   const yRange = yMax - yMin
- 
+
   const W = 680
   const H = 220
   const pad = { top: 24, right: 32, bottom: 36, left: 72 }
   const cW = W - pad.left - pad.right
   const cH = H - pad.top - pad.bottom
- 
+
   const xOf = (i: number) =>
     pad.left + (sorted.length > 1 ? (i / (sorted.length - 1)) * cW : cW / 2)
   const yOf = (v: number) =>
     pad.top + cH - ((v - yMin) / yRange) * cH
- 
+
   const points = sorted.map((vol, i) => ({
     x: xOf(i),
     y: yOf(parseFloat(String(vol.price))),
     price: parseFloat(String(vol.price)),
     vol,
   }))
- 
+
   const lineD = points.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ")
   const areaD =
     lineD +
     ` L${points[points.length - 1].x},${pad.top + cH} L${pad.left},${pad.top + cH} Z`
- 
+
   const NUM_TICKS = 5
   const yTicks = Array.from({ length: NUM_TICKS + 1 }, (_, i) => ({
     v: yMin + (yRange * i) / NUM_TICKS,
     y: yOf(yMin + (yRange * i) / NUM_TICKS),
   }))
- 
-  // Show at most 6 x-axis labels, always including first and last
+
   const xStep = Math.max(1, Math.floor(sorted.length / 6))
   const showXLabel = (i: number) =>
     i === 0 || i === sorted.length - 1 || i % xStep === 0
- 
+
   const minIdx = prices.indexOf(minPrice)
   const maxIdx = prices.indexOf(maxPrice)
- 
+
   const fmt = (v: number) => Math.round(v).toLocaleString("vi-VN")
- 
-  // Line draw animation on mount
+
   useEffect(() => {
     const line = lineRef.current
     if (!line) return
@@ -1292,7 +1289,7 @@ function PricingLineChart({ volumes }: { volumes: Volume[] }) {
       line.style.strokeDashoffset = "0"
     })
   }, [lineD])
- 
+
   const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
     const svg = svgRef.current
     if (!svg) return
@@ -1313,22 +1310,22 @@ function PricingLineChart({ volumes }: { volumes: Volume[] }) {
       volNumber: sorted[closest].volume_number,
     })
   }
- 
+
   const deltaLabel =
     Math.abs(deltaPct) < 0.001
       ? "Không đổi"
       : `${delta > 0 ? "+" : ""}${deltaPct.toFixed(2)}%`
- 
+
   const badgeClass =
     Math.abs(deltaPct) < 0.001
       ? "bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
       : delta > 0
       ? "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400"
       : "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400"
- 
+
   const trendIcon =
     Math.abs(deltaPct) < 0.001 ? "▸" : delta > 0 ? "▲" : "▼"
- 
+
   return (
     <div className="w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 p-5">
       {/* Header */}
@@ -1354,7 +1351,7 @@ function PricingLineChart({ volumes }: { volumes: Volume[] }) {
           </span>
         </div>
       </div>
- 
+
       {/* Summary stats */}
       <div className="flex gap-5 mb-4 pb-4 border-b border-neutral-100 dark:border-neutral-800">
         {[
@@ -1369,7 +1366,7 @@ function PricingLineChart({ volumes }: { volumes: Volume[] }) {
           </div>
         ))}
       </div>
- 
+
       {/* Chart */}
       <div className="relative w-full">
         {/* Tooltip */}
@@ -1384,7 +1381,7 @@ function PricingLineChart({ volumes }: { volumes: Volume[] }) {
             </div>
           </div>
         )}
- 
+
         <svg
           ref={svgRef}
           viewBox={`0 0 ${W} ${H}`}
@@ -1394,24 +1391,27 @@ function PricingLineChart({ volumes }: { volumes: Volume[] }) {
           onMouseLeave={() => setTooltip(t => ({ ...t, visible: false }))}
         >
           <defs>
-            <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.3" />
-              <stop offset="90%" stopColor="#3b82f6" stopOpacity="0" />
+            <linearGradient id={`${gradId}-light`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.15" />
+              <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.01" />
+            </linearGradient>
+            <linearGradient id={`${gradId}-dark`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#60a5fa" stopOpacity="0.2" />
+              <stop offset="100%" stopColor="#60a5fa" stopOpacity="0.01" />
             </linearGradient>
           </defs>
- 
-          {/* Grid lines */}
+
+          {/* Grid lines — use className, NOT stroke="currentColor" */}
           {yTicks.map((tick, i) => (
             <line
               key={i}
               x1={pad.left} y1={tick.y}
               x2={W - pad.right} y2={tick.y}
-              stroke="currentColor"
               strokeWidth="1"
-              className="text-neutral-100 dark:text-neutral-800"
+              className="stroke-neutral-100 dark:stroke-neutral-800"
             />
           ))}
- 
+
           {/* Y-axis labels */}
           {yTicks.map((tick, i) => (
             <text
@@ -1426,53 +1426,70 @@ function PricingLineChart({ volumes }: { volumes: Volume[] }) {
               {fmt(tick.v)}
             </text>
           ))}
- 
-          {/* Area */}
-          <path d={areaD} fill={`url(#${gradId})`} />
- 
-          {/* Line */}
+
+          {/* Area fill — two paths toggled by dark mode */}
+          <path
+            d={areaD}
+            fill={`url(#${gradId}-light)`}
+            className="dark:opacity-0 transition-opacity"
+          />
+          <path
+            d={areaD}
+            fill={`url(#${gradId}-dark)`}
+            className="opacity-0 dark:opacity-100 transition-opacity"
+          />
+
+          {/* Line — use className for stroke, NOT stroke attribute */}
           <path
             ref={lineRef}
             d={lineD}
             fill="none"
-            stroke="#3b82f6"
             strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
+            className="stroke-blue-500"
           />
- 
+
           {/* Data points */}
           {points.map((p, i) => {
             const isMin = i === minIdx && priceRange > 0
             const isMax = i === maxIdx && priceRange > 0
-            const color = isMin ? "#ef4444" : isMax ? "#22c55e" : "#3b82f6"
+            const colorClass = isMin
+              ? "stroke-red-500"
+              : isMax
+                ? "stroke-green-500"
+                : "stroke-blue-500"
             const r = isMin || isMax ? 6 : 5
             return (
               <g key={i}>
-                {/* Invisible hit area */}
                 <circle cx={p.x} cy={p.y} r={12} fill="transparent" />
+                {/* FIX: removed fill="white" attribute — use className only so dark: variant works */}
                 <circle
-                  cx={p.x} cy={p.y} r={r}
-                  fill="white"
-                  className="fill-white dark:fill-neutral-950"
-                  stroke={color}
+                  cx={p.x}
+                  cy={p.y}
+                  r={r}
+                  className={`fill-white dark:fill-neutral-950 ${colorClass}`}
                   strokeWidth="2.5"
                   style={{ pointerEvents: "none" }}
                 />
                 {isMin && (
-                  <text x={p.x} y={p.y + 18} textAnchor="middle" fontSize="10" fill="#ef4444" fontWeight="500">
+                  <text x={p.x} y={p.y + 18} textAnchor="middle" fontSize="10" fontWeight="500"
+                    className="fill-red-500"
+                  >
                     ▼ min
                   </text>
                 )}
                 {isMax && (
-                  <text x={p.x} y={p.y - 10} textAnchor="middle" fontSize="10" fill="#22c55e" fontWeight="500">
+                  <text x={p.x} y={p.y - 10} textAnchor="middle" fontSize="10" fontWeight="500"
+                    className="fill-green-500"
+                  >
                     ▲ max
                   </text>
                 )}
               </g>
             )
           })}
- 
+
           {/* X-axis labels */}
           {sorted.map((vol, i) =>
             showXLabel(i) ? (

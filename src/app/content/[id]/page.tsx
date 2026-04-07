@@ -1201,21 +1201,24 @@ function MangaStats({ volumes, locale }: { volumes: any[]; locale: string }) {
   )
 }
 
-// ── UPDATED: Line Chart for Pricing ────────────────────────────────────────
+// ── UPDATED: Polished Line Chart for Pricing ───────────────────────────────
 
 function PricingLineChart({ volumes }: { volumes: any[] }) {
-  // Sort chronologically (Vol 1 -> Vol N) for the timeline
   const sortedVols = [...volumes].sort((a, b) => (a.volume_number || 0) - (b.volume_number || 0))
   const prices = sortedVols.map(v => v.price || 0)
-  const maxPrice = Math.max(...prices, 1000) // Avoid div by zero, ensure some scale
   
-  // Chart dimensions
+  if (prices.length === 0) return null
+
+  const maxPrice = Math.max(...prices, 1000) * 1.1 // Add 10% headroom
+  
+  // SVG Coordinate System
   const width = 100
-  const height = 50
+  const height = 60
   const padding = 5
-  const innerHeight = height - padding * 2
+  const innerHeight = height - (padding * 2)
   const innerWidth = width
 
+  // Calculate coordinates
   const points = sortedVols.map((vol, i) => {
     const x = sortedVols.length > 1 
       ? (i / (sortedVols.length - 1)) * innerWidth 
@@ -1224,77 +1227,144 @@ function PricingLineChart({ volumes }: { volumes: any[] }) {
     return { x, y, vol }
   })
 
-  const polylinePoints = points.map(p => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ')
-  const areaPoints = `0,${height} ${polylinePoints} ${width},${height}`
+  // Path data for Area (closed loop) and Line (open loop)
+  const linePathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ')
+  const areaPathD = `${linePathD} L ${width},${height} L 0,${height} Z`
+
+  // Grid lines (0%, 50%, 100%)
+  const gridLines = [
+    { y: height - padding, label: (0).toLocaleString('vi-VN') },
+    { y: height - padding - (innerHeight / 2), label: (maxPrice / 2).toLocaleString('vi-VN') },
+    { y: height - padding - innerHeight, label: maxPrice.toLocaleString('vi-VN') },
+  ]
 
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
 
   return (
-    <div className="w-full relative group">
-      {/* Tooltip */}
+    <div className="w-full relative select-none">
+      {/* Tooltip - Floating Glassmorphism Style */}
       {hoveredIdx !== null && points[hoveredIdx] && (
         <div 
-          className="absolute pointer-events-none z-20 bg-dark-800/90 border border-white/20 text-white text-[10px] px-2 py-1 rounded shadow-xl flex flex-col items-center whitespace-nowrap"
+          className="absolute pointer-events-none z-30 flex flex-col items-center transition-opacity duration-200"
           style={{ 
             left: `${points[hoveredIdx].x}%`, 
             top: `${points[hoveredIdx].y}%`, 
-            transform: 'translate(-50%, -150%)' 
+            transform: 'translate(-50%, calc(-100% - 12px))' 
           }}
         >
-          <span className="font-bold text-primary-400">Vol. {points[hoveredIdx].vol.volume_number}</span>
-          <span>{(points[hoveredIdx].vol.price || 0).toLocaleString('vi-VN')} đ</span>
+          <div className="bg-slate-900/90 backdrop-blur-md border border-white/10 text-white text-[11px] font-medium px-3 py-1.5 rounded-lg shadow-2xl whitespace-nowrap flex items-center gap-2">
+            <span className="text-cyan-400">Vol. {points[hoveredIdx].vol.volume_number}</span>
+            <span className="text-gray-400">•</span>
+            <span>{(points[hoveredIdx].vol.price || 0).toLocaleString('vi-VN')} đ</span>
+          </div>
+          {/* Little triangle pointer */}
+          <div className="w-2 h-2 bg-slate-900/90 border-r border-b border-white/10 transform rotate-45 -mt-1.5" style={{ backdropFilter: 'blur(12px)' }}></div>
         </div>
       )}
 
-      {/* SVG Chart */}
-      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-[200px] overflow-visible" preserveAspectRatio="none">
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-[220px] overflow-visible" preserveAspectRatio="none">
         <defs>
-          <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#ec4899" stopOpacity="0.4" />
-            <stop offset="100%" stopColor="#ec4899" stopOpacity="0" />
+          {/* Sophisticated Gradient: Indigo to Transparent */}
+          <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#6366f1" stopOpacity="0.25" />
+            <stop offset="100%" stopColor="#6366f1" stopOpacity="0" />
           </linearGradient>
+          
+          {/* Glow Filter for the Line */}
+          <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+            <feMerge>
+              <feMergeNode in="coloredBlur"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
         </defs>
 
-        {/* Area Fill */}
-        <polygon
-          points={areaPoints}
-          fill="url(#priceGradient)"
-          className="transition-all duration-300"
+        {/* 1. Grid Lines (Background) */}
+        {gridLines.map((line, i) => (
+          <g key={i}>
+            <line
+              x1="0" y1={line.y} x2={width} y2={line.y}
+              stroke="rgba(255,255,255,0.05)"
+              strokeWidth="0.2"
+              strokeDasharray="2 2"
+            />
+            <text
+              x={width + 2}
+              y={line.y + 3}
+              fill="rgba(255,255,255,0.2)"
+              fontSize="3"
+              textAnchor="start"
+              style={{ fontFamily: 'monospace' }}
+            >
+              {line.label}
+            </text>
+          </g>
+        ))}
+
+        {/* 2. Area Fill */}
+        <path
+          d={areaPathD}
+          fill="url(#chartGradient)"
+          className="transition-all duration-700 ease-in-out"
         />
 
-        {/* The Line */}
-        <polyline
-          points={polylinePoints}
+        {/* 3. The Main Line */}
+        <path
+          d={linePathD}
           fill="none"
-          stroke="#ec4899"
-          strokeWidth="1.5"
+          stroke="#22d3ee" // Cyan-400
+          strokeWidth="1.2"
           strokeLinecap="round"
           strokeLinejoin="round"
           vectorEffect="non-scaling-stroke"
-          className="drop-shadow-[0_0_8px_rgba(236,72,153,0.5)]"
+          filter="url(#glow)"
+          className="transition-all duration-300"
         />
 
-        {/* Interactive Points */}
-        {points.map((p, i) => (
-          <circle
-            key={i}
-            cx={p.x}
-            cy={p.y}
-            r={hoveredIdx === i ? 2.5 : 1.5}
-            fill="#fff"
-            stroke="#ec4899"
-            strokeWidth="1"
-            className="cursor-pointer transition-all duration-200 hover:r-3"
-            onMouseEnter={() => setHoveredIdx(i)}
-            onMouseLeave={() => setHoveredIdx(null)}
-          />
-        ))}
+        {/* 4. Interactive Data Points */}
+        {points.map((p, i) => {
+          const isHovered = hoveredIdx === i
+          return (
+            <g key={i}>
+              {/* Invisible hit area for easier hovering */}
+              <circle
+                cx={p.x} cy={p.y} r={4}
+                fill="transparent"
+                onMouseEnter={() => setHoveredIdx(i)}
+                onMouseLeave={() => setHoveredIdx(null)}
+                style={{ cursor: 'pointer' }}
+              />
+              
+              {/* Visible Dot */}
+              <circle
+                cx={p.x} cy={p.y}
+                r={isHovered ? 3 : 1.5}
+                fill="#0f172a" // Dark center
+                stroke="#22d3ee" // Cyan border
+                strokeWidth={isHovered ? 2 : 1}
+                className="transition-all duration-200"
+              />
+              
+              {/* Vertical Guide Line on Hover */}
+              {isHovered && (
+                <line
+                  x1={p.x} y1={p.y} x2={p.x} y2={height}
+                  stroke="#22d3ee"
+                  strokeWidth="0.5"
+                  strokeDasharray="2 2"
+                  opacity="0.5"
+                />
+              )}
+            </g>
+          )
+        })}
       </svg>
 
-      {/* X-Axis Labels (First, Middle, Last) */}
-      <div className="flex justify-between text-[9px] text-gray-500 mt-2 font-mono">
+      {/* X-Axis Labels */}
+      <div className="flex justify-between text-[10px] text-gray-500 mt-2 font-medium tracking-wide">
         <span>Vol.{points[0]?.vol.volume_number}</span>
-        {points.length > 2 && <span>Vol.{points[Math.floor(points.length / 2)]?.vol.volume_number}</span>}
+        {points.length > 2 && <span className="opacity-50">Vol.{points[Math.floor(points.length / 2)]?.vol.volume_number}</span>}
         <span>Vol.{points[points.length - 1]?.vol.volume_number}</span>
       </div>
     </div>

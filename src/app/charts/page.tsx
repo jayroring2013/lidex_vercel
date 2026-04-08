@@ -227,6 +227,7 @@ export default function ChartsPage() {
         .from('series')
         .select('id, title, anime_meta(*)')
         .eq('item_type', 'anime')
+        .eq('anime_meta.season_year', 2026)
         .not('anime_meta', 'is', null)
         .not('genres', 'cs', '{"Hentai"}')
         .limit(2000)

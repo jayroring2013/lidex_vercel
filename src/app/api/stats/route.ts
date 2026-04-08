@@ -6,7 +6,7 @@ export async function GET() {
   try {
     const [seriesCount, animeCount, mangaCount, novelCount] = await Promise.all([
       supabase.from('series').select('*', { count: 'exact', head: true }).not('genres', 'cs', '{"Hentai"}'),
-      supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'anime').not('genres', 'cs', '{"Hentai"}'),
+      supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'anime').eq('anime_meta.season_year', 2026).not('genres', 'cs', '{"Hentai"}'),
       supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'manga').not('genres', 'cs', '{"Hentai"}'),
       supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'novel').not('genres', 'cs', '{"Hentai"}')
     ])
@@ -15,6 +15,7 @@ export async function GET() {
     const { data: popularityData, error } = await supabase
       .from('anime_meta')
       .select('popularity')
+      .eq('season_year', 2026)
       .not('popularity', 'is', null)
       .order('popularity', { ascending: true })
 

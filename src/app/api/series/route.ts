@@ -19,7 +19,13 @@ export async function GET(req: NextRequest) {
       .limit(limit)
 
     if (id)   query = query.eq('id', id)
-    if (type) query = query.eq('item_type', type)
+    if (type) {
+      if (type === 'anime') {
+        query = query.eq('item_type', 'anime').eq('anime_meta.season_year', 2026)
+      } else {
+        query = query.eq('item_type', type)
+      }
+    }
 
     query = query.order(orderBy, { ascending: asc })
 

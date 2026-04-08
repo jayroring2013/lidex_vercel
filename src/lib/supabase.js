@@ -19,7 +19,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 export async function getSiteStats() {
   try {
     const [animeRes, mangaRes, novelRes] = await Promise.all([
-      supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'anime'),
+      supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'anime').eq('anime_meta.season_year', 2026),
       supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'manga'),
       supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'novel'),
     ])
@@ -112,6 +112,7 @@ export async function getTopRatedSeries({ limit = 10 } = {}) {
           banner_url, status, genres, item_type
         )
       `)
+      .eq('season_year', 2026)
       .not('mean_score', 'is', null)
       .order('mean_score', { ascending: false })
       .limit(limit)
@@ -142,7 +143,7 @@ export async function getTopRatedSeries({ limit = 10 } = {}) {
 export async function getSeriesCountByType() {
   try {
     const [anime, manga, novel] = await Promise.all([
-      supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'anime'),
+      supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'anime').eq('anime_meta.season_year', 2026),
       supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'manga'),
       supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'novel'),
     ])

@@ -210,6 +210,7 @@ export default function IndexPage() {
           .from('series')
           .select('id, title, cover_url, item_type, studio, status, anime_meta(mean_score, popularity, favourites, episodes, duration_min, format, season, season_year)')
           .eq('item_type', 'anime')
+          .eq('anime_meta.season_year', 2026)
           .limit(3000)
         if (data) setAllRows(data.map((s: any) => ({
           ...s,

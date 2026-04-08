@@ -225,7 +225,7 @@ export default function ChartsPage() {
       setAnimeLoading(true)
       const { data, error } = await supabase
         .from('series')
-        .select('id, title, anime_meta(*)')
+        .select('id, title, anime_meta!inner(*)')
         .eq('item_type', 'anime')
         .eq('anime_meta.season_year', 2026)
         .not('anime_meta', 'is', null)

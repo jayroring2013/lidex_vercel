@@ -18,7 +18,6 @@ import Link from 'next/link'
 
 ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend)
 
-
 // ── Constants ─────────────────────────────────────────────────────────────────
 const SERIES_COLORS = [
   { line: 'rgba(99,102,241,1)',  fill: 'rgba(99,102,241,0.15)',  text: '#818cf8' },
@@ -73,7 +72,6 @@ interface SearchResult {
 }
 
 // ── Percentile helpers ────────────────────────────────────────────────────────
-// Higher popularity rank = lower raw number, so we invert
 function toPercentile(value: number | null, allValues: number[], invert = false): number {
   if (value == null) return 0
   const sorted = [...allValues].sort((a, b) => a - b)
@@ -103,7 +101,7 @@ export default function ComparePage() {
   const [searchResults,setSearchResults]= useState<SearchResult[]>([])
   const [searching,    setSearching]    = useState(false)
   const [selected,     setSelected]     = useState<AnimeEntry[]>([])
-  const [allMeta,      setAllMeta]      = useState<AnimeMeta[]>([])  // for percentile calc
+  const [allMeta,      setAllMeta]      = useState<AnimeMeta[]>([])
   const [isDark,       setIsDark]       = useState(false)
   const [showDropdown, setShowDropdown] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -138,20 +136,26 @@ export default function ComparePage() {
   // Debounced search
   useEffect(() => {
     if (!query.trim()) { setSearchResults([]); setShowDropdown(false); return }
-    const t = setTimeout(async () => {
+    const timer = setTimeout(async () => {
       setSearching(true)
+      // ✅ !inner ensures only series with a matching 2026 anime_meta row are returned
       const { data } = await supabase
         .from('series')
-        .select('id, title, cover_url, studio')
+        .select('id, title, cover_url, studio, anime_meta!inner(season_year)')
         .eq('item_type', 'anime')
         .eq('anime_meta.season_year', 2026)
         .ilike('title', `%${query}%`)
         .limit(8)
-      setSearchResults(data || [])
+      setSearchResults((data || []).map((r: any) => ({
+        id:        r.id,
+        title:     r.title,
+        cover_url: r.cover_url,
+        studio:    r.studio,
+      })))
       setShowDropdown(true)
       setSearching(false)
     }, 300)
-    return () => clearTimeout(t)
+    return () => clearTimeout(timer)
   }, [query])
 
   async function addSeries(result: SearchResult) {
@@ -160,6 +164,7 @@ export default function ComparePage() {
     setQuery('')
     setShowDropdown(false)
 
+    // ✅ Fetch full details — no season_year filter needed here since we're fetching by ID
     const { data } = await supabase
       .from('series')
       .select('id, title, studio, cover_url, status, anime_meta(*)')
@@ -184,21 +189,21 @@ export default function ComparePage() {
   }
 
   // Percentile baselines
-  const allScores     = allMeta.map(m => m.mean_score   ?? 0).filter(Boolean)
-  const allPop        = allMeta.map(m => m.popularity   ?? 0).filter(Boolean)
-  const allFavs       = allMeta.map(m => m.favourites   ?? 0).filter(Boolean)
-  const allEps        = allMeta.map(m => m.episodes     ?? 0).filter(Boolean)
-  const allDur        = allMeta.map(m => m.duration_min ?? 0).filter(Boolean)
+  const allScores = allMeta.map(m => m.mean_score   ?? 0).filter(Boolean)
+  const allPop    = allMeta.map(m => m.popularity   ?? 0).filter(Boolean)
+  const allFavs   = allMeta.map(m => m.favourites   ?? 0).filter(Boolean)
+  const allEps    = allMeta.map(m => m.episodes     ?? 0).filter(Boolean)
+  const allDur    = allMeta.map(m => m.duration_min ?? 0).filter(Boolean)
 
   function getRadarValues(entry: AnimeEntry): number[] {
     const m = entry.anime_meta
     return [
       toPercentile(m?.mean_score   ?? null, allScores),
-      toPercentile(m?.popularity   ?? null, allPop, true), // lower pop rank = more popular
+      toPercentile(m?.popularity   ?? null, allPop, true),
       toPercentile(m?.favourites   ?? null, allFavs),
       toPercentile(m?.episodes     ?? null, allEps),
       toPercentile(m?.duration_min ?? null, allDur),
-      m?.end_date ? 100 : m?.start_date ? 50 : 0,          // completion
+      m?.end_date ? 100 : m?.start_date ? 50 : 0,
     ]
   }
 
@@ -210,15 +215,15 @@ export default function ComparePage() {
     datasets: selected.map((entry, i) => {
       const c = SERIES_COLORS[i]
       return {
-        label:                  entry.title,
-        data:                   getRadarValues(entry),
-        backgroundColor:        c.fill,
-        borderColor:            c.line,
-        borderWidth:            2,
-        pointBackgroundColor:   c.line,
-        pointBorderColor:       isDark ? '#0f172a' : '#fff',
-        pointRadius:            5,
-        pointHoverRadius:       7,
+        label:                entry.title,
+        data:                 getRadarValues(entry),
+        backgroundColor:      c.fill,
+        borderColor:          c.line,
+        borderWidth:          2,
+        pointBackgroundColor: c.line,
+        pointBorderColor:     isDark ? '#0f172a' : '#fff',
+        pointRadius:          5,
+        pointHoverRadius:     7,
       }
     }),
   }
@@ -233,11 +238,11 @@ export default function ComparePage() {
         grid:       { color: gridColor },
         pointLabels: { color: labelColor, font: { size: 13, weight: 600 as any } },
         ticks: {
-          display:   true,
-          stepSize:  25,
-          color:     isDark ? 'rgba(148,163,184,0.5)' : 'rgba(100,116,139,0.5)',
+          display:       true,
+          stepSize:      25,
+          color:         isDark ? 'rgba(148,163,184,0.5)' : 'rgba(100,116,139,0.5)',
           backdropColor: 'transparent',
-          font:      { size: 9 },
+          font:          { size: 9 },
         },
       },
     },
@@ -254,12 +259,6 @@ export default function ComparePage() {
         borderWidth: 1, padding: 10,
       },
     },
-  }
-
-  const selectStyle = {
-    background: 'var(--background-secondary)',
-    color:      'var(--foreground)',
-    border:     '1px solid var(--card-border)',
   }
 
   return (
@@ -389,7 +388,6 @@ export default function ComparePage() {
                         status:       entry.status,
                         season:       m?.season ? `${m.season} ${m.season_year ?? ''}`.trim() : null,
                       }
-                      // Percentile for numeric cols (for coloring)
                       const pcts: Record<string, number> = {
                         mean_score:   toPercentile(m?.mean_score   ?? null, allScores),
                         popularity:   toPercentile(m?.popularity   ?? null, allPop, true),
@@ -399,11 +397,7 @@ export default function ComparePage() {
                       }
 
                       return (
-                        <tr
-                          key={entry.id}
-                          style={{ borderBottom: '1px solid var(--card-border)' }}
-                        >
-                          {/* Series name */}
+                        <tr key={entry.id} style={{ borderBottom: '1px solid var(--card-border)' }}>
                           <td className="px-5 py-4">
                             <div className="flex items-center gap-3">
                               {entry.cover_url && (
@@ -422,11 +416,9 @@ export default function ComparePage() {
                             </div>
                           </td>
 
-                          {/* Stat cells */}
                           {STAT_COLS.map(c => {
                             const isNumeric = c.key in pcts
                             const pct       = pcts[c.key] ?? 50
-                            // Color: high pct = series color, low pct = muted
                             const cellColor = isNumeric
                               ? pct >= 75 ? col.text : pct >= 40 ? 'var(--foreground)' : 'var(--foreground-muted)'
                               : 'var(--foreground)'
@@ -439,7 +431,6 @@ export default function ComparePage() {
                             )
                           })}
 
-                          {/* Remove */}
                           <td className="pr-4 text-center">
                             <button
                               onClick={() => removeSeries(entry.id)}
@@ -462,7 +453,6 @@ export default function ComparePage() {
               className="rounded-2xl p-6"
               style={{ background: 'var(--glass-bg)', border: '1px solid var(--card-border)' }}
             >
-              {/* Series color legend */}
               <div className="flex flex-wrap items-center justify-center gap-6 mb-6">
                 {selected.map((entry, i) => (
                   <div key={entry.id} className="flex items-center gap-2">

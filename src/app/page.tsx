@@ -98,7 +98,7 @@ export default function Home() {
 
     // ── 3.  Per-type counts ─────────────────────────────────────────────────
     Promise.all([
-      supabase.from('series').select(''anime_meta!inner(season_year)'', { count: 'exact', head: true }).eq('item_type', 'anime').eq('anime_meta.season_year', 2026).not('genres', 'cs', '{"Hentai"}'),
+      supabase.from('series').select('anime_meta!inner(season_year)', { count: 'exact', head: true }).eq('item_type', 'anime').eq('anime_meta.season_year', 2026).not('genres', 'cs', '{"Hentai"}'),
       supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'manga').not('genres', 'cs', '{"Hentai"}'),
       supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'novel').not('genres', 'cs', '{"Hentai"}'),
     ]).then(([animeRes, mangaRes, novelRes]) => {

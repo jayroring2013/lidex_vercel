@@ -181,29 +181,8 @@ export default function ContentDetail() {
 
   // ── Anime: set cover from series directly ────────────────────────────────────
   useEffect(() => {
-    if (!series || series.item_type === 'manga' || series.item_type === 'novel') return
+    if (!series || series.item_type === 'manga') return
     setCoverSrc(series.cover_url || null)
-  }, [series])
-
-  // ── Novel: fetch latest volume cover (mirrors manga enrichment) ───────────────
-  useEffect(() => {
-    if (!series || series.item_type !== 'novel') return
-    async function loadNovelCover() {
-      const { data: vols } = await supabase
-        .from('volumes')
-        .select('volume_number, cover_url')
-        .eq('series_id', series.id)
-        .eq('is_special', false)
-        .not('volume_number', 'is', null)
-        .order('volume_number', { ascending: false })
-      if (vols && vols.length > 0) {
-        const withCover = vols.find((v: any) => v.cover_url)
-        setCoverSrc(withCover?.cover_url || series.cover_url || null)
-      } else {
-        setCoverSrc(series.cover_url || null)
-      }
-    }
-    loadNovelCover()
   }, [series])
 
   // ── Calculate LiDex Score (anime only) ──────────────────────────────────────
@@ -1194,43 +1173,202 @@ function MangaStats({ volumes, locale }: { volumes: any[]; locale: string }) {
         <PricingLineChart volumes={volumes} />
       </div>
 
-      {/* Release Timeline */}
-      <div className="glass rounded-2xl p-5 sm:p-6">
-        <div className="flex items-center gap-2 mb-5">
-          <Calendar className="w-5 h-5 text-primary-500" />
+      {/* Release Schedule Carousel */}
+      <ReleaseSchedule volumes={volumes} locale={locale} />
+
+    </div>
+  )
+}
+
+// ── Release Schedule Carousel ─────────────────────────────────────────────
+
+function ReleaseSchedule({ volumes, locale }: { volumes: any[]; locale: string }) {
+  const isVI = locale === 'vi'
+  const sorted = [...volumes].sort((a, b) => (a.volume_number || 0) - (b.volume_number || 0))
+
+  const VISIBLE = 5 // cards shown at once
+  const [startIdx, setStartIdx] = useState(0)
+  const [activeIdx, setActiveIdx] = useState<number | null>(null)
+  const [imgErrors, setImgErrors] = useState<Record<number, boolean>>({})
+
+  const canPrev = startIdx > 0
+  const canNext = startIdx + VISIBLE < sorted.length
+
+  const prev = () => setStartIdx(i => Math.max(0, i - 1))
+  const next = () => setStartIdx(i => Math.min(sorted.length - VISIBLE, i + 1))
+
+  const visible = sorted.slice(startIdx, startIdx + VISIBLE)
+
+  if (sorted.length === 0) return null
+
+  return (
+    <div className="glass rounded-2xl p-5 sm:p-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center gap-2">
+          <Calendar className="w-5 h-5 text-primary-500 flex-shrink-0" />
           <h2 className="text-base font-bold" style={{ color: 'var(--foreground)' }}>
-            {isVI ? 'Dòng thời gian phát hành' : 'Release Timeline'}
+            {isVI ? 'Lịch phát hành' : 'Release Schedule'}
           </h2>
+          <span
+            className="ml-1 text-[11px] px-2 py-0.5 rounded-full font-semibold"
+            style={{ background: 'var(--background-secondary)', color: 'var(--foreground-muted)', border: '1px solid var(--card-border)' }}
+          >
+            {sorted.length} {isVI ? 'tập' : 'vols'}
+          </span>
         </div>
-        <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-          {/* Sort ascending for timeline (Oldest -> Newest) */}
-          {[...volumes].sort((a, b) => (a.volume_number || 0) - (b.volume_number || 0)).map((vol, i) => (
-            <div key={vol.id || i} className="flex items-center justify-between p-3 rounded-lg transition-colors hover:bg-white/5" style={{ border: '1px solid var(--card-border)' }}>
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-md bg-primary-500/20 flex items-center justify-center text-xs font-bold text-primary-400 border border-primary-500/30">
-                  {vol.volume_number}
-                </div>
-                <div>
-                  <p className="text-xs font-semibold" style={{ color: 'var(--foreground)' }}>
-                    {isVI ? 'Tập' : 'Volume'} {vol.volume_number}
-                  </p>
-                  {vol.release_date && (
-                    <p className="text-[10px]" style={{ color: 'var(--foreground-muted)' }}>
-                      {new Date(vol.release_date).toLocaleDateString(isVI ? 'vi-VN' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
-                    </p>
-                  )}
-                </div>
-              </div>
-              {vol.price && (
-                <span className="text-sm font-bold tabular-nums" style={{ color: 'var(--foreground-secondary)' }}>
-                  {Number(vol.price).toLocaleString('vi-VN')}
-                </span>
-              )}
-            </div>
-          ))}
+
+        {/* Nav buttons */}
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={prev}
+            disabled={!canPrev}
+            className="w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed"
+            style={{
+              background: canPrev ? 'var(--background-secondary)' : 'transparent',
+              border: '1px solid var(--card-border)',
+              color: 'var(--foreground-secondary)',
+            }}
+            aria-label="Previous volumes"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M9 11L5 7L9 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+          <span className="text-xs tabular-nums px-1" style={{ color: 'var(--foreground-muted)', minWidth: 52, textAlign: 'center' }}>
+            {startIdx + 1}–{Math.min(startIdx + VISIBLE, sorted.length)} / {sorted.length}
+          </span>
+          <button
+            onClick={next}
+            disabled={!canNext}
+            className="w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed"
+            style={{
+              background: canNext ? 'var(--background-secondary)' : 'transparent',
+              border: '1px solid var(--card-border)',
+              color: 'var(--foreground-secondary)',
+            }}
+            aria-label="Next volumes"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M5 3L9 7L5 11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
         </div>
       </div>
 
+      {/* Carousel track */}
+      <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${VISIBLE}, 1fr)` }}>
+        {visible.map((vol, localI) => {
+          const globalI = startIdx + localI
+          const isActive = activeIdx === globalI
+          const hasImg = vol.cover_url && !imgErrors[globalI]
+          const date = vol.release_date
+            ? new Date(vol.release_date).toLocaleDateString(isVI ? 'vi-VN' : 'en-US', {
+                year: 'numeric', month: 'short', day: 'numeric',
+              })
+            : null
+
+          return (
+            <div
+              key={vol.id || globalI}
+              onClick={() => setActiveIdx(isActive ? null : globalI)}
+              className="flex flex-col cursor-pointer group"
+              style={{ minWidth: 0 }}
+            >
+              {/* Cover */}
+              <div
+                className="relative rounded-xl overflow-hidden mb-2 transition-all duration-200"
+                style={{
+                  aspectRatio: '2/3',
+                  border: isActive
+                    ? '2px solid #6366f1'
+                    : '1px solid var(--card-border)',
+                  boxShadow: isActive ? '0 0 0 3px #6366f125' : 'none',
+                  background: 'var(--background-secondary)',
+                  transform: isActive ? 'translateY(-2px)' : 'none',
+                }}
+              >
+                {hasImg ? (
+                  <img
+                    src={vol.cover_url}
+                    alt={`Vol. ${vol.volume_number}`}
+                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    onError={() => setImgErrors(prev => ({ ...prev, [globalI]: true }))}
+                  />
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center gap-1.5"
+                    style={{ background: 'linear-gradient(135deg, #6366f115, #818cf815)' }}>
+                    <BookOpen className="w-6 h-6 text-primary-400 opacity-60" />
+                    <span className="text-[10px] font-bold text-primary-400 opacity-60">
+                      Vol.{vol.volume_number}
+                    </span>
+                  </div>
+                )}
+
+                {/* Volume badge overlay */}
+                <div
+                  className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md text-[10px] font-bold text-white"
+                  style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+                >
+                  #{vol.volume_number}
+                </div>
+
+                {/* Hover overlay */}
+                <div
+                  className="absolute inset-0 transition-opacity duration-200 opacity-0 group-hover:opacity-100"
+                  style={{ background: 'rgba(99,102,241,0.08)' }}
+                />
+              </div>
+
+              {/* Info below card */}
+              <div className="px-0.5">
+                <p
+                  className="text-[11px] font-semibold leading-tight mb-0.5 truncate"
+                  style={{ color: isActive ? '#6366f1' : 'var(--foreground)' }}
+                >
+                  {isVI ? 'Tập' : 'Vol.'} {vol.volume_number}
+                </p>
+                {date ? (
+                  <p className="text-[10px] leading-tight" style={{ color: 'var(--foreground-muted)' }}>
+                    {date}
+                  </p>
+                ) : (
+                  <p className="text-[10px] italic" style={{ color: 'var(--foreground-muted)', opacity: 0.5 }}>
+                    {isVI ? 'Chưa có ngày' : 'No date'}
+                  </p>
+                )}
+                {vol.price && (
+                  <p className="text-[11px] font-bold tabular-nums mt-0.5" style={{ color: 'var(--foreground-secondary)' }}>
+                    {Number(vol.price).toLocaleString('vi-VN')} ₫
+                  </p>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Dot pagination */}
+      {sorted.length > VISIBLE && (
+        <div className="flex justify-center gap-1.5 mt-4">
+          {Array.from({ length: Math.ceil(sorted.length / VISIBLE) }, (_, pageI) => {
+            const isCurrentPage = Math.floor(startIdx / VISIBLE) === pageI
+            return (
+              <button
+                key={pageI}
+                onClick={() => setStartIdx(Math.min(pageI * VISIBLE, sorted.length - VISIBLE))}
+                className="rounded-full transition-all duration-200"
+                style={{
+                  width: isCurrentPage ? 20 : 6,
+                  height: 6,
+                  background: isCurrentPage ? '#6366f1' : 'var(--card-border)',
+                }}
+                aria-label={`Go to page ${pageI + 1}`}
+              />
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
@@ -1242,33 +1380,11 @@ function PricingLineChart({ volumes }: { volumes: Volume[] }) {
   const lineRef = useRef<SVGPathElement>(null)
   const [tooltip, setTooltip] = useState<TooltipState>({ visible: false, x: 0, y: 0, price: 0, volNumber: 0 })
   const gradId = useId().replace(/:/g, "")
-
-  // Detect dark mode from document
-  const [isDark, setIsDark] = useState(false)
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-color-scheme: dark)")
-    // Also check for class-based dark mode (Tailwind default)
-    const checkDark = () => {
-      setIsDark(
-        document.documentElement.classList.contains("dark") ||
-        mq.matches
-      )
-    }
-    checkDark()
-    mq.addEventListener("change", checkDark)
-    // Observe class changes on <html> for toggle-based dark mode
-    const observer = new MutationObserver(checkDark)
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] })
-    return () => {
-      mq.removeEventListener("change", checkDark)
-      observer.disconnect()
-    }
-  }, [])
-
+ 
   const sorted = [...volumes].sort((a, b) => (a.volume_number ?? 0) - (b.volume_number ?? 0))
   const prices = sorted.map(v => parseFloat(String(v.price)) || 0)
   if (prices.length === 0) return null
-
+ 
   const minPrice = Math.min(...prices)
   const maxPrice = Math.max(...prices)
   const avgPrice = prices.reduce((a, b) => a + b, 0) / prices.length
@@ -1277,50 +1393,53 @@ function PricingLineChart({ volumes }: { volumes: Volume[] }) {
   const lastPrice = prices[prices.length - 1]
   const delta = lastPrice - firstPrice
   const deltaPct = firstPrice ? (delta / firstPrice) * 100 : 0
-
+ 
+  // Smart Y padding: if all prices are identical, pad ±500; otherwise ±25%
   const yPad = priceRange < 1 ? 500 : priceRange * 0.25
   const yMin = minPrice - yPad
   const yMax = maxPrice + yPad
   const yRange = yMax - yMin
-
+ 
   const W = 680
   const H = 220
   const pad = { top: 24, right: 32, bottom: 36, left: 72 }
   const cW = W - pad.left - pad.right
   const cH = H - pad.top - pad.bottom
-
+ 
   const xOf = (i: number) =>
     pad.left + (sorted.length > 1 ? (i / (sorted.length - 1)) * cW : cW / 2)
   const yOf = (v: number) =>
     pad.top + cH - ((v - yMin) / yRange) * cH
-
+ 
   const points = sorted.map((vol, i) => ({
     x: xOf(i),
     y: yOf(parseFloat(String(vol.price))),
     price: parseFloat(String(vol.price)),
     vol,
   }))
-
+ 
   const lineD = points.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ")
   const areaD =
     lineD +
     ` L${points[points.length - 1].x},${pad.top + cH} L${pad.left},${pad.top + cH} Z`
-
+ 
   const NUM_TICKS = 5
   const yTicks = Array.from({ length: NUM_TICKS + 1 }, (_, i) => ({
     v: yMin + (yRange * i) / NUM_TICKS,
     y: yOf(yMin + (yRange * i) / NUM_TICKS),
   }))
-
+ 
+  // Show at most 6 x-axis labels, always including first and last
   const xStep = Math.max(1, Math.floor(sorted.length / 6))
   const showXLabel = (i: number) =>
     i === 0 || i === sorted.length - 1 || i % xStep === 0
-
+ 
   const minIdx = prices.indexOf(minPrice)
   const maxIdx = prices.indexOf(maxPrice)
-
+ 
   const fmt = (v: number) => Math.round(v).toLocaleString("vi-VN")
-
+ 
+  // Line draw animation on mount
   useEffect(() => {
     const line = lineRef.current
     if (!line) return
@@ -1332,7 +1451,7 @@ function PricingLineChart({ volumes }: { volumes: Volume[] }) {
       line.style.strokeDashoffset = "0"
     })
   }, [lineD])
-
+ 
   const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
     const svg = svgRef.current
     if (!svg) return
@@ -1353,86 +1472,78 @@ function PricingLineChart({ volumes }: { volumes: Volume[] }) {
       volNumber: sorted[closest].volume_number,
     })
   }
-
+ 
   const deltaLabel =
     Math.abs(deltaPct) < 0.001
       ? "Không đổi"
       : `${delta > 0 ? "+" : ""}${deltaPct.toFixed(2)}%`
-
+ 
+  const badgeClass =
+    Math.abs(deltaPct) < 0.001
+      ? "bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
+      : delta > 0
+      ? "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+      : "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+ 
   const trendIcon =
     Math.abs(deltaPct) < 0.001 ? "▸" : delta > 0 ? "▲" : "▼"
-
-  // Theme-aware colors — NO Tailwind dark: classes inside SVG
-  const colors = {
-    dotFill: isDark ? "#1e293b" : "#ffffff",
-    gridStroke: isDark ? "#334155" : "#e5e7eb",
-    axisFill: isDark ? "#94a3b8" : "#6b7280",
-    lineStroke: "#3b82f6",
-    areaStart: isDark ? "rgba(59,130,246,0.2)" : "rgba(59,130,246,0.15)",
-    areaEnd: isDark ? "rgba(59,130,246,0.02)" : "rgba(59,130,246,0.01)",
-  }
-
+ 
   return (
-    <div className="w-full rounded-xl p-5" style={{ background: 'var(--background-secondary)', border: '1px solid var(--card-border)' }}>
+    <div className="w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 p-5">
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div>
-          <p className="text-xs font-medium uppercase tracking-widest mb-1" style={{ color: 'var(--foreground-muted)' }}>
+          <p className="text-xs font-medium uppercase tracking-widest text-neutral-400 dark:text-neutral-500 mb-1">
             Lịch sử giá (VNĐ)
           </p>
-          <p className="text-2xl font-bold tabular-nums" style={{ color: 'var(--foreground)' }}>
+          <p className="text-xl font-medium text-neutral-900 dark:text-neutral-100 tabular-nums">
             {fmt(minPrice)}
             {priceRange > 0 && (
-              <span className="mx-3 font-light" style={{ color: 'var(--foreground-muted)' }}>–</span>
+              <span className="text-neutral-400 dark:text-neutral-600 mx-2">–</span>
             )}
             {priceRange > 0 && fmt(maxPrice)}
-            <span className="text-sm font-normal ml-2" style={{ color: 'var(--foreground-muted)' }}>VND</span>
           </p>
         </div>
         <div className="flex flex-col items-end gap-1.5">
-          <span 
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium"
-            style={{
-              background: Math.abs(deltaPct) < 0.001 
-                ? 'var(--background-secondary)' 
-                : delta > 0 
-                  ? 'rgba(34,197,94,0.15)' 
-                  : 'rgba(239,68,68,0.15)',
-              color: Math.abs(deltaPct) < 0.001 
-                ? 'var(--foreground-muted)' 
-                : delta > 0 
-                  ? '#22c55e' 
-                  : '#ef4444'
-            }}
-          >
+          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${badgeClass}`}>
             {trendIcon} {deltaLabel}
           </span>
-          <span className="text-xs" style={{ color: 'var(--foreground-muted)' }}>
+          <span className="text-xs text-neutral-400 dark:text-neutral-600">
             Vol.{sorted[0]?.volume_number} → Vol.{sorted[sorted.length - 1]?.volume_number}
           </span>
         </div>
       </div>
-
+ 
+      {/* Summary stats */}
+      <div className="flex gap-5 mb-4 pb-4 border-b border-neutral-100 dark:border-neutral-800">
+        {[
+          { label: "Thấp nhất", value: fmt(minPrice), color: "text-red-600 dark:text-red-400" },
+          { label: "Cao nhất",  value: fmt(maxPrice), color: "text-green-600 dark:text-green-400" },
+          { label: "Trung bình", value: fmt(avgPrice), color: "text-neutral-900 dark:text-neutral-100" },
+          { label: "Số tập", value: `${sorted.length} tập`, color: "text-neutral-900 dark:text-neutral-100" },
+        ].map(({ label, value, color }) => (
+          <div key={label} className="flex flex-col">
+            <span className="text-[11px] text-neutral-400 dark:text-neutral-600 mb-0.5">{label}</span>
+            <span className={`text-sm font-medium tabular-nums ${color}`}>{value}</span>
+          </div>
+        ))}
+      </div>
+ 
       {/* Chart */}
       <div className="relative w-full">
         {/* Tooltip */}
         {tooltip.visible && (
           <div
-            className="absolute pointer-events-none z-10 rounded-lg px-3 py-2 shadow-md text-xs -translate-y-full -translate-x-1/2"
-            style={{ 
-              left: `${Math.min(tooltip.x, 80)}%`, 
-              top: `${tooltip.y}%`,
-              background: 'var(--background-secondary)',
-              border: '1px solid var(--card-border)'
-            }}
+            className="absolute pointer-events-none z-10 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg px-3 py-2 shadow-md text-xs -translate-y-full -translate-x-1/2"
+            style={{ left: `${Math.min(tooltip.x, 80)}%`, top: `${tooltip.y}%` }}
           >
-            <div className="mb-0.5" style={{ color: 'var(--foreground-muted)' }}>Vol.{tooltip.volNumber}</div>
-            <div className="font-medium text-sm tabular-nums" style={{ color: 'var(--foreground)' }}>
+            <div className="text-neutral-400 dark:text-neutral-500 mb-0.5">Vol.{tooltip.volNumber}</div>
+            <div className="font-medium text-sm text-neutral-900 dark:text-neutral-100 tabular-nums">
               {fmt(tooltip.price)} ₫
             </div>
           </div>
         )}
-
+ 
         <svg
           ref={svgRef}
           viewBox={`0 0 ${W} ${H}`}
@@ -1441,25 +1552,25 @@ function PricingLineChart({ volumes }: { volumes: Volume[] }) {
           onMouseMove={handleMouseMove}
           onMouseLeave={() => setTooltip(t => ({ ...t, visible: false }))}
         >
-          {/* Area gradient — single gradient, colors controlled by JS */}
           <defs>
             <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={colors.areaStart} />
-              <stop offset="100%" stopColor={colors.areaEnd} />
+              <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.3" />
+              <stop offset="90%" stopColor="#3b82f6" stopOpacity="0" />
             </linearGradient>
           </defs>
-
+ 
           {/* Grid lines */}
           {yTicks.map((tick, i) => (
             <line
               key={i}
               x1={pad.left} y1={tick.y}
               x2={W - pad.right} y2={tick.y}
-              stroke={colors.gridStroke}
+              stroke="currentColor"
               strokeWidth="1"
+              className="text-neutral-100 dark:text-neutral-800"
             />
           ))}
-
+ 
           {/* Y-axis labels */}
           {yTicks.map((tick, i) => (
             <text
@@ -1469,41 +1580,41 @@ function PricingLineChart({ volumes }: { volumes: Volume[] }) {
               textAnchor="end"
               fontSize="11"
               fontFamily="monospace"
-              fill={colors.axisFill}
+              className="fill-neutral-400 dark:fill-neutral-600"
             >
               {fmt(tick.v)}
             </text>
           ))}
-
-          {/* Area fill */}
+ 
+          {/* Area */}
           <path d={areaD} fill={`url(#${gradId})`} />
-
+ 
           {/* Line */}
           <path
             ref={lineRef}
             d={lineD}
             fill="none"
-            stroke={colors.lineStroke}
+            stroke="#3b82f6"
             strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
-
+ 
           {/* Data points */}
           {points.map((p, i) => {
             const isMin = i === minIdx && priceRange > 0
             const isMax = i === maxIdx && priceRange > 0
-            const strokeColor = isMin ? "#ef4444" : isMax ? "#22c55e" : "#3b82f6"
+            const color = isMin ? "#ef4444" : isMax ? "#22c55e" : "#3b82f6"
             const r = isMin || isMax ? 6 : 5
             return (
               <g key={i}>
+                {/* Invisible hit area */}
                 <circle cx={p.x} cy={p.y} r={12} fill="transparent" />
                 <circle
-                  cx={p.x}
-                  cy={p.y}
-                  r={r}
-                  fill={colors.dotFill}
-                  stroke={strokeColor}
+                  cx={p.x} cy={p.y} r={r}
+                  fill="white"
+                  className="fill-white dark:fill-neutral-950"
+                  stroke={color}
                   strokeWidth="2.5"
                   style={{ pointerEvents: "none" }}
                 />
@@ -1520,7 +1631,7 @@ function PricingLineChart({ volumes }: { volumes: Volume[] }) {
               </g>
             )
           })}
-
+ 
           {/* X-axis labels */}
           {sorted.map((vol, i) =>
             showXLabel(i) ? (
@@ -1530,7 +1641,7 @@ function PricingLineChart({ volumes }: { volumes: Volume[] }) {
                 y={H - 8}
                 textAnchor="middle"
                 fontSize="11"
-                fill={colors.axisFill}
+                className="fill-neutral-400 dark:fill-neutral-600"
               >
                 Vol.{vol.volume_number}
               </text>

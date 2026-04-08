@@ -80,7 +80,7 @@ export default function Dashboard() {
           { data: novelData }
         ] = await Promise.all([
           getTopRatedSeries({ limit: 10 }),
-          supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'anime').not('genres', 'cs', '{"Hentai"}'),
+          supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'anime').eq('anime_meta.season_year', 2026).not('genres', 'cs', '{"Hentai"}'),
           supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'novel').not('genres', 'cs', '{"Hentai"}'),
           supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'manga').not('genres', 'cs', '{"Hentai"}'),
           supabase.from('series').select('id, title, cover_url').eq('item_type', 'manga').not('cover_url', 'is', null).not('genres', 'cs', '{"Hentai"}').order('updated_at', { ascending: false }).limit(10),

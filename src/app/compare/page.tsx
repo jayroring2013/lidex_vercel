@@ -144,6 +144,7 @@ export default function ComparePage() {
         .from('series')
         .select('id, title, cover_url, studio')
         .eq('item_type', 'anime')
+        .eq('anime_meta.season_year', 2026)
         .ilike('title', `%${query}%`)
         .limit(8)
       setSearchResults(data || [])

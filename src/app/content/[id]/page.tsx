@@ -189,6 +189,23 @@ export default function ContentDetail() {
     setCoverSrc(series.cover_url || null)
   }, [series])
 
+  // ── Anime: fetch series_links ─────────────────────────────────────────────────
+  useEffect(() => {
+    if (!series || series.item_type !== 'anime') return
+
+    async function loadAnimeLinks() {
+      const { data: links } = await supabase
+        .from('series_links')
+        .select('link_type, label, url')
+        .eq('series_id', series.id)
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true })
+      if (links) setSeriesLinks(links)
+    }
+
+    loadAnimeLinks()
+  }, [series])
+
   // ── Calculate LiDex Score (anime only) ──────────────────────────────────────
   useEffect(() => {
     if (!series || series.item_type !== 'anime' || !series.anime_meta) return
@@ -866,30 +883,41 @@ export default function ContentDetail() {
                       </p>
                     )}
                   </>
-                ) : (
-                  /* Anime Fallback Links (Unchanged) */
+                ) : isAnime ? (
                   <>
-                    <a href={`https://anilist.co/search/anime?search=${encodeURIComponent(series.title)}`}
-                      target="_blank" rel="noopener noreferrer"
-                      className="flex items-center justify-between p-2.5 rounded-lg group transition-colors"
-                      style={{ background: 'var(--background-secondary)', border: '1px solid var(--card-border)' }}>
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-[#02a9ff]" />
-                        <span className="text-xs font-medium group-hover:text-primary-500 transition-colors" style={{ color: 'var(--foreground-secondary)' }}>AniList</span>
-                      </div>
-                      <ExternalLink className="w-3.5 h-3.5 group-hover:text-primary-500" style={{ color: 'var(--foreground-muted)' }} />
-                    </a>
-                    <a href={`https://myanimelist.net/search.php?q=${encodeURIComponent(series.title)}`}
-                      target="_blank" rel="noopener noreferrer"
-                      className="flex items-center justify-between p-2.5 rounded-lg group transition-colors"
-                      style={{ background: 'var(--background-secondary)', border: '1px solid var(--card-border)' }}>
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-[#2e51a2]" />
-                        <span className="text-xs font-medium group-hover:text-primary-500 transition-colors" style={{ color: 'var(--foreground-secondary)' }}>MyAnimeList</span>
-                      </div>
-                      <ExternalLink className="w-3.5 h-3.5 group-hover:text-primary-500" style={{ color: 'var(--foreground-muted)' }} />
-                    </a>
+                    {seriesLinks.length > 0 ? (
+                      seriesLinks.map((link: any, i: number) => {
+                        const dotColor =
+                          link.link_type === 'anilist'   ? '#02a9ff' :
+                          link.link_type === 'stream'   ? '#f59e0b' :
+                          link.link_type === 'official' ? '#6366f1' :
+                          link.link_type === 'trailer'  ? '#ef4444' :
+                          link.link_type === 'purchase' ? '#22c55e' : '#94a3b8'
+                        return (
+                          <a key={i} href={link.url} target="_blank" rel="noopener noreferrer"
+                            className="flex items-center justify-between p-2.5 rounded-lg group transition-colors"
+                            style={{ background: 'var(--background-secondary)', border: '1px solid var(--card-border)' }}>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: dotColor }} />
+                              <span className="text-xs font-medium group-hover:text-primary-500 transition-colors truncate" style={{ color: 'var(--foreground-secondary)' }}>
+                                {link.label}
+                              </span>
+                            </div>
+                            <ExternalLink className="w-3.5 h-3.5 flex-shrink-0 ml-2 group-hover:text-primary-500" style={{ color: 'var(--foreground-muted)' }} />
+                          </a>
+                        )
+                      })
+                    ) : (
+                      <p className="text-xs text-center py-2" style={{ color: 'var(--foreground-muted)' }}>
+                        {isVI ? 'Không có liên kết' : 'No links'}
+                      </p>
+                    )}
                   </>
+                ) : (
+                  <p className="text-xs text-center py-2" style={{ color: 'var(--foreground-muted)' }}>
+                    {isVI ? 'Không có liên kết' : 'No links'}
+                  </p>
+                )}
                 )}
               </div>
             </div>

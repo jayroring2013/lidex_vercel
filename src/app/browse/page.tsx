@@ -463,10 +463,10 @@ export default function BrowsePage() {
         if (type === 'anime') {
           const [{ data: pop }, { data: rec }] = await Promise.all([
             supabase.from('series').select('id, title, cover_url, status, studio, anime_meta(mean_score, popularity, season_year)')
-              .eq('item_type', 'anime').not('cover_url', 'is', null).not('genres', 'cs', '{"Hentai"}')
+              .eq('item_type', 'anime').eq('anime_meta.season_year', 2026).not('cover_url', 'is', null).not('genres', 'cs', '{"Hentai"}')
               .order('anime_meta(popularity)', { ascending: false }).limit(14),
             supabase.from('series').select('id, title, cover_url, status, studio, anime_meta(mean_score, season_year)')
-              .eq('item_type', 'anime').not('cover_url', 'is', null).not('genres', 'cs', '{"Hentai"}')
+              .eq('item_type', 'anime').eq('anime_meta.season_year', 2026).not('cover_url', 'is', null).not('genres', 'cs', '{"Hentai"}')
               .order('updated_at', { ascending: false }).limit(14),
           ])
           if (!cancelled) { setPopular(toAnimeCards(pop || [])); setRecent(toAnimeCards(rec || [])) }
@@ -520,7 +520,7 @@ export default function BrowsePage() {
       if (type === 'anime') {
         let q = supabase.from('series')
           .select('id, title, cover_url, status, studio, anime_meta(mean_score, popularity, format, season_year)')
-          .eq('item_type', 'anime').not('genres', 'cs', '{"Hentai"}')
+          .eq('item_type', 'anime').eq('anime_meta.season_year', 2026).not('genres', 'cs', '{"Hentai"}')
         if (search)           q = q.ilike('title', `%${search}%`)
         if (status !== 'all') q = q.ilike('status', status)
         if (sort === 'score_desc')        q = q.order('anime_meta(mean_score)',    { ascending: false })

@@ -918,7 +918,6 @@ export default function ContentDetail() {
                     {isVI ? 'Không có liên kết' : 'No links'}
                   </p>
                 )}
-                )}
               </div>
             </div>
 

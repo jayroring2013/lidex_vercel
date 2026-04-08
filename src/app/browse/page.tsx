@@ -64,7 +64,6 @@ function useDebounce<T>(value: T, ms = 300): T {
   return dv
 }
 
-// Proxy ALL external images — not just MangaDex — to avoid CORS / hotlink issues
 function proxyImg(url: string | null): string | null {
   if (!url) return null
   try {
@@ -107,10 +106,6 @@ function gridCols(size: number): string {
 
 // ── Card mappers ──────────────────────────────────────────────────────────────
 
-/**
- * Fetch the latest non-special volume cover for each series in `ids`.
- * Returns a map: series_id → proxied cover_url (or null)
- */
 async function fetchLatestVolCovers(ids: (string | number)[]): Promise<Record<string | number, string | null>> {
   if (!ids.length) return {}
   const { data } = await supabase
@@ -121,7 +116,6 @@ async function fetchLatestVolCovers(ids: (string | number)[]): Promise<Record<st
     .not('cover_url', 'is', null)
     .order('volume_number', { ascending: false })
   if (!data) return {}
-  // Keep only the highest-numbered volume per series (first match per series_id)
   const map: Record<string | number, string | null> = {}
   for (const row of data) {
     if (map[row.series_id] === undefined) {
@@ -133,7 +127,6 @@ async function fetchLatestVolCovers(ids: (string | number)[]): Promise<Record<st
 
 function toAnimeCards(rows: any[]): SeriesCard[] {
   return rows.map(s => {
-    // Supabase returns related tables as arrays when querying from the parent side
     const meta = Array.isArray(s.anime_meta) ? s.anime_meta[0] : s.anime_meta
     return {
       id: s.id, title: s.title,
@@ -154,12 +147,11 @@ function toMangaCards(rows: any[], volCovers: Record<string | number, string | n
   return rows.map(m => ({
     id:         m.id,
     title:      m.title,
-    // Prefer latest volume cover, fall back to series cover
     cover_url:  volCovers[m.id] !== undefined ? volCovers[m.id] : proxyImg(m.cover_url),
     scoreLabel: '',
     status:     m.status,
     type:       'manga' as ContentType,
-    meta:       null,   // publisher name not available from series table directly
+    meta:       null,
     year:       null,
     genres:     Array.isArray(m.genres) ? m.genres : [],
     href:       `/content/${m.id}`,
@@ -171,12 +163,11 @@ function toNovelCards(rows: any[], volCovers: Record<string | number, string | n
   return (rows || []).filter(Boolean).map(n => ({
     id:         n.id,
     title:      n.title,
-    // Prefer latest volume cover, fall back to series cover
     cover_url:  volCovers[n.id] !== undefined ? volCovers[n.id] : proxyImg(n.cover_url),
     scoreLabel: '',
     status:     n.status,
     type:       'novel' as ContentType,
-    meta:       null,   // publisher name not available from series table directly
+    meta:       null,
     year:       null,
     genres:     Array.isArray(n.genres) ? n.genres : [],
     href:       `/content/${n.id}`,
@@ -195,10 +186,8 @@ function GlowCard({ children, color }: { children: React.ReactNode; color: strin
       className="relative group rounded-2xl overflow-hidden transition-all duration-200 hover:scale-[1.02] hover:-translate-y-0.5"
       style={{ background: 'var(--glass-bg)', border: '1px solid var(--card-border)' }}
     >
-      {/* Spotlight effect */}
       <div className="pointer-events-none absolute inset-0 z-10 rounded-2xl transition-opacity duration-300"
         style={{ opacity: g.on ? 1 : 0, background: `radial-gradient(200px circle at ${g.x}px ${g.y}px, ${color}20, transparent 70%)` }} />
-      {/* Border glow on hover */}
       <div className="pointer-events-none absolute inset-0 z-10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"
         style={{ boxShadow: `inset 0 0 0 1px ${color}50` }} />
       {children}
@@ -231,28 +220,24 @@ function CardItem({ card, color }: { card: SeriesCard; color: string }) {
               <BookOpen className="w-8 h-8 opacity-20" style={{ color }} />
             </div>
         }
-        {/* Score */}
         {card.scoreLabel && (
           <div className="absolute top-2 right-2 px-2 py-0.5 rounded-lg text-xs font-bold"
             style={{ background: 'rgba(0,0,0,0.80)', color: '#fbbf24', backdropFilter: 'blur(6px)' }}>
             {card.scoreLabel}
           </div>
         )}
-        {/* Status */}
         {card.status && (
           <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-bold text-white"
             style={{ background: `${statusColor(card.status)}dd`, backdropFilter: 'blur(4px)' }}>
             {statusLabel(card.status)}
           </div>
         )}
-        {/* External icon */}
         {card.external && (
           <div className="absolute top-2 left-2 w-5 h-5 rounded-md flex items-center justify-center"
             style={{ background: 'rgba(0,0,0,0.65)' }}>
             <ExternalLink className="w-2.5 h-2.5 text-white/70" />
           </div>
         )}
-        {/* Hover overlay */}
         <div className="absolute inset-0 flex items-end opacity-0 group-hover:opacity-100 transition-opacity duration-200"
           style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.88) 40%, transparent)' }}>
           <div className="p-3 w-full">
@@ -261,7 +246,6 @@ function CardItem({ card, color }: { card: SeriesCard; color: string }) {
           </div>
         </div>
       </div>
-      {/* Fixed-height info strip — keeps all cards same total height */}
       <div className="px-3 pt-2 pb-3 h-[72px] flex flex-col justify-between">
         <div>
           <p className="text-xs font-semibold line-clamp-2 leading-snug" style={{ color: 'var(--foreground)' }}>{card.title}</p>
@@ -461,13 +445,24 @@ export default function BrowsePage() {
       setDiscLoading(true)
       try {
         if (type === 'anime') {
+          // ✅ Use !inner so series without a 2026 anime_meta row are excluded entirely
           const [{ data: pop }, { data: rec }] = await Promise.all([
-            supabase.from('series').select('id, title, cover_url, status, studio, anime_meta(mean_score, popularity, season_year)')
-              .eq('item_type', 'anime').eq('anime_meta.season_year', 2026).not('cover_url', 'is', null).not('genres', 'cs', '{"Hentai"}')
-              .order('anime_meta(popularity)', { ascending: false }).limit(14),
-            supabase.from('series').select('id, title, cover_url, status, studio, anime_meta(mean_score, season_year)')
-              .eq('item_type', 'anime').eq('anime_meta.season_year', 2026).not('cover_url', 'is', null).not('genres', 'cs', '{"Hentai"}')
-              .order('updated_at', { ascending: false }).limit(14),
+            supabase.from('series')
+              .select('id, title, cover_url, status, studio, anime_meta!inner(mean_score, popularity, season_year)')
+              .eq('item_type', 'anime')
+              .eq('anime_meta.season_year', 2026)
+              .not('cover_url', 'is', null)
+              .not('genres', 'cs', '{"Hentai"}')
+              .order('anime_meta(popularity)', { ascending: false })
+              .limit(14),
+            supabase.from('series')
+              .select('id, title, cover_url, status, studio, anime_meta!inner(mean_score, season_year)')
+              .eq('item_type', 'anime')
+              .eq('anime_meta.season_year', 2026)
+              .not('cover_url', 'is', null)
+              .not('genres', 'cs', '{"Hentai"}')
+              .order('updated_at', { ascending: false })
+              .limit(14),
           ])
           if (!cancelled) { setPopular(toAnimeCards(pop || [])); setRecent(toAnimeCards(rec || [])) }
 
@@ -518,9 +513,12 @@ export default function BrowsePage() {
       let more = false
 
       if (type === 'anime') {
+        // ✅ Use !inner so only series with a matching 2026 anime_meta row are returned
         let q = supabase.from('series')
-          .select('id, title, cover_url, status, studio, anime_meta(mean_score, popularity, format, season_year)')
-          .eq('item_type', 'anime').eq('anime_meta.season_year', 2026).not('genres', 'cs', '{"Hentai"}')
+          .select('id, title, cover_url, status, studio, anime_meta!inner(mean_score, popularity, format, season_year)')
+          .eq('item_type', 'anime')
+          .eq('anime_meta.season_year', 2026)
+          .not('genres', 'cs', '{"Hentai"}')
         if (search)           q = q.ilike('title', `%${search}%`)
         if (status !== 'all') q = q.ilike('status', status)
         if (sort === 'score_desc')        q = q.order('anime_meta(mean_score)',    { ascending: false })
@@ -584,7 +582,6 @@ export default function BrowsePage() {
         </div>
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 sm:pt-12 pb-6 sm:pb-8">
-          {/* Gradient title */}
           <h1 className="text-3xl sm:text-5xl font-black mb-1.5 leading-none">
             <span style={{ color: 'var(--foreground)' }}>{t('browse_discover')} </span>
             <span className="transition-colors duration-300" style={{ color }}>{TYPE_CONFIG[type].label}</span>
@@ -640,7 +637,7 @@ export default function BrowsePage() {
         {!isBrowsing && (
           <div>
             <Carousel title={t('browse_popular')} icon={TrendingUp} items={popular} loading={discLoading} color={color} />
-            <Carousel title={t('browse_recent')}       icon={Clock}      items={recent}  loading={discLoading} color={color} />
+            <Carousel title={t('browse_recent')}  icon={Clock}      items={recent}  loading={discLoading} color={color} />
             <div className="flex justify-center mt-2">
               <button onClick={() => setBrowseMode(true)}
                 className="group flex items-center gap-2.5 px-7 py-3.5 rounded-2xl text-sm font-bold text-white transition-all hover:scale-105"

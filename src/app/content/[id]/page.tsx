@@ -166,14 +166,18 @@ export default function ContentDetail() {
         setCoverSrc(series.cover_url || null)
       }
 
-      // 4. series_links — fetch real links from DB (official, purchase, stream)
-      const { data: links } = await supabase
-        .from('series_links')
-        .select('link_type, label, url')
-        .eq('series_id', series.id)
-        .eq('is_active', true)
-        .order('sort_order', { ascending: true })
-      if (links) setSeriesLinks(links)
+      // 4. series_links — fetch links for the latest volume only
+      const latestVol = vols && vols.length > 0 ? vols[0] : null
+      if (latestVol) {
+        const { data: links } = await supabase
+          .from('series_links')
+          .select('link_type, label, url')
+          .eq('series_id', series.id)
+          .eq('volume_id', latestVol.id)
+          .eq('is_active', true)
+          .order('sort_order', { ascending: true })
+        if (links) setSeriesLinks(links)
+      }
     }
 
     loadMangaEnrichment()
@@ -836,26 +840,6 @@ export default function ContentDetail() {
               <div className="space-y-2">
                 {isManga ? (
                   <>
-                    {/* NEW: Direct Link to Tana for the Series */}
-                    {series.slug && (
-                      <a 
-                        href={`https://tana.moe/manga/${series.slug}`} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-between p-2.5 rounded-lg group transition-colors"
-                        style={{ background: 'var(--background-secondary)', border: '1px solid var(--card-border)' }}
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="w-2 h-2 rounded-full flex-shrink-0 bg-[#ef4444]" /> {/* Tana Red */}
-                          <span className="text-xs font-medium group-hover:text-primary-500 transition-colors truncate" style={{ color: 'var(--foreground-secondary)' }}>
-                            Tana (Source)
-                          </span>
-                        </div>
-                        <ExternalLink className="w-3.5 h-3.5 flex-shrink-0 ml-2 group-hover:text-primary-500" style={{ color: 'var(--foreground-muted)' }} />
-                      </a>
-                    )}
-
-                    {/* Existing Dynamic Links from DB */}
                     {seriesLinks.length > 0 ? (
                       seriesLinks.map((link: any, i: number) => {
                         const dotColor =
@@ -878,7 +862,7 @@ export default function ContentDetail() {
                       })
                     ) : (
                       <p className="text-xs text-center py-2" style={{ color: 'var(--foreground-muted)' }}>
-                        {isVI ? 'Chưa có liên kết khác' : 'No other links'}
+                        {isVI ? 'Không có liên kết' : 'No links'}
                       </p>
                     )}
                   </>
@@ -1489,7 +1473,7 @@ function PricingLineChart({ volumes }: { volumes: Volume[] }) {
     Math.abs(deltaPct) < 0.001 ? "▸" : delta > 0 ? "▲" : "▼"
  
   return (
-    <div className="w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 p-5">
+    <div className="w-full">
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div>
@@ -1514,31 +1498,21 @@ function PricingLineChart({ volumes }: { volumes: Volume[] }) {
         </div>
       </div>
  
-      {/* Summary stats */}
-      <div className="flex gap-5 mb-4 pb-4 border-b border-neutral-100 dark:border-neutral-800">
-        {[
-          { label: "Thấp nhất", value: fmt(minPrice), color: "text-red-600 dark:text-red-400" },
-          { label: "Cao nhất",  value: fmt(maxPrice), color: "text-green-600 dark:text-green-400" },
-          { label: "Trung bình", value: fmt(avgPrice), color: "text-neutral-900 dark:text-neutral-100" },
-          { label: "Số tập", value: `${sorted.length} tập`, color: "text-neutral-900 dark:text-neutral-100" },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="flex flex-col">
-            <span className="text-[11px] text-neutral-400 dark:text-neutral-600 mb-0.5">{label}</span>
-            <span className={`text-sm font-medium tabular-nums ${color}`}>{value}</span>
-          </div>
-        ))}
-      </div>
- 
       {/* Chart */}
       <div className="relative w-full">
         {/* Tooltip */}
         {tooltip.visible && (
           <div
-            className="absolute pointer-events-none z-10 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg px-3 py-2 shadow-md text-xs -translate-y-full -translate-x-1/2"
-            style={{ left: `${Math.min(tooltip.x, 80)}%`, top: `${tooltip.y}%` }}
+            className="absolute pointer-events-none z-10 rounded-lg px-3 py-2 text-xs -translate-y-full -translate-x-1/2"
+            style={{
+              left: `${Math.min(tooltip.x, 80)}%`,
+              top: `${tooltip.y}%`,
+              background: 'var(--background-secondary)',
+              border: '1px solid var(--card-border)',
+            }}
           >
-            <div className="text-neutral-400 dark:text-neutral-500 mb-0.5">Vol.{tooltip.volNumber}</div>
-            <div className="font-medium text-sm text-neutral-900 dark:text-neutral-100 tabular-nums">
+            <div className="mb-0.5" style={{ color: 'var(--foreground-muted)' }}>Vol.{tooltip.volNumber}</div>
+            <div className="font-medium text-sm tabular-nums" style={{ color: 'var(--foreground)' }}>
               {fmt(tooltip.price)} ₫
             </div>
           </div>

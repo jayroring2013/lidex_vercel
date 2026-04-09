@@ -47,9 +47,10 @@ export default function Home() {
   const [covers,     setCovers]     = useState<Cover[]>([])
   // Trending row — top anime by anime_meta.trending ASC
   const [trending,   setTrending]   = useState<Cover[]>([])
+  // Top Rated Anime — for the second interest box
+  const [topRated,   setTopRated]   = useState<Cover | null>(null)
   // Hero stat line — per-type counts from series
   const [typeCounts, setTypeCounts] = useState<TypeCounts | null>(null)
-  const [topRated,   setTopRated]   = useState<Cover | null>(null) 
 
   useEffect(() => {
     // ── 1.  Cover wall: mix of anime + manga + novel ───────────────────────
@@ -76,25 +77,6 @@ export default function Home() {
           })
       })
 
-    // ── 2.5 Top Rated Anime (for the second box) ───────────────────────────
-    supabase
-      .from('anime_meta')
-      .select('series_id, mean_score, series!inner(id, title, cover_url)')
-      .eq('season_year', 2026)
-      .not('mean_score', 'is', null)
-      .not('series.genres', 'cs', '{"Hentai"}')
-      .order('mean_score', { ascending: false })
-      .limit(1)
-      .then(({ data, error }) => {
-        if (data && data.length > 0) {
-          setTopRated({
-            id:        data[0].series.id,
-            title:     data[0].series.title,
-            cover_url: data[0].series.cover_url,
-          })
-        }
-      })
-
     // ── 2.  Trending row: anime_meta.trending ASC joined to series ─────────
     supabase
       .from('anime_meta')
@@ -113,6 +95,25 @@ export default function Home() {
               cover_url: r.series.cover_url,
             }))
           )
+        }
+      })
+
+    // ── 2.5 Top Rated Anime (for the second box) ───────────────────────────
+    supabase
+      .from('anime_meta')
+      .select('series_id, mean_score, series!inner(id, title, cover_url)')
+      .eq('season_year', 2026)
+      .not('mean_score', 'is', null)
+      .not('series.genres', 'cs', '{"Hentai"}')
+      .order('mean_score', { ascending: false })
+      .limit(1)
+      .then(({ data, error }) => {
+        if (data && data.length > 0) {
+          setTopRated({
+            id:        data[0].series.id,
+            title:     data[0].series.title,
+            cover_url: data[0].series.cover_url,
+          })
         }
       })
 
@@ -361,7 +362,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-          
 
       <style>{`
         @keyframes scrollUp {

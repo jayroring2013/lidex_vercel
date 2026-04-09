@@ -97,7 +97,7 @@ export default function Home() {
         .select('series_id, md_follows, series!inner(id, title, cover_url, updated_at)')
         .not('series.cover_url', 'is', null)
         .not('series.genres', 'cs', '{"Hentai"}')
-        .order('md_follows', { ascending: false, nullsLast: true })
+        .order('md_follows', { ascending: false, nullsFirst: false })
         .order('series(updated_at)', { ascending: false })
         .limit(4),
       

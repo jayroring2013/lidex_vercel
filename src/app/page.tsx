@@ -45,7 +45,7 @@ export default function Home() {
 
   // Cover wall — all content types mixed
   const [covers,     setCovers]     = useState<Cover[]>([])
-  // Trending row — top anime by anime_meta.trending ASC
+  // Trending row — mixed content types (anime, manga, novel)
   const [trending,   setTrending]   = useState<Cover[]>([])
   // Hero stat line — per-type counts from series
   const [typeCounts, setTypeCounts] = useState<TypeCounts | null>(null)
@@ -75,26 +75,80 @@ export default function Home() {
           })
       })
 
-    // ── 2.  Trending row: anime_meta.trending ASC joined to series ─────────
-    supabase
-      .from('anime_meta')
-      .select('series_id, trending, series!inner(id, title, cover_url)')
-      .eq('season_year', 2026)
-      .not('trending', 'is', null)
-      .not('series.genres', 'cs', '{"Hentai"}')
-      .order('trending', { ascending: true })
-      .limit(12)
-      .then(({ data, error }) => {
-        if (data && data.length > 0) {
-          setTrending(
-            data.map((r: any) => ({
-              id:        r.series.id,
-              title:     r.series.title,
-              cover_url: r.series.cover_url,
-            }))
-          )
-        }
-      })
+    // ── 2.  Trending row: mix of anime, manga & novel ──────────────────────
+    //      Uses actual available data:
+    //      - Anime: trending rank from anime_meta (lower = more trending)
+    //      - Manga: md_follows from manga_meta (fallback to updated_at if null)
+    //      - Novels: updated_at from series (no score/trending fields available)
+    Promise.all([
+      // Trending anime from anime_meta.trending
+      supabase
+        .from('anime_meta')
+        .select('series_id, trending, series!inner(id, title, cover_url)')
+        .eq('season_year', 2026)
+        .not('trending', 'is', null)
+        .not('series.genres', 'cs', '{"Hentai"}')
+        .order('trending', { ascending: true })
+        .limit(4),
+      
+      // Popular manga by md_follows (or recently updated if md_follows is null)
+      supabase
+        .from('manga_meta')
+        .select('series_id, md_follows, series!inner(id, title, cover_url, updated_at)')
+        .not('series.cover_url', 'is', null)
+        .not('series.genres', 'cs', '{"Hentai"}')
+        .order('md_follows', { ascending: false, nullsLast: true })
+        .order('series(updated_at)', { ascending: false })
+        .limit(4),
+      
+      // Recently updated novels (no trending/score fields in novel_meta)
+      supabase
+        .from('novel_meta')
+        .select('series_id, series!inner(id, title, cover_url, updated_at)')
+        .not('series.cover_url', 'is', null)
+        .not('series.genres', 'cs', '{"Hentai"}')
+        .order('series(updated_at)', { ascending: false })
+        .limit(4),
+    ]).then(([animeRes, mangaRes, novelRes]) => {
+      const allTrending: Cover[] = []
+      
+      // Add anime
+      if (animeRes.data && animeRes.data.length > 0) {
+        allTrending.push(
+          ...animeRes.data.map((r: any) => ({
+            id: r.series.id,
+            title: r.series.title,
+            cover_url: r.series.cover_url,
+          }))
+        )
+      }
+      
+      // Add manga
+      if (mangaRes.data && mangaRes.data.length > 0) {
+        allTrending.push(
+          ...mangaRes.data.map((r: any) => ({
+            id: r.series.id,
+            title: r.series.title,
+            cover_url: r.series.cover_url,
+          }))
+        )
+      }
+      
+      // Add novels
+      if (novelRes.data && novelRes.data.length > 0) {
+        allTrending.push(
+          ...novelRes.data.map((r: any) => ({
+            id: r.series.id,
+            title: r.series.title,
+            cover_url: r.series.cover_url,
+          }))
+        )
+      }
+      
+      // Shuffle to mix content types
+      const shuffled = [...allTrending].sort(() => Math.random() - 0.5)
+      setTrending(shuffled.slice(0, 12))
+    })
 
     // ── 3.  Per-type counts ─────────────────────────────────────────────────
     Promise.all([
@@ -242,8 +296,11 @@ export default function Home() {
       </section>
 
       {/* ══ TRENDING ROW ════════════════════════════════════════════════════════
-           Source: anime_meta.trending ASC → series
-           Replaces the old "popular" row which was just a slice of cover wall  */}
+           Source: Mixed content types with best available data:
+           - Anime: anime_meta.trending (rank-based, season 2026)
+           - Manga: manga_meta.md_follows (or recently updated if null)
+           - Novels: series.updated_at (no trending/score in novel_meta)
+           Shows 12 total items shuffled for variety */}
       {trending.length > 0 && (
         <section className="py-12">
           <div className="max-w-7xl mx-auto px-6 sm:px-10 lg:px-16">

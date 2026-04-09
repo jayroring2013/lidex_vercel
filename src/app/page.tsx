@@ -2,9 +2,9 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
-import { ArrowRight, Sparkles, BarChart2, Flame } from 'lucide-react'
+import { ArrowRight, Sparkles, BarChart2, Flame, GitCompareArrows } from 'lucide-react'
 import supabase from '@/lib/supabaseClient'
 import { useLocale } from '@/contexts/LocaleContext'
 
@@ -12,10 +12,10 @@ interface Cover { id: number; title: string; cover_url: string | null }
 interface TypeCounts { anime: number; manga: number; novel: number }
 
 // ── Safe image ────────────────────────────────────────────────────────────────
-function SafeImg({ src, alt }: { src: string; alt: string }) {
+function SafeImg({ src, alt, className }: { src: string; alt: string; className?: string }) {
   const [err, setErr] = useState(false)
-  if (err) return <div className="w-full h-full" style={{ background: 'rgba(99,102,241,0.12)' }} />
-  return <img src={src} alt={alt} className="w-full h-full object-cover block" onError={() => setErr(true)} />
+  if (err) return <div className={className} style={{ background: 'rgba(99,102,241,0.12)' }} />
+  return <img src={src} alt={alt} className={className ?? 'w-full h-full object-cover block'} onError={() => setErr(true)} />
 }
 
 // ── Scrolling cover column ────────────────────────────────────────────────────
@@ -30,11 +30,124 @@ function CoverColumn({ covers, speed, offset, delay }: {
         {doubled.map((c, i) => (
           <div key={i} className="rounded-lg overflow-hidden flex-shrink-0"
             style={{ aspectRatio: '2/3', border: '1px solid rgba(255,255,255,0.05)' }}>
-            {c.cover_url ? <SafeImg src={c.cover_url} alt={c.title} /> : <div className="w-full h-full" style={{ background: 'rgba(99,102,241,0.1)' }} />}
+            {c.cover_url
+              ? <SafeImg src={c.cover_url} alt={c.title} />
+              : <div className="w-full h-full" style={{ background: 'rgba(99,102,241,0.1)' }} />}
           </div>
         ))}
       </div>
     </div>
+  )
+}
+
+// ── Trending card with cycling background covers ───────────────────────────────
+function TrendingCard({ items, vi }: { items: Cover[]; vi: boolean }) {
+  const [activeIdx, setActiveIdx] = useState(0)
+  const [fading, setFading] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (items.length < 2) return
+    timerRef.current = setInterval(() => {
+      setFading(true)
+      setTimeout(() => {
+        setActiveIdx(prev => (prev + 1) % items.length)
+        setFading(false)
+      }, 400)
+    }, 3000)
+    return () => { if (timerRef.current) clearInterval(timerRef.current) }
+  }, [items.length])
+
+  const active = items[activeIdx]
+
+  return (
+    <div className="relative rounded-2xl overflow-hidden w-full h-full"
+      style={{ background: '#c2410c', boxShadow: '0 8px 32px rgba(249,115,22,0.3)' }}>
+
+      {/* Cycling background cover */}
+      {active?.cover_url && (
+        <div
+          className="absolute inset-0 transition-opacity duration-500"
+          style={{ opacity: fading ? 0 : 0.22 }}
+        >
+          <img
+            src={active.cover_url}
+            alt=""
+            className="w-full h-full object-cover object-center"
+            style={{ filter: 'saturate(0.6) blur(1px)' }}
+          />
+        </div>
+      )}
+
+      {/* Gradient overlay so text is always readable */}
+      <div className="absolute inset-0"
+        style={{ background: 'linear-gradient(135deg, rgba(234,88,12,0.85) 0%, rgba(194,65,12,0.6) 100%)' }} />
+      <div className="absolute inset-0"
+        style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 60%)' }} />
+
+      {/* Content */}
+      <div className="relative h-full flex flex-col justify-between p-5">
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <Flame className="w-4 h-4 text-orange-200 flex-shrink-0" />
+            <p className="text-sm font-bold text-white">{vi ? 'Đang thịnh hành' : 'Trending Now'}</p>
+          </div>
+
+          {/* Cycling title */}
+          <p
+            className="text-xl font-black text-white leading-tight transition-opacity duration-400"
+            style={{ opacity: fading ? 0 : 1, minHeight: '3rem' }}
+          >
+            {active?.title ?? '…'}
+          </p>
+
+          {/* Dot indicators */}
+          <div className="flex gap-1.5 mt-3">
+            {items.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => { setActiveIdx(i); setFading(false) }}
+                className="rounded-full transition-all duration-300"
+                style={{
+                  width: i === activeIdx ? 18 : 6,
+                  height: 6,
+                  background: i === activeIdx ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.3)',
+                }}
+              />
+            ))}
+          </div>
+        </div>
+
+        <Link href="/browse"
+          className="group inline-flex items-center gap-1 text-xs font-semibold mt-4"
+          style={{ color: 'rgba(255,255,255,0.85)' }}>
+          {vi ? 'Xem tất cả' : 'View all'}
+          <ArrowRight className="w-3 h-3 transition-transform group-hover:translate-x-0.5" />
+        </Link>
+      </div>
+    </div>
+  )
+}
+
+// ── Feature card ──────────────────────────────────────────────────────────────
+function FeatureCard({ color, title, cta, href }: {
+  color: string; title: string; cta: string; href: string
+}) {
+  return (
+    <Link href={href}
+      className="group relative flex flex-col justify-end rounded-2xl overflow-hidden w-full h-full transition-all duration-200 hover:scale-[1.02] hover:-translate-y-1"
+      style={{ background: color, boxShadow: `0 6px 24px ${color}55` }}>
+      <div className="absolute inset-0"
+        style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.13) 0%, transparent 60%)' }} />
+      <div className="relative p-5">
+        <p className="text-base font-bold text-white leading-tight">{title}</p>
+        <p className="text-xs mt-1.5 font-semibold flex items-center gap-1"
+          style={{ color: 'rgba(255,255,255,0.7)' }}>
+          {cta}
+          <ArrowRight className="w-3 h-3 transition-transform group-hover:translate-x-0.5" />
+        </p>
+      </div>
+    </Link>
   )
 }
 
@@ -43,15 +156,12 @@ export default function Home() {
   const { locale } = useLocale()
   const vi = locale === 'vi'
 
-  // Cover wall — all content types mixed
   const [covers,     setCovers]     = useState<Cover[]>([])
-  // Trending row — mixed content types (anime, manga, novel)
   const [trending,   setTrending]   = useState<Cover[]>([])
-  // Hero stat line — per-type counts from series
   const [typeCounts, setTypeCounts] = useState<TypeCounts | null>(null)
 
   useEffect(() => {
-    // ── 1.  Cover wall: mix of anime + manga + novel ───────────────────────
+    // Cover wall
     supabase
       .from('series')
       .select('id, title, cover_url, item_type')
@@ -70,112 +180,65 @@ export default function Home() {
           .not('cover_url', 'is', null)
           .not('genres', 'cs', '{"Hentai"}')
           .limit(60)
-          .then(({ data: d2, error: e2 }) => {
-            load(d2 || [])
-          })
+          .then(({ data: d2 }) => load(d2 || []))
       })
 
-    // ── 2.  Trending row: mix of anime, manga & novel ──────────────────────
-    //      Uses actual available data:
-    //      - Anime: trending rank from anime_meta (lower = more trending)
-    //      - Manga: md_follows from manga_meta (fallback to updated_at if null)
-    //      - Novels: updated_at from series (no score/trending fields available)
+    // Trending
     Promise.all([
-      // Trending anime from anime_meta.trending
-      supabase
-        .from('anime_meta')
+      supabase.from('anime_meta')
         .select('series_id, trending, series!inner(id, title, cover_url)')
         .eq('season_year', 2026)
         .not('trending', 'is', null)
         .not('series.genres', 'cs', '{"Hentai"}')
         .order('trending', { ascending: true })
         .limit(4),
-      
-      // Popular manga by md_follows (or recently updated if md_follows is null)
-      supabase
-        .from('manga_meta')
+      supabase.from('manga_meta')
         .select('series_id, md_follows, series!inner(id, title, cover_url, updated_at)')
         .not('series.cover_url', 'is', null)
         .not('series.genres', 'cs', '{"Hentai"}')
         .order('md_follows', { ascending: false, nullsFirst: false })
-        .order('series(updated_at)', { ascending: false })
         .limit(4),
-      
-      // Recently updated novels (no trending/score fields in novel_meta)
-      supabase
-        .from('novel_meta')
+      supabase.from('novel_meta')
         .select('series_id, series!inner(id, title, cover_url, updated_at)')
         .not('series.cover_url', 'is', null)
         .not('series.genres', 'cs', '{"Hentai"}')
         .order('series(updated_at)', { ascending: false })
         .limit(4),
     ]).then(([animeRes, mangaRes, novelRes]) => {
-      const allTrending: Cover[] = []
-      
-      // Add anime
-      if (animeRes.data && animeRes.data.length > 0) {
-        allTrending.push(
-          ...animeRes.data.map((r: any) => ({
-            id: r.series.id,
-            title: r.series.title,
-            cover_url: r.series.cover_url,
-          }))
-        )
-      }
-      
-      // Add manga
-      if (mangaRes.data && mangaRes.data.length > 0) {
-        allTrending.push(
-          ...mangaRes.data.map((r: any) => ({
-            id: r.series.id,
-            title: r.series.title,
-            cover_url: r.series.cover_url,
-          }))
-        )
-      }
-      
-      // Add novels
-      if (novelRes.data && novelRes.data.length > 0) {
-        allTrending.push(
-          ...novelRes.data.map((r: any) => ({
-            id: r.series.id,
-            title: r.series.title,
-            cover_url: r.series.cover_url,
-          }))
-        )
-      }
-      
-      // Shuffle to mix content types
-      const shuffled = [...allTrending].sort(() => Math.random() - 0.5)
-      setTrending(shuffled.slice(0, 12))
+      const all: Cover[] = []
+      if (animeRes.data) all.push(...animeRes.data.map((r: any) => ({ id: r.series.id, title: r.series.title, cover_url: r.series.cover_url })))
+      if (mangaRes.data) all.push(...mangaRes.data.map((r: any) => ({ id: r.series.id, title: r.series.title, cover_url: r.series.cover_url })))
+      if (novelRes.data) all.push(...novelRes.data.map((r: any) => ({ id: r.series.id, title: r.series.title, cover_url: r.series.cover_url })))
+      const shuffled = [...all].sort(() => Math.random() - 0.5)
+      setTrending(shuffled.slice(0, 8))
     })
 
-    // ── 3.  Per-type counts ─────────────────────────────────────────────────
+    // Type counts
     Promise.all([
       supabase.from('series').select('anime_meta!inner(season_year)', { count: 'exact', head: true }).eq('item_type', 'anime').eq('anime_meta.season_year', 2026).not('genres', 'cs', '{"Hentai"}'),
       supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'manga').not('genres', 'cs', '{"Hentai"}'),
       supabase.from('series').select('*', { count: 'exact', head: true }).eq('item_type', 'novel').not('genres', 'cs', '{"Hentai"}'),
-    ]).then(([animeRes, mangaRes, novelRes]) => {
-      setTypeCounts({
-        anime: animeRes.count ?? 0,
-        manga: mangaRes.count ?? 0,
-        novel: novelRes.count ?? 0,
-      })
-    })
+    ]).then(([a, m, n]) => setTypeCounts({ anime: a.count ?? 0, manga: m.count ?? 0, novel: n.count ?? 0 }))
   }, [])
 
-  // Split covers into columns — 3 left, 5 right
+  // Cover wall columns
   const rightCovers = covers.slice(0, Math.ceil(covers.length * 0.6))
   const leftCovers  = covers.slice(Math.ceil(covers.length * 0.6))
-  const rightCols = [0, 1, 2, 3, 4].map(i => rightCovers.filter((_, idx) => idx % 5 === i))
-  const leftCols  = [0, 1, 2].map(i => leftCovers.filter((_, idx) => idx % 3 === i))
+  const rightCols = [0,1,2,3,4].map(i => rightCovers.filter((_, idx) => idx % 5 === i))
+  const leftCols  = [0,1,2].map(i => leftCovers.filter((_, idx)  => idx % 3 === i))
   const hasCols = covers.length >= 8
-  const R_SPEEDS  = [28, 22, 32, 24, 26]
-  const R_OFFSETS = [0, -60, 30, -30, 50]
-  const R_DELAYS  = [0, -8, -4, -14, -6]
-  const L_SPEEDS  = [30, 24, 27]
-  const L_OFFSETS = [-20, 40, -40]
-  const L_DELAYS  = [-5, -12, -2]
+  const R_SPEEDS  = [28,22,32,24,26]
+  const R_OFFSETS = [0,-60,30,-30,50]
+  const R_DELAYS  = [0,-8,-4,-14,-6]
+  const L_SPEEDS  = [30,24,27]
+  const L_OFFSETS = [-20,40,-40]
+  const L_DELAYS  = [-5,-12,-2]
+
+  const featureCards = [
+    { color: '#6366f1', title: vi ? 'Khám phá & Lọc'    : 'Browse & Filter',  cta: vi ? 'Khám phá'    : 'Browse',      href: '/browse'  },
+    { color: '#22c55e', title: vi ? 'Biểu đồ phân tán'  : 'Scatter Charts',   cta: vi ? 'Xem biểu đồ' : 'View Charts', href: '/charts'  },
+    { color: '#ec4899', title: vi ? 'So sánh trực tiếp' : 'Head-to-Head',     cta: vi ? 'So sánh'     : 'Compare',     href: '/compare' },
+  ]
 
   return (
     <div style={{ background: 'var(--background)' }}>
@@ -183,16 +246,12 @@ export default function Home() {
       {/* ══ HERO ══════════════════════════════════════════════════════════════ */}
       <section className="relative flex flex-col overflow-hidden" style={{ minHeight: '100svh' }}>
 
-        {/* Cover wall — fills both sides */}
+        {/* Cover wall */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          {/* Overlay — dims the art everywhere, stronger at edges, soft in center */}
           <div className="absolute inset-0 z-10"
             style={{ background: 'linear-gradient(to right, rgba(10,15,30,0.25) 0%, rgba(10,15,30,0.55) 18%, rgba(10,15,30,0.72) 34%, rgba(10,15,30,0.72) 66%, rgba(10,15,30,0.55) 82%, rgba(10,15,30,0.25) 100%)' }} />
-          {/* Top + bottom vignette */}
           <div className="absolute inset-x-0 top-0 h-32 z-10" style={{ background: 'linear-gradient(to bottom, var(--background), transparent)' }} />
           <div className="absolute inset-x-0 bottom-0 h-40 z-10" style={{ background: 'linear-gradient(to top, var(--background), transparent)' }} />
-
-          {/* Single full-width column wall — 8 columns edge-to-edge */}
           <div className="absolute inset-0 items-start overflow-hidden" style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: '10px', padding: '0 4px' }}>
             {hasCols
               ? [
@@ -219,40 +278,27 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Content */}
+        {/* Hero content */}
         <div className="relative z-20 flex-1 flex flex-col justify-center">
           <div className="max-w-7xl mx-auto w-full px-6 sm:px-10 lg:px-16 py-24">
-
-            {/* Eyebrow */}
             <p className="text-xs sm:text-sm font-semibold tracking-widest uppercase mb-5"
               style={{ color: '#818cf8', letterSpacing: '0.18em' }}>
               {vi ? 'Phân tích · Dữ liệu · Cộng đồng' : 'Analytics · Data · Community'}
             </p>
-
-            {/* Headline */}
             <h1 className="font-black leading-none tracking-tight mb-6"
-              style={{
-                fontSize: 'clamp(2.8rem, 7vw, 5.5rem)',
-                fontFamily: 'var(--font-inter), "Be Vietnam Pro", sans-serif',
-                color: 'var(--foreground)',
-                maxWidth: '10ch',
-              }}>
+              style={{ fontSize: 'clamp(2.8rem, 7vw, 5.5rem)', color: 'var(--foreground)', maxWidth: '10ch' }}>
               {vi ? (
                 <>Khám phá<br /><span style={{ color: '#818cf8' }}>tựa tiếp</span><br />theo</>
               ) : (
                 <>Discover<br /><span style={{ color: '#818cf8' }}>your next</span><br />obsession</>
               )}
             </h1>
-
-            {/* One-liner */}
             <p className="text-base sm:text-lg mb-10 max-w-sm leading-relaxed"
               style={{ color: 'rgba(255,255,255,0.55)', fontWeight: 400 }}>
               {vi
                 ? 'Điểm số, xu hướng và thống kê sâu cho Anime, Manga & Light Novel.'
                 : 'Scores, trends and deep stats for Anime, Manga & Light Novels.'}
             </p>
-
-            {/* Two CTAs — primary + ghost */}
             <div className="flex items-center gap-3 flex-wrap">
               <Link href="/browse"
                 className="group flex items-center gap-2 px-6 py-3.5 rounded-xl text-sm font-bold text-white transition-all duration-200 hover:brightness-110 hover:-translate-y-0.5"
@@ -268,18 +314,13 @@ export default function Home() {
                 {vi ? 'Biểu đồ' : 'Charts'}
               </Link>
             </div>
-
-            {/* Per-type stat line — replaces the old single total count */}
             {typeCounts && (
               <p className="mt-8 text-xs" style={{ color: 'rgba(255,255,255,0.28)' }}>
-                <span style={{ color: 'rgba(129,140,248,0.65)' }}>{typeCounts.anime.toLocaleString()}</span>
-                {' '}{vi ? 'anime' : 'anime'}
+                <span style={{ color: 'rgba(129,140,248,0.65)' }}>{typeCounts.anime.toLocaleString()}</span> {vi ? 'anime' : 'anime'}
                 {' · '}
-                <span style={{ color: 'rgba(34,197,94,0.65)' }}>{typeCounts.manga.toLocaleString()}</span>
-                {' '}{vi ? 'manga' : 'manga'}
+                <span style={{ color: 'rgba(34,197,94,0.65)' }}>{typeCounts.manga.toLocaleString()}</span> {vi ? 'manga' : 'manga'}
                 {' · '}
-                <span style={{ color: 'rgba(236,72,153,0.65)' }}>{typeCounts.novel.toLocaleString()}</span>
-                {' '}{vi ? 'light novel' : 'light novels'}
+                <span style={{ color: 'rgba(236,72,153,0.65)' }}>{typeCounts.novel.toLocaleString()}</span> {vi ? 'light novel' : 'light novels'}
                 {' '}{vi ? 'trong cơ sở dữ liệu' : 'in the database'}
               </p>
             )}
@@ -295,73 +336,25 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ══ TRENDING + FEATURES ═══════════════════════════════════════════════ */}
+      {/* ══ CARDS SECTION ═════════════════════════════════════════════════════ */}
       <section className="py-16 sm:py-20">
         <div className="max-w-7xl mx-auto px-6 sm:px-10 lg:px-16">
 
-          <div className="flex flex-wrap gap-3">
-            {/* Trending Card - Larger card with horizontal scroll of items inside */}
-            {trending.length > 0 && (
-              <div className="group relative rounded-2xl overflow-hidden transition-all duration-200"
-                style={{ 
-                  width: '100%', 
-                  minWidth: '280px',
-                  maxWidth: '600px',
-                  background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)', 
-                  boxShadow: '0 4px 20px rgba(249,115,22,0.35)' 
-                }}>
-                <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 60%)' }} />
-                <div className="relative p-5">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Flame className="w-5 h-5 text-white" />
-                    <p className="text-base font-bold text-white">{vi ? 'Đang thịnh hành' : 'Trending Now'}</p>
-                  </div>
-                  
-                  {/* Horizontal scroll container for trending items */}
-                  <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1" style={{ scrollbarWidth: 'thin' }}>
-                    {trending.slice(0, 8).map(item => (
-                      <Link key={item.id} href={`/content/${item.id}`}
-                        className="relative flex-shrink-0 rounded-lg overflow-hidden transition-all duration-200 hover:scale-105"
-                        style={{ width: 85, height: 120, boxShadow: '0 2px 12px rgba(0,0,0,0.3)' }}>
-                        {item.cover_url
-                          ? <img src={item.cover_url} alt={item.title} className="absolute inset-0 w-full h-full object-cover" />
-                          : <div className="absolute inset-0" style={{ background: 'rgba(99,102,241,0.2)' }} />
-                        }
-                        <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 50%)' }} />
-                        <div className="absolute bottom-0 left-0 right-0 p-1.5">
-                          <p className="text-[9px] font-bold leading-tight text-white line-clamp-2">{item.title}</p>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
+          {/*
+            Uniform 4-col grid on lg+, 2-col on md, 1-col on sm.
+            All 4 cards share the same fixed height so they're perfectly aligned.
+          */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+            style={{ gridAutoRows: '220px' }}>
 
-                  <Link href="/browse"
-                    className="mt-3 inline-flex items-center gap-1 text-xs font-semibold transition-colors"
-                    style={{ color: 'rgba(255,255,255,0.9)' }}>
-                    {vi ? 'Xem tất cả' : 'View all'}
-                    <ArrowRight className="w-3 h-3 transition-transform group-hover:translate-x-0.5" />
-                  </Link>
-                </div>
-              </div>
+            {/* Trending — same size as feature cards */}
+            {trending.length > 0 && (
+              <TrendingCard items={trending} vi={vi} />
             )}
 
-            {/* Feature Cards */}
-            {[
-              { color: '#6366f1', title: vi ? 'Khám phá & Lọc' : 'Browse & Filter', href: '/browse', cta: vi ? 'Khám phá' : 'Browse' },
-              { color: '#22c55e', title: vi ? 'Biểu đồ phân tán' : 'Scatter Charts', href: '/charts', cta: vi ? 'Xem biểu đồ' : 'View Charts' },
-              { color: '#ec4899', title: vi ? 'So sánh trực tiếp' : 'Head-to-Head', href: '/compare', cta: vi ? 'So sánh' : 'Compare' },
-            ].map(f => (
-              <Link key={f.title} href={f.href}
-                className="group relative flex flex-col justify-end rounded-2xl overflow-hidden transition-all duration-200 hover:scale-[1.03] hover:-translate-y-1"
-                style={{ width: 180, height: 110, background: f.color, boxShadow: `0 4px 20px ${f.color}55` }}>
-                <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 60%)' }} />
-                <div className="relative p-4">
-                  <p className="text-sm font-bold text-white leading-tight">{f.title}</p>
-                  <p className="text-[11px] mt-1 font-semibold flex items-center gap-0.5" style={{ color: 'rgba(255,255,255,0.7)' }}>
-                    {f.cta} <ArrowRight className="w-3 h-3 transition-transform group-hover:translate-x-0.5" />
-                  </p>
-                </div>
-              </Link>
+            {/* Feature cards */}
+            {featureCards.map(f => (
+              <FeatureCard key={f.title} {...f} />
             ))}
           </div>
         </div>

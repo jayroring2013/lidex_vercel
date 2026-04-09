@@ -47,8 +47,6 @@ export default function Home() {
   const [covers,     setCovers]     = useState<Cover[]>([])
   // Trending row — top anime by anime_meta.trending ASC
   const [trending,   setTrending]   = useState<Cover[]>([])
-  // Top Rated Anime — for the second interest box
-  const [topRated,   setTopRated]   = useState<Cover | null>(null)
   // Hero stat line — per-type counts from series
   const [typeCounts, setTypeCounts] = useState<TypeCounts | null>(null)
 
@@ -95,27 +93,6 @@ export default function Home() {
               cover_url: r.series.cover_url,
             }))
           )
-        }
-      })
-
-    // ── 2.5 Top Rated Anime (for the second box) ───────────────────────────
-    supabase
-      .from('anime_meta')
-      .select('series_id, mean_score, series!inner(id, title, cover_url)')
-      .eq('season_year', 2026)
-      .not('mean_score', 'is', null)
-      .not('series.genres', 'cs', '{"Hentai"}')
-      .order('mean_score', { ascending: false })
-      .limit(1)
-      .then(({ data, error }) => {
-        if (data && data.length > 0) {
-          // FIX: Cast to 'any' to access nested 'series' property
-          const row = data[0] as any
-          setTopRated({
-            id:        row.series.id,
-            title:     row.series.title,
-            cover_url: row.series.cover_url,
-          })
         }
       })
 
@@ -264,103 +241,97 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ══ INTEREST BOXES (Replaces Trending & Features) ════════════════════ */}
-      <section className="py-12">
-        <div className="max-w-7xl mx-auto px-6 sm:px-10 lg:px-16">
-          
-          {/* Heading */}
-          <div className="mb-6">
-            <h2 className="text-xl font-bold tracking-tight" style={{ color: 'var(--foreground)' }}>
-              {vi ? 'Bạn đang quan tâm gì?' : 'What are you interested in?'}
-            </h2>
-          </div>
+      {/* ══ TRENDING ROW ════════════════════════════════════════════════════════
+           Source: anime_meta.trending ASC → series
+           Replaces the old "popular" row which was just a slice of cover wall  */}
+      {trending.length > 0 && (
+        <section className="py-12">
+          <div className="max-w-7xl mx-auto px-6 sm:px-10 lg:px-16">
 
-          {/* Grid: 2 Dynamic (Images) + 2 Static (Icons/Text) */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-
-            {/* Box 1: Trending Anime (Dynamic) */}
-            <Link href="/browse?sort=trending"
-              className="group relative overflow-hidden rounded-2xl aspect-video sm:aspect-[3/2] shadow-lg transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:shadow-indigo-500/10"
-            >
-              {trending[0] ? (
-                <SafeImg src={trending[0].cover_url} alt={trending[0].title} />
-              ) : (
-                <div className="w-full h-full bg-gray-800 animate-pulse" />
-              )}
-              {/* Gradient Overlay */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
-              {/* Text Content */}
-              <div className="absolute inset-0 flex flex-col justify-end p-4">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-orange-400 mb-1">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-2">
+                <Flame className="w-4 h-4" style={{ color: '#f97316' }} />
+                <span className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--foreground-muted)' }}>
                   {vi ? 'Đang thịnh hành' : 'Trending Now'}
                 </span>
-                <h3 className="text-sm sm:text-base font-bold text-white line-clamp-1">
-                  {trending[0]?.title || 'Loading...'}
-                </h3>
               </div>
-            </Link>
+              <Link href="/browse"
+                className="group flex items-center gap-1 text-xs font-semibold transition-colors hover:text-primary-400"
+                style={{ color: 'var(--foreground-muted)' }}>
+                {vi ? 'Xem tất cả' : 'See all'}
+                <ArrowRight className="w-3 h-3 transition-transform group-hover:translate-x-0.5" />
+              </Link>
+            </div>
 
-            {/* Box 2: Top Rated Anime (Dynamic) */}
-            <Link href="/browse?sort=score"
-              className="group relative overflow-hidden rounded-2xl aspect-video sm:aspect-[3/2] shadow-lg transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:shadow-green-500/10"
-            >
-              {topRated ? (
-                <SafeImg src={topRated.cover_url} alt={topRated.title} />
-              ) : (
-                <div className="w-full h-full bg-gray-800 animate-pulse" />
-              )}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
-              <div className="absolute inset-0 flex flex-col justify-end p-4">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-green-400 mb-1">
-                  {vi ? 'Đánh giá cao nhất' : 'Top Rated'}
-                </span>
-                <h3 className="text-sm sm:text-base font-bold text-white line-clamp-1">
-                  {topRated?.title || 'Loading...'}
-                </h3>
-              </div>
-            </Link>
+            <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+              {trending.map(item => (
+                <Link key={item.id} href={`/content/${item.id}`}
+                  className="group flex-shrink-0 rounded-xl overflow-hidden transition-all duration-200 hover:scale-[1.04] hover:-translate-y-1"
+                  style={{ width: 130, aspectRatio: '2/3', boxShadow: '0 4px 16px rgba(0,0,0,0.35)' }}>
+                  {item.cover_url
+                    ? <SafeImg src={item.cover_url} alt={item.title} />
+                    : <div className="w-full h-full" style={{ background: 'var(--background-secondary)' }} />
+                  }
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
-            {/* Box 3: Charts (Static) */}
-            <Link href="/charts"
-              className="group relative overflow-hidden rounded-2xl aspect-video sm:aspect-[3/2] shadow-lg transition-all duration-300 hover:scale-[1.02]"
-              style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)' }}
-            >
-              <div className="absolute inset-0 opacity-10">
-                {/* Abstract Chart Pattern */}
-                <div className="absolute top-4 left-4 w-8 h-8 rounded-full bg-white/20" />
-                <div className="absolute bottom-4 right-4 w-12 h-12 rounded-full bg-white/10" />
-                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-24 h-1 bg-white/20 rounded" />
-              </div>
-              <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center">
-                <div className="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-                  <BarChart2 className="w-5 h-5 text-indigo-400" />
+      {/* ══ FEATURES ══════════════════════════════════════════════════════════ */}
+      <section className="py-16 sm:py-20">
+        <div className="max-w-7xl mx-auto px-6 sm:px-10 lg:px-16">
+
+          <div className="grid sm:grid-cols-3 gap-px rounded-2xl overflow-hidden"
+            style={{ background: 'var(--card-border)' }}>
+            {[
+              {
+                color:  '#6366f1',
+                eyebrow: vi ? 'Tính năng' : 'Feature',
+                title:  vi ? 'Khám phá & Lọc' : 'Browse & Filter',
+                desc:   vi ? 'Tìm Anime, Manga, LN theo điểm, thể loại, studio và trạng thái.' : 'Find Anime, Manga, LN by score, genre, studio and status.',
+                href:   '/browse',
+                cta:    vi ? 'Khám phá' : 'Browse',
+              },
+              {
+                color:  '#22c55e',
+                eyebrow: vi ? 'Tính năng' : 'Feature',
+                title:  vi ? 'Biểu đồ phân tán' : 'Scatter Charts',
+                desc:   vi ? 'So sánh hàng nghìn tựa trên biểu đồ tương tác. Zoom, kéo, lọc.' : 'Compare thousands of titles on an interactive chart. Zoom, pan, filter.',
+                href:   '/charts',
+                cta:    vi ? 'Xem biểu đồ' : 'View Charts',
+              },
+              {
+                color:  '#ec4899',
+                eyebrow: vi ? 'Tính năng' : 'Feature',
+                title:  vi ? 'So sánh trực tiếp' : 'Head-to-Head',
+                desc:   vi ? 'Đặt 4 anime cạnh nhau trên biểu đồ radar. Thấy ngay điểm mạnh yếu.' : 'Put 4 anime side by side on a radar chart. Instantly see strengths.',
+                href:   '/compare',
+                cta:    vi ? 'So sánh' : 'Compare',
+              },
+            ].map(f => (
+              <Link key={f.title} href={f.href}
+                className="group flex flex-col gap-4 p-6 sm:p-8 transition-colors duration-200"
+                style={{ background: 'var(--glass-bg)' }}
+                onMouseEnter={e => (e.currentTarget.style.background = `${f.color}08`)}
+                onMouseLeave={e => (e.currentTarget.style.background = 'var(--glass-bg)')}>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center"
+                  style={{ background: `${f.color}18` }}>
+                  <div className="w-3 h-3 rounded-sm" style={{ background: f.color }} />
                 </div>
-                <span className="text-xs font-semibold text-indigo-200">
-                  {vi ? 'Biểu đồ Phân tích' : 'Analytics Charts'}
-                </span>
-              </div>
-            </Link>
-
-            {/* Box 4: Compare (Static) */}
-            <Link href="/compare"
-              className="group relative overflow-hidden rounded-2xl aspect-video sm:aspect-[3/2] shadow-lg transition-all duration-300 hover:scale-[1.02]"
-              style={{ background: 'linear-gradient(135deg, #831843 0%, #be185d 100%)' }}
-            >
-              <div className="absolute inset-0 opacity-10">
-                {/* Abstract Radar Pattern */}
-                <div className="absolute top-4 right-4 w-16 h-16 border border-white/20 rounded-full" />
-                <div className="absolute top-8 right-8 w-10 h-10 border border-white/20 rounded-full" />
-              </div>
-              <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center">
-                <div className="w-10 h-10 rounded-full bg-pink-500/20 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-                  <Sparkles className="w-5 h-5 text-pink-400" />
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: f.color }}>{f.eyebrow}</p>
+                  <h3 className="text-base font-bold mb-2" style={{ color: 'var(--foreground)' }}>{f.title}</h3>
+                  <p className="text-sm leading-relaxed" style={{ color: 'var(--foreground-secondary)' }}>{f.desc}</p>
                 </div>
-                <span className="text-xs font-semibold text-pink-200">
-                  {vi ? 'So sánh Trực tiếp' : 'Head-to-Head'}
-                </span>
-              </div>
-            </Link>
-
+                <div className="flex items-center gap-1 text-xs font-semibold mt-auto transition-gap duration-200"
+                  style={{ color: f.color }}>
+                  {f.cta}
+                  <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
+                </div>
+              </Link>
+            ))}
           </div>
         </div>
       </section>

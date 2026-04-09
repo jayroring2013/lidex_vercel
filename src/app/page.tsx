@@ -295,59 +295,57 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ══ TRENDING ROW ════════════════════════════════════════════════════════
-           Source: Mixed content types with best available data:
-           - Anime: anime_meta.trending (rank-based, season 2026)
-           - Manga: manga_meta.md_follows (or recently updated if null)
-           - Novels: series.updated_at (no trending/score in novel_meta)
-           Shows 12 total items shuffled for variety */}
-      {trending.length > 0 && (
-        <section className="py-12">
-          <div className="max-w-7xl mx-auto px-6 sm:px-10 lg:px-16">
-
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-2">
-                <Flame className="w-4 h-4" style={{ color: '#f97316' }} />
-                <span className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--foreground-muted)' }}>
-                  {vi ? 'Đang thịnh hành' : 'Trending Now'}
-                </span>
-              </div>
-              <Link href="/browse"
-                className="group flex items-center gap-1 text-xs font-semibold transition-colors hover:text-primary-400"
-                style={{ color: 'var(--foreground-muted)' }}>
-                {vi ? 'Xem tất cả' : 'See all'}
-                <ArrowRight className="w-3 h-3 transition-transform group-hover:translate-x-0.5" />
-              </Link>
-            </div>
-
-            <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-              {trending.map(item => (
-                <Link key={item.id} href={`/content/${item.id}`}
-                  className="group relative flex-shrink-0 rounded-xl overflow-hidden transition-all duration-200 hover:scale-[1.03] hover:-translate-y-1"
-                  style={{ width: 180, height: 110, boxShadow: '0 4px 20px rgba(0,0,0,0.45)' }}>
-                  {item.cover_url
-                    ? <img src={item.cover_url} alt={item.title} className="absolute inset-0 w-full h-full object-cover" />
-                    : <div className="absolute inset-0" style={{ background: 'rgba(99,102,241,0.2)' }} />
-                  }
-                  <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.3) 55%, transparent 100%)' }} />
-                  <div className="absolute bottom-0 left-0 right-0 p-3">
-                    <p className="text-xs font-bold leading-tight text-white line-clamp-2">{item.title}</p>
-                    <p className="text-[10px] mt-1 font-semibold flex items-center gap-0.5" style={{ color: 'rgba(255,255,255,0.55)' }}>
-                      {vi ? 'Xem chi tiết' : 'View detail'} <ArrowRight className="w-2.5 h-2.5" />
-                    </p>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* ══ FEATURES ══════════════════════════════════════════════════════════ */}
+      {/* ══ TRENDING + FEATURES ═══════════════════════════════════════════════ */}
       <section className="py-16 sm:py-20">
         <div className="max-w-7xl mx-auto px-6 sm:px-10 lg:px-16">
 
           <div className="flex flex-wrap gap-3">
+            {/* Trending Card - Larger card with horizontal scroll of items inside */}
+            {trending.length > 0 && (
+              <div className="group relative rounded-2xl overflow-hidden transition-all duration-200"
+                style={{ 
+                  width: '100%', 
+                  minWidth: '280px',
+                  maxWidth: '600px',
+                  background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)', 
+                  boxShadow: '0 4px 20px rgba(249,115,22,0.35)' 
+                }}>
+                <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 60%)' }} />
+                <div className="relative p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Flame className="w-5 h-5 text-white" />
+                    <p className="text-base font-bold text-white">{vi ? 'Đang thịnh hành' : 'Trending Now'}</p>
+                  </div>
+                  
+                  {/* Horizontal scroll container for trending items */}
+                  <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1" style={{ scrollbarWidth: 'thin' }}>
+                    {trending.slice(0, 8).map(item => (
+                      <Link key={item.id} href={`/content/${item.id}`}
+                        className="relative flex-shrink-0 rounded-lg overflow-hidden transition-all duration-200 hover:scale-105"
+                        style={{ width: 85, height: 120, boxShadow: '0 2px 12px rgba(0,0,0,0.3)' }}>
+                        {item.cover_url
+                          ? <img src={item.cover_url} alt={item.title} className="absolute inset-0 w-full h-full object-cover" />
+                          : <div className="absolute inset-0" style={{ background: 'rgba(99,102,241,0.2)' }} />
+                        }
+                        <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 50%)' }} />
+                        <div className="absolute bottom-0 left-0 right-0 p-1.5">
+                          <p className="text-[9px] font-bold leading-tight text-white line-clamp-2">{item.title}</p>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+
+                  <Link href="/browse"
+                    className="mt-3 inline-flex items-center gap-1 text-xs font-semibold transition-colors"
+                    style={{ color: 'rgba(255,255,255,0.9)' }}>
+                    {vi ? 'Xem tất cả' : 'View all'}
+                    <ArrowRight className="w-3 h-3 transition-transform group-hover:translate-x-0.5" />
+                  </Link>
+                </div>
+              </div>
+            )}
+
+            {/* Feature Cards */}
             {[
               { color: '#6366f1', title: vi ? 'Khám phá & Lọc' : 'Browse & Filter', href: '/browse', cta: vi ? 'Khám phá' : 'Browse' },
               { color: '#22c55e', title: vi ? 'Biểu đồ phân tán' : 'Scatter Charts', href: '/charts', cta: vi ? 'Xem biểu đồ' : 'View Charts' },

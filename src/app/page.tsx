@@ -266,12 +266,19 @@ export default function Home() {
             <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
               {trending.map(item => (
                 <Link key={item.id} href={`/content/${item.id}`}
-                  className="group flex-shrink-0 rounded-xl overflow-hidden transition-all duration-200 hover:scale-[1.04] hover:-translate-y-1"
-                  style={{ width: 130, aspectRatio: '2/3', boxShadow: '0 4px 16px rgba(0,0,0,0.35)' }}>
+                  className="group relative flex-shrink-0 rounded-xl overflow-hidden transition-all duration-200 hover:scale-[1.03] hover:-translate-y-1"
+                  style={{ width: 180, height: 110, boxShadow: '0 4px 20px rgba(0,0,0,0.45)' }}>
                   {item.cover_url
-                    ? <SafeImg src={item.cover_url} alt={item.title} />
-                    : <div className="w-full h-full" style={{ background: 'var(--background-secondary)' }} />
+                    ? <img src={item.cover_url} alt={item.title} className="absolute inset-0 w-full h-full object-cover" />
+                    : <div className="absolute inset-0" style={{ background: 'rgba(99,102,241,0.2)' }} />
                   }
+                  <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.3) 55%, transparent 100%)' }} />
+                  <div className="absolute bottom-0 left-0 right-0 p-3">
+                    <p className="text-xs font-bold leading-tight text-white line-clamp-2">{item.title}</p>
+                    <p className="text-[10px] mt-1 font-semibold flex items-center gap-0.5" style={{ color: 'rgba(255,255,255,0.55)' }}>
+                      {vi ? 'Xem chi tiết' : 'View detail'} <ArrowRight className="w-2.5 h-2.5" />
+                    </p>
+                  </div>
                 </Link>
               ))}
             </div>
@@ -283,52 +290,21 @@ export default function Home() {
       <section className="py-16 sm:py-20">
         <div className="max-w-7xl mx-auto px-6 sm:px-10 lg:px-16">
 
-          <div className="grid sm:grid-cols-3 gap-px rounded-2xl overflow-hidden"
-            style={{ background: 'var(--card-border)' }}>
+          <div className="flex flex-wrap gap-3">
             {[
-              {
-                color:  '#6366f1',
-                eyebrow: vi ? 'Tính năng' : 'Feature',
-                title:  vi ? 'Khám phá & Lọc' : 'Browse & Filter',
-                desc:   vi ? 'Tìm Anime, Manga, LN theo điểm, thể loại, studio và trạng thái.' : 'Find Anime, Manga, LN by score, genre, studio and status.',
-                href:   '/browse',
-                cta:    vi ? 'Khám phá' : 'Browse',
-              },
-              {
-                color:  '#22c55e',
-                eyebrow: vi ? 'Tính năng' : 'Feature',
-                title:  vi ? 'Biểu đồ phân tán' : 'Scatter Charts',
-                desc:   vi ? 'So sánh hàng nghìn tựa trên biểu đồ tương tác. Zoom, kéo, lọc.' : 'Compare thousands of titles on an interactive chart. Zoom, pan, filter.',
-                href:   '/charts',
-                cta:    vi ? 'Xem biểu đồ' : 'View Charts',
-              },
-              {
-                color:  '#ec4899',
-                eyebrow: vi ? 'Tính năng' : 'Feature',
-                title:  vi ? 'So sánh trực tiếp' : 'Head-to-Head',
-                desc:   vi ? 'Đặt 4 anime cạnh nhau trên biểu đồ radar. Thấy ngay điểm mạnh yếu.' : 'Put 4 anime side by side on a radar chart. Instantly see strengths.',
-                href:   '/compare',
-                cta:    vi ? 'So sánh' : 'Compare',
-              },
+              { color: '#6366f1', title: vi ? 'Khám phá & Lọc' : 'Browse & Filter', href: '/browse', cta: vi ? 'Khám phá' : 'Browse' },
+              { color: '#22c55e', title: vi ? 'Biểu đồ phân tán' : 'Scatter Charts', href: '/charts', cta: vi ? 'Xem biểu đồ' : 'View Charts' },
+              { color: '#ec4899', title: vi ? 'So sánh trực tiếp' : 'Head-to-Head', href: '/compare', cta: vi ? 'So sánh' : 'Compare' },
             ].map(f => (
               <Link key={f.title} href={f.href}
-                className="group flex flex-col gap-4 p-6 sm:p-8 transition-colors duration-200"
-                style={{ background: 'var(--glass-bg)' }}
-                onMouseEnter={e => (e.currentTarget.style.background = `${f.color}08`)}
-                onMouseLeave={e => (e.currentTarget.style.background = 'var(--glass-bg)')}>
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center"
-                  style={{ background: `${f.color}18` }}>
-                  <div className="w-3 h-3 rounded-sm" style={{ background: f.color }} />
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: f.color }}>{f.eyebrow}</p>
-                  <h3 className="text-base font-bold mb-2" style={{ color: 'var(--foreground)' }}>{f.title}</h3>
-                  <p className="text-sm leading-relaxed" style={{ color: 'var(--foreground-secondary)' }}>{f.desc}</p>
-                </div>
-                <div className="flex items-center gap-1 text-xs font-semibold mt-auto transition-gap duration-200"
-                  style={{ color: f.color }}>
-                  {f.cta}
-                  <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
+                className="group relative flex flex-col justify-end rounded-2xl overflow-hidden transition-all duration-200 hover:scale-[1.03] hover:-translate-y-1"
+                style={{ width: 180, height: 110, background: f.color, boxShadow: `0 4px 20px ${f.color}55` }}>
+                <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 60%)' }} />
+                <div className="relative p-4">
+                  <p className="text-sm font-bold text-white leading-tight">{f.title}</p>
+                  <p className="text-[11px] mt-1 font-semibold flex items-center gap-0.5" style={{ color: 'rgba(255,255,255,0.7)' }}>
+                    {f.cta} <ArrowRight className="w-3 h-3 transition-transform group-hover:translate-x-0.5" />
+                  </p>
                 </div>
               </Link>
             ))}

@@ -62,47 +62,48 @@ function TrendingCard({ items, vi }: { items: Cover[]; vi: boolean }) {
 
   return (
     <div className="relative rounded-2xl overflow-hidden w-full h-full"
-      style={{ background: '#c2410c', boxShadow: '0 8px 32px rgba(249,115,22,0.3)' }}>
+      style={{ background: '#7c2d12', boxShadow: '0 8px 32px rgba(249,115,22,0.3)' }}>
 
-      {/* Cycling background cover */}
+      {/* Full-bleed cover — clearly visible, no blur, no desaturation */}
       {active?.cover_url && (
         <div
           className="absolute inset-0 transition-opacity duration-500"
-          style={{ opacity: fading ? 0 : 0.22 }}
+          style={{ opacity: fading ? 0 : 1 }}
         >
           <img
             src={active.cover_url}
             alt=""
             className="w-full h-full object-cover object-center"
-            style={{ filter: 'saturate(0.6) blur(1px)' }}
           />
         </div>
       )}
 
-      {/* Gradient overlay so text is always readable */}
+      {/* Subtle dark scrim only at top and bottom so text sits cleanly */}
       <div className="absolute inset-0"
-        style={{ background: 'linear-gradient(135deg, rgba(234,88,12,0.85) 0%, rgba(194,65,12,0.6) 100%)' }} />
-      <div className="absolute inset-0"
-        style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 60%)' }} />
+        style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, transparent 45%, transparent 40%, rgba(0,0,0,0.72) 100%)' }} />
 
-      {/* Content */}
-      <div className="relative h-full flex flex-col justify-between p-5">
+      {/* Content — eyebrow at top, title + dots at bottom */}
+      <div className="absolute inset-0 flex flex-col justify-between p-5">
+        {/* Top: small eyebrow label */}
+        <div className="flex items-center gap-1.5">
+          <Flame className="w-3.5 h-3.5 text-orange-300 flex-shrink-0" />
+          <p className="text-xs font-semibold uppercase tracking-widest"
+            style={{ color: 'rgba(255,255,255,0.75)', letterSpacing: '0.12em' }}>
+            {vi ? 'Đang thịnh hành' : 'Trending Now'}
+          </p>
+        </div>
+
+        {/* Bottom: big title + dots + link — mirrors the other cards */}
         <div>
-          <div className="flex items-center gap-2 mb-3">
-            <Flame className="w-4 h-4 text-orange-200 flex-shrink-0" />
-            <p className="text-sm font-bold text-white">{vi ? 'Đang thịnh hành' : 'Trending Now'}</p>
-          </div>
-
-          {/* Cycling title */}
           <p
-            className="text-xl font-black text-white leading-tight transition-opacity duration-400"
-            style={{ opacity: fading ? 0 : 1, minHeight: '3rem' }}
+            className="text-base font-bold text-white leading-snug mb-2 transition-opacity duration-400"
+            style={{ opacity: fading ? 0 : 1 }}
           >
             {active?.title ?? '…'}
           </p>
 
           {/* Dot indicators */}
-          <div className="flex gap-1.5 mt-3">
+          <div className="flex gap-1.5 mb-3">
             {items.map((_, i) => (
               <button
                 key={i}
@@ -111,19 +112,19 @@ function TrendingCard({ items, vi }: { items: Cover[]; vi: boolean }) {
                 style={{
                   width: i === activeIdx ? 18 : 6,
                   height: 6,
-                  background: i === activeIdx ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.3)',
+                  background: i === activeIdx ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.35)',
                 }}
               />
             ))}
           </div>
-        </div>
 
-        <Link href="/browse"
-          className="group inline-flex items-center gap-1 text-xs font-semibold mt-4"
-          style={{ color: 'rgba(255,255,255,0.85)' }}>
-          {vi ? 'Xem tất cả' : 'View all'}
-          <ArrowRight className="w-3 h-3 transition-transform group-hover:translate-x-0.5" />
-        </Link>
+          <Link href="/browse"
+            className="group inline-flex items-center gap-1 text-xs font-semibold"
+            style={{ color: 'rgba(255,255,255,0.75)' }}>
+            {vi ? 'Xem tất cả' : 'View all'}
+            <ArrowRight className="w-3 h-3 transition-transform group-hover:translate-x-0.5" />
+          </Link>
+        </div>
       </div>
     </div>
   )

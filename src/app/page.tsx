@@ -109,10 +109,12 @@ export default function Home() {
       .limit(1)
       .then(({ data, error }) => {
         if (data && data.length > 0) {
+          // FIX: Cast to 'any' to access nested 'series' property
+          const row = data[0] as any
           setTopRated({
-            id:        data[0].series.id,
-            title:     data[0].series.title,
-            cover_url: data[0].series.cover_url,
+            id:        row.series.id,
+            title:     row.series.title,
+            cover_url: row.series.cover_url,
           })
         }
       })

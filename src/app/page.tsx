@@ -61,72 +61,38 @@ function TrendingCard({ items, vi }: { items: Cover[]; vi: boolean }) {
   const active = items[activeIdx]
 
   return (
-    <div className="relative rounded-2xl overflow-hidden w-full h-full"
+    <Link href={active ? `/content/${active.id}` : '/browse'}
+      className="relative rounded-2xl overflow-hidden w-full h-full block"
       style={{ background: '#7c2d12', boxShadow: '0 8px 32px rgba(249,115,22,0.3)' }}>
 
-      {/* Full-bleed cover — clearly visible, no blur, no desaturation */}
+      {/* Full-bleed cover */}
       {active?.cover_url && (
-        <div
-          className="absolute inset-0 transition-opacity duration-500"
-          style={{ opacity: fading ? 0 : 1 }}
-        >
-          <img
-            src={active.cover_url}
-            alt=""
-            className="w-full h-full object-cover object-center"
-          />
+        <div className="absolute inset-0 transition-opacity duration-500"
+          style={{ opacity: fading ? 0 : 1 }}>
+          <img src={active.cover_url} alt="" className="w-full h-full object-cover object-center" />
         </div>
       )}
 
-      {/* Subtle dark scrim only at top and bottom so text sits cleanly */}
+      {/* Bottom scrim only — mirrors the gradient feel of feature cards */}
       <div className="absolute inset-0"
-        style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, transparent 45%, transparent 40%, rgba(0,0,0,0.72) 100%)' }} />
+        style={{ background: 'linear-gradient(to bottom, transparent 30%, rgba(0,0,0,0.78) 100%)' }} />
 
-      {/* Content — eyebrow at top, title + dots at bottom */}
-      <div className="absolute inset-0 flex flex-col justify-between p-5">
-        {/* Top: small eyebrow label */}
-        <div className="flex items-center gap-1.5">
-          <Flame className="w-3.5 h-3.5 text-orange-300 flex-shrink-0" />
-          <p className="text-xs font-semibold uppercase tracking-widest"
-            style={{ color: 'rgba(255,255,255,0.75)', letterSpacing: '0.12em' }}>
-            {vi ? 'Đang thịnh hành' : 'Trending Now'}
-          </p>
-        </div>
-
-        {/* Bottom: big title + dots + link — mirrors the other cards */}
-        <div>
-          <p
-            className="text-base font-bold text-white leading-snug mb-2 transition-opacity duration-400"
-            style={{ opacity: fading ? 0 : 1 }}
-          >
-            {active?.title ?? '…'}
-          </p>
-
-          {/* Dot indicators */}
-          <div className="flex gap-1.5 mb-3">
-            {items.map((_, i) => (
-              <button
-                key={i}
-                onClick={() => { setActiveIdx(i); setFading(false) }}
-                className="rounded-full transition-all duration-300"
-                style={{
-                  width: i === activeIdx ? 18 : 6,
-                  height: 6,
-                  background: i === activeIdx ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.35)',
-                }}
-              />
-            ))}
-          </div>
-
-          <Link href="/browse"
-            className="group inline-flex items-center gap-1 text-xs font-semibold"
-            style={{ color: 'rgba(255,255,255,0.75)' }}>
-            {vi ? 'Xem tất cả' : 'View all'}
-            <ArrowRight className="w-3 h-3 transition-transform group-hover:translate-x-0.5" />
-          </Link>
-        </div>
+      {/* Content — same position/structure as FeatureCard */}
+      <div className="absolute inset-0 flex flex-col justify-end p-5">
+        {/* Series title — same size/weight as feature card titles */}
+        <p className="text-base font-bold text-white leading-tight transition-opacity duration-400"
+          style={{ opacity: fading ? 0 : 1 }}>
+          {active?.title ?? '…'}
+        </p>
+        {/* CTA row — same as feature cards */}
+        <p className="text-xs mt-1.5 font-semibold flex items-center gap-1"
+          style={{ color: 'rgba(255,255,255,0.7)' }}>
+          <Flame className="w-3 h-3 text-orange-300 flex-shrink-0" />
+          {vi ? 'Đang thịnh hành' : 'Trending Now'}
+          <ArrowRight className="w-3 h-3 ml-auto transition-transform group-hover:translate-x-0.5" />
+        </p>
       </div>
-    </div>
+    </Link>
   )
 }
 

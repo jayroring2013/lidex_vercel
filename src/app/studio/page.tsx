@@ -11,37 +11,36 @@ import {
   type ChartOptions,
 } from 'chart.js'
 import { Bar } from 'react-chartjs-2'
-import { Loader2, Building2 } from 'lucide-react'
+import { Loader2, Grid3X3 } from 'lucide-react'
 import supabase from '@/lib/supabaseClient'
 import { useLocale } from '@/contexts/LocaleContext'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
 
-interface StudioAggregate {
-  studio: string
+interface GenreAggregate {
+  genre: string
   count: number
   avgScore: number
 }
 
-export default function StudioLeaderboardPage() {
+export default function GenreMatrixPage() {
   const { locale } = useLocale()
   const vi = locale === 'vi'
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [rows, setRows] = useState<StudioAggregate[]>([])
+  const [genreRows, setGenreRows] = useState<GenreAggregate[]>([])
   const [minTitles, setMinTitles] = useState(5)
 
   useEffect(() => {
-    async function load() {
+    async function loadGenreStats() {
       setLoading(true)
       setError(null)
 
       const { data, error: qErr } = await supabase
         .from('series')
-        .select('studio, anime_meta!inner(mean_score)')
+        .select('genres, anime_meta!inner(mean_score)')
         .eq('item_type', 'anime')
-        .not('studio', 'is', null)
         .not('anime_meta.mean_score', 'is', null)
         .not('genres', 'cs', '{"Hentai"}')
         .limit(5000)
@@ -55,53 +54,56 @@ export default function StudioLeaderboardPage() {
       const grouped = new Map<string, { sum: number; count: number }>()
 
       ;(data || []).forEach((row: any) => {
-        const studio = (row.studio || '').trim()
         const meta = Array.isArray(row.anime_meta) ? row.anime_meta[0] : row.anime_meta
         const meanScore = meta?.mean_score
+        const genres = Array.isArray(row.genres) ? row.genres : []
 
-        if (!studio || typeof meanScore !== 'number') return
+        if (typeof meanScore !== 'number' || genres.length === 0) return
 
-        const curr = grouped.get(studio) || { sum: 0, count: 0 }
-        curr.sum += meanScore
-        curr.count += 1
-        grouped.set(studio, curr)
+        genres.forEach((g: string) => {
+          const genre = (g || '').trim()
+          if (!genre) return
+
+          const curr = grouped.get(genre) || { sum: 0, count: 0 }
+          curr.sum += meanScore
+          curr.count += 1
+          grouped.set(genre, curr)
+        })
       })
 
-      const aggregates: StudioAggregate[] = Array.from(grouped.entries()).map(([studio, v]) => ({
-        studio,
+      const aggregated: GenreAggregate[] = Array.from(grouped.entries()).map(([genre, v]) => ({
+        genre,
         count: v.count,
         avgScore: Number((v.sum / v.count).toFixed(2)),
       }))
 
-      setRows(aggregates)
+      setGenreRows(aggregated)
       setLoading(false)
     }
 
-    load()
+    loadGenreStats()
   }, [])
 
-  const leaderboard = useMemo(() => {
-    return [...rows]
-      .filter(r => r.count >= minTitles)
+  const topGenres = useMemo(() => {
+    return [...genreRows]
+      .filter(g => g.count >= minTitles)
       .sort((a, b) => b.avgScore - a.avgScore)
       .slice(0, 15)
-  }, [rows, minTitles])
+  }, [genreRows, minTitles])
 
-  const chartData = useMemo(() => {
-    return {
-      labels: leaderboard.map(s => s.studio),
-      datasets: [
-        {
-          label: vi ? 'Điểm trung bình' : 'Average mean_score',
-          data: leaderboard.map(s => s.avgScore),
-          backgroundColor: 'rgba(99, 102, 241, 0.75)',
-          borderColor: 'rgba(99, 102, 241, 1)',
-          borderWidth: 1,
-          borderRadius: 8,
-        },
-      ],
-    }
-  }, [leaderboard, vi])
+  const chartData = useMemo(() => ({
+    labels: topGenres.map(g => g.genre),
+    datasets: [
+      {
+        label: vi ? 'Điểm trung bình' : 'Average mean_score',
+        data: topGenres.map(g => g.avgScore),
+        backgroundColor: 'rgba(236, 72, 153, 0.75)',
+        borderColor: 'rgba(236, 72, 153, 1)',
+        borderWidth: 1,
+        borderRadius: 8,
+      },
+    ],
+  }), [topGenres, vi])
 
   const chartOptions = useMemo<ChartOptions<'bar'>>(() => ({
     responsive: true,
@@ -112,11 +114,10 @@ export default function StudioLeaderboardPage() {
       tooltip: {
         callbacks: {
           label: (ctx) => {
-            const studio = leaderboard[ctx.dataIndex]
-            const score = ctx.parsed.x
+            const row = topGenres[ctx.dataIndex]
             return vi
-              ? `Điểm TB: ${score} · ${studio?.count ?? 0} tựa`
-              : `Avg: ${score} · ${studio?.count ?? 0} titles`
+              ? `Điểm TB: ${ctx.parsed.x} · ${row?.count ?? 0} tựa`
+              : `Avg: ${ctx.parsed.x} · ${row?.count ?? 0} titles`
           },
         },
       },
@@ -131,35 +132,30 @@ export default function StudioLeaderboardPage() {
         },
       },
       y: {
-        ticks: {
-          autoSkip: false,
-        },
+        ticks: { autoSkip: false },
       },
     },
-  }), [leaderboard, vi])
+  }), [topGenres, vi])
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--background)' }}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
         <div className="mb-6 sm:mb-8">
           <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2" style={{ color: 'var(--foreground)' }}>
-            <Building2 className="w-7 h-7 text-primary-500" />
-            {vi ? 'BXH Studio' : 'Studio Leaderboard'}
+            <Grid3X3 className="w-7 h-7 text-pink-500" />
+            {vi ? 'Ma trận độ phổ biến thể loại' : 'Genre Popularity Matrix'}
           </h1>
           <p className="mt-2 text-sm" style={{ color: 'var(--foreground-secondary)' }}>
             {vi
-              ? 'Xếp hạng studio theo điểm trung bình anime_meta.mean_score. Hiển thị top 15 studio sau khi lọc số tựa tối thiểu.'
-              : 'Studios ranked by average anime_meta.mean_score. Shows top 15 after applying minimum title filter.'}
+              ? 'Đối chiếu series.genres[] với anime_meta.mean_score để xem thể loại nào có điểm trung bình cao nhất.'
+              : 'Cross-reference series.genres[] with anime_meta.mean_score to see which genres score highest on average.'}
           </p>
         </div>
 
-        <div
-          className="rounded-2xl p-4 sm:p-5 mb-5"
-          style={{ background: 'var(--glass-bg)', border: '1px solid var(--card-border)' }}
-        >
+        <div className="rounded-2xl p-4 sm:p-5 mb-5" style={{ background: 'var(--glass-bg)', border: '1px solid var(--card-border)' }}>
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5">
             <label className="text-sm font-semibold" style={{ color: 'var(--foreground)' }}>
-              {vi ? 'Số tựa tối thiểu / studio' : 'Minimum titles per studio'}
+              {vi ? 'Số tựa tối thiểu / thể loại' : 'Minimum titles per genre'}
             </label>
             <input
               type="number"
@@ -175,20 +171,17 @@ export default function StudioLeaderboardPage() {
               }}
             />
             <p className="text-xs" style={{ color: 'var(--foreground-muted)' }}>
-              {vi ? 'Khuyến nghị: 5+ để dữ liệu ổn định hơn.' : 'Recommended: 5+ for more meaningful averages.'}
+              {vi ? 'Mặc định 5+ để giảm nhiễu mẫu nhỏ.' : 'Default 5+ to reduce small-sample noise.'}
             </p>
           </div>
         </div>
 
-        <div
-          className="rounded-2xl p-4 sm:p-6"
-          style={{ background: 'var(--glass-bg)', border: '1px solid var(--card-border)' }}
-        >
+        <div className="rounded-2xl p-4 sm:p-6" style={{ background: 'var(--glass-bg)', border: '1px solid var(--card-border)' }}>
           {loading ? (
             <div className="h-[520px] flex items-center justify-center">
               <div className="flex items-center gap-2" style={{ color: 'var(--foreground-secondary)' }}>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                <span>{vi ? 'Đang tải dữ liệu studio…' : 'Loading studio data…'}</span>
+                <span>{vi ? 'Đang tải dữ liệu thể loại…' : 'Loading genre data…'}</span>
               </div>
             </div>
           ) : error ? (
@@ -198,10 +191,10 @@ export default function StudioLeaderboardPage() {
                 <p className="text-xs mt-2" style={{ color: 'var(--foreground-muted)' }}>{error}</p>
               </div>
             </div>
-          ) : leaderboard.length === 0 ? (
+          ) : topGenres.length === 0 ? (
             <div className="h-[520px] flex items-center justify-center text-center">
               <p style={{ color: 'var(--foreground-secondary)' }}>
-                {vi ? 'Không có studio nào thỏa bộ lọc hiện tại.' : 'No studios match the current filter.'}
+                {vi ? 'Không có thể loại nào thỏa bộ lọc hiện tại.' : 'No genres match the current filter.'}
               </p>
             </div>
           ) : (
@@ -209,11 +202,29 @@ export default function StudioLeaderboardPage() {
               <div className="h-[520px]">
                 <Bar data={chartData} options={chartOptions} />
               </div>
-              <p className="text-xs mt-3" style={{ color: 'var(--foreground-muted)' }}>
-                {vi
-                  ? `Hiển thị ${leaderboard.length} studio hàng đầu (lọc: ≥ ${minTitles} tựa).`
-                  : `Showing top ${leaderboard.length} studios (filter: ≥ ${minTitles} titles).`}
-              </p>
+
+              <div className="mt-5 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr style={{ color: 'var(--foreground-secondary)' }}>
+                      <th className="text-left py-2">#</th>
+                      <th className="text-left py-2">{vi ? 'Thể loại' : 'Genre'}</th>
+                      <th className="text-right py-2">{vi ? 'Số tựa' : 'Titles'}</th>
+                      <th className="text-right py-2">{vi ? 'Điểm TB' : 'Avg Score'}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {topGenres.map((g, idx) => (
+                      <tr key={g.genre} style={{ borderTop: '1px solid var(--card-border)' }}>
+                        <td className="py-2">{idx + 1}</td>
+                        <td className="py-2 font-medium" style={{ color: 'var(--foreground)' }}>{g.genre}</td>
+                        <td className="py-2 text-right">{g.count}</td>
+                        <td className="py-2 text-right">{g.avgScore.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </>
           )}
         </div>

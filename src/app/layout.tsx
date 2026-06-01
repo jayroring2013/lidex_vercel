@@ -6,6 +6,7 @@ import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
 import { LocaleProvider } from '@/contexts/LocaleContext'
 import { Suspense } from 'react'
+import { Analytics } from '@vercel/analytics/react'
 
 const inter = Be_Vietnam_Pro({
   subsets:  ['latin', 'vietnamese'],
@@ -33,6 +34,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Footer />
           </LocaleProvider>
         </Suspense>
+        <Analytics />
       </body>
     </html>
   )

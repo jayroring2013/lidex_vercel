@@ -15,32 +15,6 @@ function proxyImg(url: string | null): string | null {
   return url
 }
 
-function normalizeDbDate(value: any): string | null {
-  if (!value) return null
-
-  let date: Date | null = null
-  if (value instanceof Date) {
-    date = value
-  } else {
-    const raw = String(value).trim()
-    if (!raw) return null
-
-    const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/)
-    if (iso) return iso[0]
-
-    const dmy = raw.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/)
-    if (dmy) {
-      const [, day, month, year] = dmy
-      return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
-    }
-
-    date = new Date(raw)
-  }
-
-  if (!date || Number.isNaN(date.getTime())) return null
-  return date.toISOString().slice(0, 10)
-}
-
 // ============================================
 // SITE STATS
 // ============================================
@@ -259,7 +233,7 @@ export async function getReleaseSchedule({ limit = 10 } = {}) {
       id: r.volume_id,
       volume_number: r.volume_number,
       title: r.volume_title,
-      release_date: normalizeDbDate(r.release_date),
+      release_date: r.release_date,
       price: r.price == null ? null : Number(r.price),
       currency: r.currency,
       cover_url: proxyImg(r.volume_cover_url),
@@ -692,7 +666,7 @@ export async function fetchChartVolumes() {
     return rows.map((r: any) => ({
       series_id: Number(r.series_id),
       cover_url: proxyImg(r.cover_url),
-      release_date: normalizeDbDate(r.release_date),
+      release_date: r.release_date,
     }))
   } catch (error) {
     console.error('Failed fetch chart volumes:', error)
@@ -1138,20 +1112,11 @@ export async function fetchChartNovelsData() {
 // ============================================
 // SERIES ENRICHMENT / DETAIL DATA
 // ============================================
-async function optionalEnrichmentRows(label: string, query: string, params: any[] = []) {
-  try {
-    return await sql(query, params)
-  } catch (error) {
-    console.warn(`Optional enrichment query failed (${label}):`, error)
-    return []
-  }
-}
-
 export async function fetchSeriesEnrichmentData(seriesId: number, itemType: string) {
   try {
     const [ratingData, libraryData] = await Promise.all([
-      optionalEnrichmentRows('rating summary', `SELECT * FROM get_series_rating_summary($1)`, [seriesId]),
-      optionalEnrichmentRows('library summary', `SELECT * FROM get_series_library_summary($1)`, [seriesId])
+      sql(`SELECT * FROM get_series_rating_summary($1)`, [seriesId]),
+      sql(`SELECT * FROM get_series_library_summary($1)`, [seriesId])
     ])
 
     let mangaMeta = null
@@ -1165,7 +1130,7 @@ export async function fetchSeriesEnrichmentData(seriesId: number, itemType: stri
     let lidexScore = null
 
     if (itemType === 'manga') {
-      const mangaMetaRows = await optionalEnrichmentRows('manga metadata', `
+      const mangaMetaRows = await sql(`
         SELECT series_id, demographic, original_language, vn_licensed, vn_publisher_id, updated_at
         FROM manga_meta
         WHERE series_id = $1
@@ -1173,17 +1138,17 @@ export async function fetchSeriesEnrichmentData(seriesId: number, itemType: stri
       if (mangaMetaRows.length) {
         mangaMeta = mangaMetaRows[0]
         if (mangaMeta.vn_publisher_id) {
-          const pub = await optionalEnrichmentRows('manga publisher', `SELECT name, name_vi FROM publishers WHERE id = $1`, [mangaMeta.vn_publisher_id])
+          const pub = await sql(`SELECT name, name_vi FROM publishers WHERE id = $1`, [mangaMeta.vn_publisher_id])
           if (pub.length) publisherName = pub[0].name_vi || pub[0].name
         }
       }
     } else if (itemType === 'novel') {
-      const novelMetaRows = await optionalEnrichmentRows('novel metadata', `SELECT * FROM novel_meta WHERE series_id = $1`, [seriesId])
+      const novelMetaRows = await sql(`SELECT * FROM novel_meta WHERE series_id = $1`, [seriesId])
       if (novelMetaRows.length) novelMeta = novelMetaRows[0]
     }
 
     if (itemType === 'manga' || itemType === 'novel') {
-      vols = await optionalEnrichmentRows('volumes', `
+      vols = await sql(`
         SELECT id, volume_number, release_date, cover_url, price, currency, page_count, is_special
         FROM volumes
         WHERE series_id = $1 AND is_special = false AND volume_number IS NOT NULL
@@ -1192,7 +1157,7 @@ export async function fetchSeriesEnrichmentData(seriesId: number, itemType: stri
 
       if (vols.length > 0) {
         const latestVolId = vols[0].id
-        links = await optionalEnrichmentRows('volume links', `
+        links = await sql(`
           SELECT link_type, label, url
           FROM series_links
           WHERE series_id = $1 AND volume_id = $2 AND is_active = true
@@ -1200,7 +1165,7 @@ export async function fetchSeriesEnrichmentData(seriesId: number, itemType: stri
         `, [seriesId, latestVolId])
       }
     } else if (itemType === 'anime') {
-      links = await optionalEnrichmentRows('anime links', `
+      links = await sql(`
         SELECT link_type, label, url
         FROM series_links
         WHERE series_id = $1 AND is_active = true
@@ -1210,14 +1175,14 @@ export async function fetchSeriesEnrichmentData(seriesId: number, itemType: stri
 
     if (itemType === 'novel') {
       // 1. Fetch ranking rows
-      const rankingRows = await optionalEnrichmentRows('LN ranking', `
+      const rankingRows = await sql(`
         SELECT id, series_title, series_id, lidex_series_id, series_code, number_of_volumes, average_price, max_release_at, publisher, original_volumes, original_status, evalution, evaluation_basis, ln_score, trang_thai, drop_percent, drop_basis, average_gap_months, months_since_last_release, completion_ratio, publisher_activity, publisher_releases_last_24m, score_components, drop_components, cover_url, cover_source_title
         FROM ln_series_ranking
         ORDER BY ln_score DESC
       `)
       
       // 2. Fetch vote history
-      const votesRows = await optionalEnrichmentRows('fan vote history', `
+      const votesRows = await sql(`
         SELECT vr.votes, vr.rank, vp.month, vp.year, vp.label
         FROM voting_results vr
         JOIN voting_periods vp ON vr.period_id = vp.id
@@ -1230,7 +1195,6 @@ export async function fetchSeriesEnrichmentData(seriesId: number, itemType: stri
         lidex_series_id: r.lidex_series_id == null ? null : Number(r.lidex_series_id),
         number_of_volumes: r.number_of_volumes == null ? null : Number(r.number_of_volumes),
         average_price: r.average_price == null ? null : Number(r.average_price),
-        max_release_at: normalizeDbDate(r.max_release_at),
         original_volumes: r.original_volumes == null ? null : Number(r.original_volumes),
         ln_score: r.ln_score == null ? null : Number(r.ln_score),
         drop_percent: r.drop_percent == null ? null : Number(r.drop_percent),
@@ -1241,7 +1205,7 @@ export async function fetchSeriesEnrichmentData(seriesId: number, itemType: stri
       }))
 
       // Find matching ranking row
-      const seriesDetails = await optionalEnrichmentRows('series titles for LN matching', `SELECT title, title_vi, title_native FROM series WHERE id = $1`, [seriesId])
+      const seriesDetails = await sql(`SELECT title, title_vi, title_native FROM series WHERE id = $1`, [seriesId])
       if (seriesDetails.length) {
         const s = seriesDetails[0]
         const normalizedTitle = String(s.title || '').trim().toLowerCase()
@@ -1269,15 +1233,15 @@ export async function fetchSeriesEnrichmentData(seriesId: number, itemType: stri
     }
 
     if (itemType === 'anime') {
-      const animeDetails = await optionalEnrichmentRows('anime details', `SELECT * FROM series WHERE id = $1`, [seriesId])
+      const animeDetails = await sql(`SELECT * FROM series WHERE id = $1`, [seriesId])
       let anime_meta: any = null
       if (animeDetails.length) {
-        const metaRows = await optionalEnrichmentRows('anime metadata', `SELECT * FROM anime_meta WHERE series_id = $1`, [seriesId])
+        const metaRows = await sql(`SELECT * FROM anime_meta WHERE series_id = $1`, [seriesId])
         if (metaRows.length) anime_meta = metaRows[0]
       }
 
       if (animeDetails.length && anime_meta) {
-        const statsData = await optionalEnrichmentRows('anime population stats', `
+        const statsData = await sql(`
           SELECT 
             a.mean_score, a.popularity, a.favourites, s.studio
           FROM anime_meta a
@@ -1314,7 +1278,7 @@ export async function fetchSeriesEnrichmentData(seriesId: number, itemType: stri
       mangaMeta,
       publisherName,
       novelMeta,
-      vols: vols.map((v: any) => ({ ...v, id: Number(v.id), volume_number: v.volume_number == null ? null : Number(v.volume_number), release_date: normalizeDbDate(v.release_date), price: Number(v.price) || 0 })),
+      vols: vols.map((v: any) => ({ ...v, id: Number(v.id), volume_number: v.volume_number == null ? null : Number(v.volume_number), price: Number(v.price) || 0 })),
       links: links.map((l: any) => ({ ...l })),
       lnRanking,
       lnMarketRows,
@@ -1336,13 +1300,6 @@ export async function fetchDashboardEnrichmentData() {
     `)
 
     const ids = Array.from(new Set(rankingRows.map((r: any) => Number(r.lidex_series_id)).filter(Boolean)))
-    const publisherBySeriesId = new Map<number, string>()
-    for (const row of rankingRows) {
-      const seriesId = Number(row.lidex_series_id)
-      if (seriesId && row.publisher && !publisherBySeriesId.has(seriesId)) {
-        publisherBySeriesId.set(seriesId, row.publisher)
-      }
-    }
     
     let canonicalList: any[] = []
     let voteRows: any[] = []
@@ -1362,9 +1319,9 @@ export async function fetchDashboardEnrichmentData() {
           WHERE vr.series_id = ANY($1)
         `, [ids]),
         sql(`
-          SELECT v.series_id, v.release_date, v.is_special
-          FROM volumes v
-          WHERE v.series_id = ANY($1) AND v.release_date IS NOT NULL
+          SELECT series_id, release_date, is_special
+          FROM volumes
+          WHERE series_id = ANY($1) AND release_date IS NOT NULL
         `, [ids])
       ])
       canonicalList = canonRes
@@ -1385,7 +1342,6 @@ export async function fetchDashboardEnrichmentData() {
         lidex_series_id: r.lidex_series_id == null ? null : Number(r.lidex_series_id),
         number_of_volumes: r.number_of_volumes == null ? null : Number(r.number_of_volumes),
         average_price: r.average_price == null ? null : Number(r.average_price),
-        max_release_at: normalizeDbDate(r.max_release_at),
         original_volumes: r.original_volumes == null ? null : Number(r.original_volumes),
         ln_score: r.ln_score == null ? null : Number(r.ln_score),
         drop_percent: r.drop_percent == null ? null : Number(r.drop_percent),
@@ -1412,9 +1368,8 @@ export async function fetchDashboardEnrichmentData() {
       })),
       volumeRows: volumeRows.map((r: any) => ({
         series_id: Number(r.series_id),
-        release_date: normalizeDbDate(r.release_date),
-        is_special: r.is_special,
-        publisher: publisherBySeriesId.get(Number(r.series_id)) || null
+        release_date: r.release_date,
+        is_special: r.is_special
       })),
       publisherRows: publisherRows.map((r: any) => ({
         name: r.name,
@@ -1555,7 +1510,7 @@ export async function fetchSeriesVolumeDetails(seriesId: number) {
       price: r.price !== null ? Number(r.price) : null,
       currency: r.currency || 'VND',
       coverUrl: proxyImg(r.cover_url),
-      releaseDate: normalizeDbDate(r.release_date)
+      releaseDate: r.release_date
     }))
   } catch (error) {
     console.error('Failed to fetch series volume details:', error)
